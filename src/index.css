@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    @apply bg-site-50 text-site-700 antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft JhengHei', 'PingFang HK', sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+    @apply text-site-900;
+  }
+  /* Accessible focus rings on all interactive elements */
+  :focus-visible {
+    @apply outline-none ring-2 ring-safety-500 ring-offset-2;
+  }
+  /* Minimum 44×44px touch targets (UI/UX Pro Max: touch-target-size CRITICAL) */
+  button, [role="button"], a, select, input[type="checkbox"], input[type="radio"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  input[type="text"], input[type="password"], input[type="email"], textarea, select {
+    min-height: 44px;
+  }
+  /* cursor-pointer on all clickable elements */
+  button, [role="button"], label[for], select {
+    @apply cursor-pointer;
+  }
+}
+
+@layer components {
+  /* ── Construction brand card ── */
+  .card {
+    @apply bg-white rounded-xl border border-site-200 shadow-card;
+  }
+  .card-md {
+    @apply bg-white rounded-2xl border border-site-200 shadow-card-md;
+  }
+  /* ── Safety orange CTA button ── */
+  .btn-safety {
+    @apply bg-safety-500 hover:bg-safety-600 active:bg-safety-700 text-white font-semibold
+           rounded-xl px-5 py-3 transition-colors duration-150 flex items-center justify-center gap-2;
+  }
+  /* ── Primary dark button ── */
+  .btn-primary {
+    @apply bg-site-800 hover:bg-site-900 active:bg-site-950 text-white font-semibold
+           rounded-xl px-5 py-3 transition-colors duration-150 flex items-center justify-center gap-2;
+  }
+  /* ── Ghost / outline button ── */
+  .btn-ghost {
+    @apply border border-site-200 text-site-600 hover:bg-site-100 font-medium
+           rounded-xl px-5 py-3 transition-colors duration-150 flex items-center justify-center gap-2;
+  }
+  /* ── Status badges ── */
+  .badge-green  { @apply bg-green-100  text-green-700  text-xs font-semibold px-2.5 py-1 rounded-full; }
+  .badge-orange { @apply bg-orange-100 text-orange-700 text-xs font-semibold px-2.5 py-1 rounded-full; }
+  .badge-red    { @apply bg-red-100    text-red-700    text-xs font-semibold px-2.5 py-1 rounded-full; }
+  .badge-blue   { @apply bg-blue-100   text-blue-700   text-xs font-semibold px-2.5 py-1 rounded-full; }
+  .badge-slate  { @apply bg-site-100   text-site-600   text-xs font-semibold px-2.5 py-1 rounded-full; }
+  /* ── Section heading ── */
+  .section-title {
+    @apply font-heading font-semibold text-site-900 text-base;
+  }
+  .section-sub {
+    @apply text-xs text-site-400 mt-0.5;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 3px;
+  }
+}
+
+/* Shake animation for login error */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-8px); }
+  40%       { transform: translateX(8px); }
+  60%       { transform: translateX(-6px); }
+  80%       { transform: translateX(6px); }
+}
+
+/* Smooth tab underline transition */
+.tab-active {
+  position: relative;
+}
+.tab-active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 1px;
+}
