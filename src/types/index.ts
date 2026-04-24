@@ -84,6 +84,7 @@ export interface IssueComment {
 export interface PendingUser {
   id: string
   username: string
+  email: string       // real email used for Supabase auth
   password?: string   // not stored in Supabase; kept optional for backward compat
   name: string
   role: Role

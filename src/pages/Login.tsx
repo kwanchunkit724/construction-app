@@ -68,14 +68,18 @@ export default function Login() {
   const [regCompany, setRegCompany]     = useState('')
   const [regTrade, setRegTrade]         = useState('')
   const [regProjectId, setRegProjectId] = useState('')
+  const [regEmail, setRegEmail]         = useState('')
   const [regError, setRegError]         = useState('')
   const [regSuccess, setRegSuccess]     = useState(false)
 
   const handleRegister = async (e: FormEvent) => {
     e.preventDefault()
     setRegError('')
-    if (!regUsername.trim() || !regPassword || !regName.trim() || !regCompany.trim()) {
+    if (!regUsername.trim() || !regPassword || !regName.trim() || !regCompany.trim() || !regEmail.trim()) {
       setRegError('請填寫所有必填欄位'); return
+    }
+    if (!regEmail.includes('@') || !regEmail.includes('.')) {
+      setRegError('請輸入有效的電郵地址'); return
     }
     if (regRole !== 'pm' && !regProjectId) {
       setRegError('請選擇所屬項目'); return
@@ -89,6 +93,7 @@ export default function Login() {
     setLoading(true)
     const result = await register({
       username: regUsername.trim(),
+      email: regEmail.trim(),
       password: regPassword,
       name: regName.trim(),
       role: regRole,
@@ -349,6 +354,11 @@ export default function Login() {
                     <div>
                       <label className="block text-xs font-semibold text-gray-600 mb-1">公司名稱 *</label>
                       <input value={regCompany} onChange={e => setRegCompany(e.target.value)} placeholder="例：金輝紮鐵有限公司"
+                        className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">工作電郵 *</label>
+                      <input type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} placeholder="例：w.chan@company.com"
                         className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400" />
                     </div>
                     <div>

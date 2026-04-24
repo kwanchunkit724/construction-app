@@ -151,6 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPendingUsers((data ?? []).map(row => ({
       id:          row.id,
       username:    row.username,
+      email:       row.email ?? '',
       name:        row.name,
       role:        row.role as Role,
       roleZh:      row.role_zh,
@@ -203,7 +204,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── login ──────────────────────────────────────────────────────────────────
   const login = async (username: string, password: string) => {
-    const email = toEmail(username)
+    // Accept real email directly (for newly registered users) or convert username
+    const email = username.includes('@') ? username.trim() : toEmail(username)
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
@@ -242,9 +244,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── register (creates Supabase auth user + pending profile) ───────────────
   const register = async (data: Omit<PendingUser, 'id' | 'requestedAt'>) => {
-    // Rely on Supabase's unique-email constraint as the duplicate guard.
-    // Anon RLS blocks reading profiles directly, so we can't check there.
-    const email = toEmail(data.username)
+    // Use the real email provided by the user (not the username@domain convention).
+    // Supabase's unique-email constraint is the duplicate guard.
+    const email = data.email.trim().toLowerCase()
     const { data: authData, error: signUpError } = await supabase.auth.signUp({
       email,
       password: data.password ?? '',
