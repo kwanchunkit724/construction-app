@@ -257,9 +257,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // If Supabase requires email confirmation, signUp returns no session.
-    // Sign in immediately to get a session so the profile insert passes RLS.
+    // Attempt to sign in immediately — succeeds only if email confirmation is disabled.
     if (!authData.session) {
-      await supabase.auth.signInWithPassword({ email, password: data.password ?? '' })
+      const { data: signInData } = await supabase.auth.signInWithPassword({ email, password: data.password ?? '' })
+      if (!signInData?.session) {
+        // Email confirmation is enabled — user must confirm before profile can be created.
+        return { ok: false, error: '請先確認電郵後再提交申請。如未收到確認電郵，請聯絡管理員關閉 Supabase 電郵驗證設定。' }
+      }
     }
 
     // Insert profile (approved = false — pending admin review)
