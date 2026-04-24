@@ -267,10 +267,10 @@ export default function Login() {
                   <div className={`space-y-5 ${shake ? 'animate-[shake_0.4s_ease-in-out]' : ''}`}>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                        用戶名 <span className="text-gray-400 font-normal">(Username)</span>
+                        用戶名 / 電郵 <span className="text-gray-400 font-normal">(Username / Email)</span>
                       </label>
                       <input type="text" value={username} onChange={e => { setUsername(e.target.value); setError('') }}
-                        placeholder="例：pm.lee" autoComplete="username"
+                        placeholder="演示帳戶用用戶名，新帳戶用電郵" autoComplete="username"
                         className={`w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-colors ${error ? 'border-red-300 focus:ring-red-200 bg-red-50' : 'border-gray-200 focus:ring-blue-200 focus:border-blue-400'}`} />
                     </div>
                     <div>
@@ -314,7 +314,12 @@ export default function Login() {
                   <div className="text-center py-10">
                     <CheckCircle size={52} className="text-green-500 mx-auto mb-3" />
                     <h3 className="font-bold text-gray-900 text-lg">申請已提交</h3>
-                    <p className="text-gray-500 text-sm mt-1">請等待管理員審批，審批後即可使用帳戶登入。</p>
+                    <p className="text-gray-500 text-sm mt-1">請等待管理員審批。</p>
+                    <div className="mt-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-left">
+                      <p className="text-blue-800 text-xs font-semibold mb-1">審批通過後登入方法：</p>
+                      <p className="text-blue-700 text-xs">在登入欄輸入您的電郵地址</p>
+                      <p className="text-blue-900 text-sm font-mono font-bold mt-1 break-all">{regEmail}</p>
+                    </div>
                     <button onClick={() => { setMode('login'); setRegSuccess(false) }}
                       className="mt-4 text-blue-600 text-sm hover:underline">返回登入</button>
                   </div>
