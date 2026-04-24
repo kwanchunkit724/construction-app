@@ -1,12 +1,14 @@
 import { useState } from 'react'
-import { LayoutDashboard, BookOpen, Shield } from 'lucide-react'
+import { LayoutDashboard, BookOpen, Shield, AlertTriangle, FileText } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import { useAuth } from '../context/AuthContext'
 import { useProgress } from '../context/ProgressContext'
 import { useSafety } from '../context/SafetyContext'
 import { useDiary } from '../context/DiaryContext'
+import { useQC } from '../context/QCContext'
+import { useDocument } from '../context/DocumentContext'
 
-type Tab = 'overview' | 'diary' | 'ptw'
+type Tab = 'overview' | 'diary' | 'ptw' | 'ncr' | 'docs'
 
 const WEATHER_ICON: Record<string, string> = {
   sunny: '☀️', cloudy: '⛅', rainy: '🌧️', stormy: '⛈️'
@@ -40,6 +42,8 @@ export default function SiteAgentApp() {
   const { items } = useProgress()
   const { ptwRequests } = useSafety()
   const { diaries } = useDiary()
+  const { ncrs } = useQC()
+  const { drawings, submittals } = useDocument()
 
   const [activeTab, setActiveTab] = useState<Tab>('overview')
 
@@ -62,10 +66,14 @@ export default function SiteAgentApp() {
       ),
     }))
 
+  const openNcrs = ncrs.filter(n => n.status !== 'closed').length
+
   const tabs = [
     { id: 'overview' as Tab, label: '地盤概覽', icon: LayoutDashboard },
     { id: 'diary' as Tab, label: '施工日誌', icon: BookOpen, badge: diaries.length },
     { id: 'ptw' as Tab, label: 'PTW狀況', icon: Shield, badge: pendingPTW },
+    { id: 'ncr' as Tab, label: 'NCR追蹤', icon: AlertTriangle, badge: openNcrs },
+    { id: 'docs' as Tab, label: '文件登記', icon: FileText },
   ]
 
   return (
@@ -235,6 +243,136 @@ export default function SiteAgentApp() {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ===== NCR TRACKING ===== */}
+            {activeTab === 'ncr' && (
+              <div>
+                <h2 className="font-semibold text-gray-800 mb-4">NCR 追蹤清單</h2>
+                {ncrs.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400">
+                    <AlertTriangle size={40} className="mx-auto mb-3 opacity-30" />
+                    <p>暫無 NCR 記錄</p>
+                    <p className="text-xs mt-1">質量管理員發起 NCR 後將在此顯示</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {ncrs.map(ncr => (
+                      <div key={ncr.id} className="p-4 border border-gray-100 rounded-xl hover:border-slate-200 transition-colors">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                              <span className="font-mono text-xs text-gray-500">{ncr.ncrNo}</span>
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                ncr.status === 'closed'            ? 'bg-gray-100 text-gray-500' :
+                                ncr.status === 'verification'      ? 'bg-green-100 text-green-700' :
+                                ncr.status === 'open'              ? 'bg-red-100 text-red-700' :
+                                'bg-yellow-100 text-yellow-700'
+                              }`}>
+                                {ncr.status === 'closed' ? '已關閉' : ncr.status === 'verification' ? '核查中' : ncr.status === 'open' ? '待處理' : '糾正中'}
+                              </span>
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                ncr.severity === 'critical' ? 'bg-red-50 text-red-600' :
+                                ncr.severity === 'major'    ? 'bg-orange-50 text-orange-600' :
+                                'bg-gray-50 text-gray-500'
+                              }`}>
+                                {ncr.severity === 'critical' ? '嚴重' : ncr.severity === 'major' ? '主要' : '輕微'}
+                              </span>
+                            </div>
+                            <p className="font-semibold text-gray-800">{ncr.workItem}</p>
+                            <p className="text-sm text-gray-500 mt-0.5 line-clamp-2">{ncr.description}</p>
+                            <div className="flex flex-wrap gap-3 text-xs text-gray-400 mt-2">
+                              <span>📍 {ncr.zone}</span>
+                              <span>👤 {ncr.raisedByName}</span>
+                              <span>📅 {ncr.date}</span>
+                            </div>
+                          </div>
+                          {ncr.photos && ncr.photos.length > 0 && (
+                            <div className="flex-shrink-0">
+                              <img src={ncr.photos[0]} alt="NCR" className="w-14 h-14 object-cover rounded-lg border border-gray-100" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ===== DOCUMENTS ===== */}
+            {activeTab === 'docs' && (
+              <div className="space-y-5">
+                <div>
+                  <h2 className="font-semibold text-gray-800 mb-3">圖則登記冊</h2>
+                  {drawings.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400 text-sm">
+                      <FileText size={32} className="mx-auto mb-2 opacity-30" />
+                      <p>暫無圖則記錄</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left border-b border-gray-100">
+                            <th className="pb-2 text-xs font-semibold text-gray-400 pr-4">圖則編號</th>
+                            <th className="pb-2 text-xs font-semibold text-gray-400 pr-4">標題</th>
+                            <th className="pb-2 text-xs font-semibold text-gray-400 pr-4">版本</th>
+                            <th className="pb-2 text-xs font-semibold text-gray-400">狀態</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {drawings.map(d => (
+                            <tr key={d.id} className="border-b border-gray-50 hover:bg-gray-50">
+                              <td className="py-2.5 pr-4 font-mono text-xs text-gray-600">{d.drawingNo}</td>
+                              <td className="py-2.5 pr-4 text-gray-800">{d.title}</td>
+                              <td className="py-2.5 pr-4 text-xs text-gray-500">{d.revision}</td>
+                              <td className="py-2.5">
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                  d.status === 'current'       ? 'bg-green-100 text-green-700' :
+                                  d.status === 'under-review'  ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-gray-100 text-gray-500'
+                                }`}>
+                                  {d.status === 'current' ? '現行' : d.status === 'under-review' ? '審查中' : '已廢止'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <h2 className="font-semibold text-gray-800 mb-3">Submittal 追蹤</h2>
+                  {submittals.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400 text-sm">暫無 Submittal 記錄</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {submittals.map(s => (
+                        <div key={s.id} className="flex items-center gap-3 p-3 border border-gray-100 rounded-xl hover:border-slate-200">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="font-mono text-xs text-gray-400">{s.submittalNo}</span>
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                s.status === 'approved'  ? 'bg-green-100 text-green-700' :
+                                s.status === 'rejected'  ? 'bg-red-100 text-red-700' :
+                                s.status === 'submitted' ? 'bg-yellow-100 text-yellow-700' :
+                                s.status === 'resubmit'  ? 'bg-orange-100 text-orange-700' :
+                                'bg-gray-100 text-gray-500'
+                              }`}>
+                                {s.status === 'approved' ? '已批准' : s.status === 'rejected' ? '已拒絕' : s.status === 'submitted' ? '已提交' : s.status === 'resubmit' ? '需重新提交' : '待提交'}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-800">{s.title}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

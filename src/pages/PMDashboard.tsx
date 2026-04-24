@@ -19,7 +19,7 @@ import { useCost } from '../context/CostContext'
 import type { ProjectZone } from '../types'
 import { sCurveData } from '../data/mockData'
 
-type PMTab = 'dashboard' | 'progress' | 'projects' | 'admin' | 'issues' | 'perms'
+type PMTab = 'dashboard' | 'progress' | 'projects' | 'admin' | 'issues' | 'perms' | 'finance'
 
 // Construction palette status colours
 const STATUS_COLOR: Record<string, string> = {
@@ -459,7 +459,7 @@ export default function PMDashboard() {
   const { projects, items, currentProjectId, currentProject, switchProject, isModuleEnabled } = useProgress()
   const { user, pendingUsers, approveUser, rejectUser } = useAuth()
   const { issues: issueReports } = useIssues()
-  const { boqItems } = useCost()
+  const { boqItems, variationOrders: allVOs } = useCost()
 
   // Auto-switch to PM's own project on first mount only
   useEffect(() => {
@@ -481,6 +481,8 @@ export default function PMDashboard() {
   const projectBoq = boqItems.filter(b => b.projectId === currentProjectId)
   const totalContractSum = projectBoq.reduce((s, b) => s + b.contractAmount, 0)
   const totalCompletedAmount = projectBoq.reduce((s, b) => s + b.completedAmount, 0)
+  const variationOrders = allVOs.filter(v => v.projectId === currentProjectId)
+  const totalVOAmount = variationOrders.filter(v => v.status === 'approved').reduce((s, v) => s + v.amount, 0)
   const budgetPct = totalContractSum > 0
     ? Math.round((totalCompletedAmount / totalContractSum) * 100)
     : 0
@@ -509,6 +511,7 @@ export default function PMDashboard() {
     { id: 'projects',  label: '項目設定',    icon: FolderOpen,     show: true },
     { id: 'issues',    label: '問題追蹤',    icon: MessageSquare,  show: isModuleEnabled('issues'),
       badge: issueReports.filter(i => i.status === 'open').length },
+    { id: 'finance',   label: '財務報告',    icon: DollarSign,     show: true },
     { id: 'admin',     label: '帳戶審批',    icon: UserCheck,      show: true, badge: myPendingUsers.length },
     { id: 'perms',     label: '用戶權限',    icon: Shield,         show: true },
   ].filter(t => t.show) as { id: PMTab; label: string; icon: React.ElementType; badge?: number }[]
@@ -663,6 +666,115 @@ export default function PMDashboard() {
 
         {/* ── Permissions tab ── */}
         {pmTab === 'perms' && <PermissionsTab projectId={user?.projectId ?? ''} />}
+
+        {/* ── Finance tab ── */}
+        {pmTab === 'finance' && (
+          <div className="space-y-5">
+            {/* Summary cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {[
+                { label: '合約總值', value: totalContractSum > 0 ? `HKD ${(totalContractSum/1e6).toFixed(1)}M` : '—', sub: '原始合約金額', color: 'bg-site-700' },
+                { label: '已完成工程值', value: totalContractSum > 0 ? `HKD ${(totalCompletedAmount/1e6).toFixed(1)}M` : '—', sub: `完成 ${totalContractSum > 0 ? ((totalCompletedAmount/totalContractSum)*100).toFixed(1) : 0}%`, color: 'bg-green-600' },
+                { label: '變更令淨額', value: totalVOAmount !== 0 ? `HKD ${(totalVOAmount/1e6).toFixed(2)}M` : '—', sub: `共 ${variationOrders.length} 項 VO`, color: totalVOAmount >= 0 ? 'bg-safety-500' : 'bg-red-500' },
+                { label: '剩餘合約額', value: totalContractSum > 0 ? `HKD ${((totalContractSum - totalCompletedAmount)/1e6).toFixed(1)}M` : '—', sub: '待完成工程值', color: 'bg-teal-600' },
+              ].map(c => (
+                <div key={c.label} className="card p-4">
+                  <div className={`w-9 h-9 rounded-xl ${c.color} flex items-center justify-center mb-3`}>
+                    <DollarSign size={16} className="text-white" />
+                  </div>
+                  <p className="font-heading font-bold text-2xl text-site-900">{c.value}</p>
+                  <p className="text-xs text-site-400 mt-0.5">{c.label}</p>
+                  <p className="text-xs text-site-500 mt-1">{c.sub}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* BOQ table */}
+            <div className="card p-5">
+              <h2 className="section-title mb-1">工程量清單 (BOQ)</h2>
+              <p className="section-sub mb-4">各分項完成進度及金額</p>
+              {boqItems.filter(b => b.projectId === currentProjectId).length === 0 ? (
+                <div className="text-center py-10 text-site-400 text-sm">此項目尚未錄入 BOQ 數據</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left border-b border-site-100">
+                        <th className="pb-2 text-xs font-semibold text-site-400 pr-4">項目描述</th>
+                        <th className="pb-2 text-xs font-semibold text-site-400 pr-4 text-right">合約金額</th>
+                        <th className="pb-2 text-xs font-semibold text-site-400 pr-4 text-right">已完成</th>
+                        <th className="pb-2 text-xs font-semibold text-site-400 text-right">完成率</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {boqItems.filter(b => b.projectId === currentProjectId).map(b => {
+                        const pct = b.contractAmount > 0 ? (b.completedAmount / b.contractAmount) * 100 : 0
+                        return (
+                          <tr key={b.id} className="border-b border-site-50 hover:bg-site-50">
+                            <td className="py-2.5 pr-4 text-site-800">{b.description}</td>
+                            <td className="py-2.5 pr-4 text-site-600 text-right font-mono text-xs">
+                              {new Intl.NumberFormat('zh-HK', { style: 'currency', currency: 'HKD', maximumFractionDigits: 0 }).format(b.contractAmount)}
+                            </td>
+                            <td className="py-2.5 pr-4 text-site-600 text-right font-mono text-xs">
+                              {new Intl.NumberFormat('zh-HK', { style: 'currency', currency: 'HKD', maximumFractionDigits: 0 }).format(b.completedAmount)}
+                            </td>
+                            <td className="py-2.5 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <div className="w-16 h-1.5 bg-site-100 rounded-full overflow-hidden">
+                                  <div className="h-full bg-green-500 rounded-full" style={{ width: `${Math.min(100, pct)}%` }} />
+                                </div>
+                                <span className="text-xs text-site-500 w-10 text-right">{pct.toFixed(0)}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Variation Orders */}
+            <div className="card p-5">
+              <h2 className="section-title mb-1">變更令 (VO)</h2>
+              <p className="section-sub mb-4">所有工程變更申請及審批狀態</p>
+              {variationOrders.filter(v => v.projectId === currentProjectId).length === 0 ? (
+                <div className="text-center py-10 text-site-400 text-sm">此項目暫無變更令記錄</div>
+              ) : (
+                <div className="space-y-2">
+                  {variationOrders.filter(v => v.projectId === currentProjectId).map(vo => (
+                    <div key={vo.id} className="flex items-start gap-4 p-3 rounded-xl border border-site-100 hover:border-site-200">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                          <span className="font-mono text-xs text-site-400">{vo.voNo || vo.id.slice(-6).toUpperCase()}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            vo.status === 'approved' ? 'bg-green-100 text-green-700' :
+                            vo.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                            vo.status === 'submitted' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>
+                            {vo.status === 'approved' ? '已批准' : vo.status === 'rejected' ? '已拒絕' : vo.status === 'submitted' ? '待審批' : '草稿'}
+                          </span>
+                          <span className="text-xs text-site-400">
+                            {vo.type === 'addition' ? '追加' : vo.type === 'omission' ? '刪減' : '替換'}
+                          </span>
+                        </div>
+                        <p className="text-sm text-site-800">{vo.description}</p>
+                        <p className="text-xs text-site-400 mt-0.5">提交：{vo.raisedByName}</p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className={`font-mono text-sm font-semibold ${vo.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {vo.amount >= 0 ? '+' : ''}{new Intl.NumberFormat('zh-HK', { style: 'currency', currency: 'HKD', maximumFractionDigits: 0 }).format(vo.amount)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── Dashboard tab ── */}
         {pmTab === 'dashboard' && <>
