@@ -242,15 +242,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── register (creates Supabase auth user + pending profile) ───────────────
   const register = async (data: Omit<PendingUser, 'id' | 'requestedAt'>) => {
-    // Check username not taken in profiles
-    const { data: existing } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('username', data.username.toLowerCase().trim())
-      .maybeSingle()
-
-    if (existing) return { ok: false, error: '此用戶名已被使用，請選擇其他用戶名。' }
-
+    // Rely on Supabase's unique-email constraint as the duplicate guard.
+    // Anon RLS blocks reading profiles directly, so we can't check there.
     const email = toEmail(data.username)
     const { data: authData, error: signUpError } = await supabase.auth.signUp({
       email,
@@ -259,6 +252,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (signUpError || !authData.user) {
       return { ok: false, error: signUpError?.message ?? '申請失敗，請重試。' }
+    }
+
+    // If Supabase requires email confirmation, signUp returns no session.
+    // Sign in immediately to get a session so the profile insert passes RLS.
+    if (!authData.session) {
+      await supabase.auth.signInWithPassword({ email, password: data.password ?? '' })
     }
 
     // Insert profile (approved = false — pending admin review)
@@ -276,7 +275,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       permissions: [],
     })
 
-    if (profileError) return { ok: false, error: '申請失敗，請重試。' }
+    if (profileError) {
+      // Clean up the dangling auth user so the username can be retried
+      await supabase.auth.signOut()
+      return { ok: false, error: '申請失敗，請重試。如問題持續請聯絡管理員。' }
+    }
 
     // Sign out immediately — cannot use app until approved
     await supabase.auth.signOut()

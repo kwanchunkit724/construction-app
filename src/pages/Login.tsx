@@ -362,7 +362,7 @@ export default function Login() {
                         <select value={regProjectId} onChange={e => setRegProjectId(e.target.value)}
                           className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400">
                           <option value="">-- 請選擇項目 --</option>
-                          {projects.map(p => (
+                          {(projects.length > 0 ? projects : [{ id: 'PROJ001', name: 'Victoria Harbour New Shore Complex' }]).map(p => (
                             <option key={p.id} value={p.id}>{p.name}</option>
                           ))}
                         </select>
