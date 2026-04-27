@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import {
   BarChart2, Users, MessageSquare, AlertTriangle,
   CheckCircle, Send, Camera, Phone,
-  Clock, Plus, Mic
+  Clock, Plus, Mic, FileText, ChevronDown, ChevronRight
 } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import ProgressTracker from '../components/ProgressTracker'
@@ -10,9 +10,10 @@ import IssueBoard from '../components/IssueBoard'
 import { useAuth } from '../context/AuthContext'
 import { useProgress } from '../context/ProgressContext'
 import { useIssues } from '../context/IssueContext'
+import { useContracts } from '../context/ContractContext'
 import { workers } from '../data/mockData'
 
-type Tab = 'progress' | 'workers' | 'comms' | 'issues'
+type Tab = 'progress' | 'workers' | 'comms' | 'issues' | 'contracts'
 
 const MSG_TYPE_STYLE = {
   'progress-report': 'bg-blue-100 text-blue-700',
@@ -32,6 +33,7 @@ export default function SubSupervisorApp() {
   const { user } = useAuth()
   const { messages, sendMessage, markRead, currentProjectId } = useProgress()
   const { submitIssue, issues } = useIssues()
+  const { contractsFor } = useContracts()
 
   const [activeTab, setActiveTab] = useState<Tab>('progress')
   const [showComposeForm, setShowComposeForm] = useState(false)
@@ -53,6 +55,8 @@ export default function SubSupervisorApp() {
   const photoInputRef = useRef<HTMLInputElement>(null)
 
   const myIssues = issues.filter(i => i.submittedBy === user?.id)
+  const myContracts = user ? contractsFor(user.id) : []
+  const [expandedContract, setExpandedContract] = useState<string | null>(null)
 
   // Messages relevant to this sub-supervisor
   const myMessages = messages.filter(
@@ -63,10 +67,11 @@ export default function SubSupervisorApp() {
   const checkedIn = myWorkers.filter(w => w.checkedIn).length
 
   const tabs: { id: Tab; label: string; icon: React.ElementType; badge?: number }[] = [
-    { id: 'progress', label: '進度更新', icon: BarChart2 },
-    { id: 'workers',  label: '工人管理', icon: Users, badge: myWorkers.length - checkedIn },
-    { id: 'comms',    label: '通訊匯報', icon: MessageSquare, badge: unreadCount },
-    { id: 'issues',   label: '問題上報', icon: AlertTriangle },
+    { id: 'progress',  label: '進度更新', icon: BarChart2 },
+    { id: 'workers',   label: '工人管理', icon: Users, badge: myWorkers.length - checkedIn },
+    { id: 'comms',     label: '通訊匯報', icon: MessageSquare, badge: unreadCount },
+    { id: 'issues',    label: '問題上報', icon: AlertTriangle },
+    { id: 'contracts', label: '我的合約', icon: FileText, badge: myContracts.length || undefined },
   ]
 
   const handleSend = () => {
@@ -118,7 +123,7 @@ export default function SubSupervisorApp() {
 
         {/* Tabs */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-          <div className="flex border-b border-gray-100 overflow-x-auto">
+          <div className="grid grid-flow-col auto-cols-fr border-b border-gray-100">
             {tabs.map(tab => {
               const Icon = tab.icon
               const isActive = activeTab === tab.id
@@ -126,14 +131,14 @@ export default function SubSupervisorApp() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-3.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-1 justify-center ${
+                  className={`relative flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-2 sm:px-4 py-2 sm:py-3.5 text-[11px] sm:text-sm font-medium border-b-2 transition-colors flex-1 ${
                     isActive ? 'border-purple-600 text-purple-700' : 'border-transparent text-gray-500 hover:text-gray-700'
                   }`}
                 >
-                  <Icon size={15} />
-                  <span className="hidden sm:inline">{tab.label}</span>
+                  <Icon size={16} />
+                  <span className="leading-tight">{tab.label}</span>
                   {(tab.badge ?? 0) > 0 && (
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${isActive ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-500'}`}>
+                    <span className={`absolute top-1 right-1 text-[9px] px-1 py-0 rounded-full font-bold ${isActive ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-500'}`}>
                       {tab.badge}
                     </span>
                   )}
@@ -571,6 +576,87 @@ export default function SubSupervisorApp() {
                   </div>
                 )}
                 </div>{/* end Section 3 */}
+              </div>
+            )}
+
+            {/* ===== CONTRACTS TAB ===== */}
+            {activeTab === 'contracts' && (
+              <div>
+                <div className="mb-4">
+                  <h2 className="font-bold text-gray-800">我的合約責任</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">以下為總監/工程師上載的合約，列明你負責的工作範圍及條款</p>
+                </div>
+
+                {myContracts.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400">
+                    <FileText size={40} className="mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">暫無合約記錄</p>
+                    <p className="text-xs mt-1">總監或工程師上載合約後將在此顯示</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {myContracts.map(c => {
+                      const isOpen = expandedContract === c.id
+                      return (
+                        <div key={c.id} className="border border-gray-200 rounded-xl overflow-hidden">
+                          <button
+                            onClick={() => setExpandedContract(isOpen ? null : c.id)}
+                            className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-purple-50 transition-colors text-left"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-gray-800 text-sm">{c.contractNo}</span>
+                                <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{c.trade}</span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-0.5">{c.company} · 簽署日期：{c.signedDate}</p>
+                              <p className="text-xs text-gray-400 mt-0.5">
+                                合約金額：HK${c.value.toLocaleString()} · {c.items.length} 項條款
+                              </p>
+                            </div>
+                            {isOpen ? <ChevronDown size={16} className="text-gray-400 flex-shrink-0" /> : <ChevronRight size={16} className="text-gray-400 flex-shrink-0" />}
+                          </button>
+
+                          {isOpen && (
+                            <div className="p-4 border-t border-gray-100">
+                              {c.items.length === 0 ? (
+                                <p className="text-xs text-gray-400 py-2">此合約暫無條款項目</p>
+                              ) : (
+                                <div className="space-y-2">
+                                  {c.items.map(item => (
+                                    <div key={item.id} className="flex gap-3 p-3 bg-white border border-gray-100 rounded-lg">
+                                      <div className="flex-shrink-0">
+                                        <span className="inline-block bg-purple-100 text-purple-800 text-xs font-mono font-bold px-2 py-0.5 rounded">
+                                          {item.clauseNo}
+                                        </span>
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-gray-800">{item.description}</p>
+                                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                          <span className="text-xs text-gray-500">{item.trade}</span>
+                                          {item.includesCleanup && (
+                                            <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">包含執垃圾</span>
+                                          )}
+                                        </div>
+                                        {item.notes && (
+                                          <p className="text-xs text-gray-400 mt-1 italic">{item.notes}</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {c.fileRef && (
+                                <p className="text-xs text-gray-400 mt-3 pt-3 border-t border-gray-100">
+                                  合約文件：{c.fileRef}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>

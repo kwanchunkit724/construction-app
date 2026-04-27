@@ -157,7 +157,7 @@ export default function CPSafety() {
 
         {/* Tabs */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-          <div className="flex border-b border-gray-100 overflow-x-auto">
+          <div className="grid grid-flow-col auto-cols-fr border-b border-gray-100">
             {tabs.map(tab => {
               const Icon = tab.icon
               const isActive = activeTab === tab.id
@@ -165,7 +165,7 @@ export default function CPSafety() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-3.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-1 justify-center ${
+                  className={`flex items-center gap-2 px-4 py-3.5 text-sm font-medium border-b-2 transition-colors flex-1 justify-center ${
                     isActive ? 'border-orange-500 text-orange-700' : 'border-transparent text-gray-500 hover:text-gray-700'
                   }`}
                 >

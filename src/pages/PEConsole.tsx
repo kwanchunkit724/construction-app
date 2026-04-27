@@ -144,7 +144,7 @@ export default function PEConsole() {
       <main className="max-w-7xl mx-auto px-4 py-6">
         {/* Tabs */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm mb-6">
-          <div className="flex border-b border-gray-100 overflow-x-auto">
+          <div className="grid grid-flow-col auto-cols-fr border-b border-gray-100">
             {tabs.map((tab) => {
               const Icon = tab.icon
               const isActive = activeTab === tab.id
@@ -152,16 +152,16 @@ export default function PEConsole() {
                 <button
                   key={tab.id}
                   onClick={() => { setActiveTab(tab.id); setSelectedReport(null); setShowNewReportForm(false) }}
-                  className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  className={`relative flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-2 sm:px-5 py-2 sm:py-3.5 text-[11px] sm:text-sm font-medium border-b-2 transition-colors flex-1 ${
                     isActive
                       ? 'border-emerald-600 text-emerald-700'
                       : 'border-transparent text-gray-500 hover:text-gray-700'
                   }`}
                 >
-                  <Icon size={15} />
-                  {tab.label}
+                  <Icon size={15} className="flex-shrink-0" />
+                  <span className="leading-tight text-center">{tab.label}</span>
                   {tab.count > 0 && (
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                    <span className={`absolute top-0.5 right-0.5 text-[9px] px-1 rounded-full font-semibold ${isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
                       {tab.count}
                     </span>
                   )}

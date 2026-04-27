@@ -8,6 +8,7 @@ import { DiaryProvider } from './context/DiaryContext'
 import { ProcurementProvider } from './context/ProcurementContext'
 import { CostProvider } from './context/CostContext'
 import { DocumentProvider } from './context/DocumentContext'
+import { ContractProvider } from './context/ContractContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import SuperAdminDashboard from './pages/SuperAdminDashboard'
@@ -23,6 +24,7 @@ import DocControlApp from './pages/DocControlApp'
 import QCApp from './pages/QCApp'
 import ProcurementApp from './pages/ProcurementApp'
 import ERDashboard from './pages/ERDashboard'
+import ContractApp from './pages/ContractApp'
 
 export default function App() {
   return (
@@ -34,6 +36,7 @@ export default function App() {
       <CostProvider>
       <DocumentProvider>
       <IssueProvider>
+      <ContractProvider>
       <ProgressProvider>
         <BrowserRouter>
           <Routes>
@@ -79,11 +82,15 @@ export default function App() {
             <Route path="/er" element={
               <ProtectedRoute allowedRole="er"><ERDashboard /></ProtectedRoute>
             }/>
+            <Route path="/contracts" element={
+              <ProtectedRoute allowedRole="pm"><ContractApp /></ProtectedRoute>
+            }/>
 
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </BrowserRouter>
       </ProgressProvider>
+      </ContractProvider>
       </IssueProvider>
       </DocumentProvider>
       </CostProvider>

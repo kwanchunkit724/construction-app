@@ -69,6 +69,11 @@ export interface IssueReport {
   photos?: string[]
   /** Which tier is currently responsible for this issue */
   currentTier: 'sub-supervisor' | 'foreman-pe' | 'pm'
+  /** Specific sub-supervisor this issue is assigned to */
+  assignedToId?: string
+  assignedToName?: string
+  /** Photo proof when sub-supervisor resolves */
+  resolvePhoto?: string
 }
 
 export interface IssueComment {
@@ -439,4 +444,30 @@ export interface Submittal {
   submittedAt: string
   status: 'pending' | 'submitted' | 'approved' | 'rejected' | 'resubmit'
   remarks?: string
+}
+
+// ── Contract Management ───────────────────────────────────────────────────────
+export interface ContractItem {
+  id: string
+  clauseNo: string        // e.g. "3.2.1"
+  trade: string           // e.g. "泥水工程"
+  description: string     // e.g. "清理施工垃圾及廢料"
+  includesCleanup: boolean
+  notes?: string
+}
+
+export interface SubContract {
+  id: string
+  projectId: string
+  contractNo: string
+  subContractorId: string
+  subContractorName: string
+  company: string
+  trade: string           // e.g. "釘板工程"
+  signedDate: string
+  value: number
+  items: ContractItem[]
+  fileRef?: string        // clause reference or PDF name
+  createdAt: string
+  createdBy: string
 }

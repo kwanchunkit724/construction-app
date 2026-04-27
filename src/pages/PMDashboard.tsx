@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import TabBar from '../components/TabBar'
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, Cell, ReferenceLine
@@ -7,8 +8,9 @@ import {
   TrendingDown, TrendingUp, AlertTriangle, CheckCircle2,
   Clock, DollarSign, Layers, ListTree,
   FolderPlus, UserCheck, MessageSquare, FolderOpen, Plus, Check, XCircle,
-  Shield, ChevronDown, ChevronRight, Trash2, Building2, RefreshCw
+  Shield, ChevronDown, ChevronRight, Trash2, Building2, RefreshCw, Download
 } from 'lucide-react'
+import { exportBoqExcel, exportBoqPdf, exportVoExcel, exportVoPdf } from '../utils/exportReport'
 import Navbar from '../components/Navbar'
 import ProgressTracker from '../components/ProgressTracker'
 import IssueBoard from '../components/IssueBoard'
@@ -520,34 +522,12 @@ export default function PMDashboard() {
     <div className="min-h-screen bg-site-50">
       <Navbar />
 
-      {/* Tab bar */}
-      <div className="bg-white border-b border-site-200 sticky top-14 z-40">
-        <div className="max-w-7xl mx-auto px-4 flex gap-0.5 overflow-x-auto scrollbar-thin">
-          {TABS.map(t => {
-            const Icon = t.icon
-            const active = pmTab === t.id
-            return (
-              <button
-                key={t.id}
-                onClick={() => setPmTab(t.id)}
-                className={`flex items-center gap-1.5 px-4 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                  active
-                    ? 'border-safety-500 text-safety-600'
-                    : 'border-transparent text-site-500 hover:text-site-800 hover:border-site-300'
-                }`}
-              >
-                <Icon size={14} />
-                {t.label}
-                {(t.badge ?? 0) > 0 && (
-                  <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold leading-none">
-                    {t.badge}
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </div>
+      <TabBar
+        tabs={TABS}
+        active={pmTab}
+        onChange={id => setPmTab(id as PMTab)}
+        activeColor="border-safety-500 text-safety-600"
+      />
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-5">
 
@@ -691,7 +671,19 @@ export default function PMDashboard() {
 
             {/* BOQ table */}
             <div className="card p-5">
-              <h2 className="section-title mb-1">工程量清單 (BOQ)</h2>
+              <div className="flex items-center justify-between mb-1">
+                <h2 className="section-title mb-0">工程量清單 (BOQ)</h2>
+                <div className="flex gap-2">
+                  <button onClick={() => exportBoqExcel(boqItems.filter(b => b.projectId === currentProjectId), currentProject?.name ?? '項目')}
+                    className="flex items-center gap-1.5 text-xs border border-site-300 text-site-600 hover:bg-site-50 px-3 py-1.5 rounded-lg transition-colors">
+                    <Download size={13} /> Excel
+                  </button>
+                  <button onClick={() => exportBoqPdf(boqItems.filter(b => b.projectId === currentProjectId), currentProject?.name ?? '項目')}
+                    className="flex items-center gap-1.5 text-xs border border-site-300 text-site-600 hover:bg-site-50 px-3 py-1.5 rounded-lg transition-colors">
+                    <Download size={13} /> PDF
+                  </button>
+                </div>
+              </div>
               <p className="section-sub mb-4">各分項完成進度及金額</p>
               {boqItems.filter(b => b.projectId === currentProjectId).length === 0 ? (
                 <div className="text-center py-10 text-site-400 text-sm">此項目尚未錄入 BOQ 數據</div>
@@ -737,7 +729,19 @@ export default function PMDashboard() {
 
             {/* Variation Orders */}
             <div className="card p-5">
-              <h2 className="section-title mb-1">變更令 (VO)</h2>
+              <div className="flex items-center justify-between mb-1">
+                <h2 className="section-title mb-0">變更令 (VO)</h2>
+                <div className="flex gap-2">
+                  <button onClick={() => exportVoExcel(variationOrders.filter(v => v.projectId === currentProjectId), currentProject?.name ?? '項目')}
+                    className="flex items-center gap-1.5 text-xs border border-site-300 text-site-600 hover:bg-site-50 px-3 py-1.5 rounded-lg transition-colors">
+                    <Download size={13} /> Excel
+                  </button>
+                  <button onClick={() => exportVoPdf(variationOrders.filter(v => v.projectId === currentProjectId), currentProject?.name ?? '項目')}
+                    className="flex items-center gap-1.5 text-xs border border-site-300 text-site-600 hover:bg-site-50 px-3 py-1.5 rounded-lg transition-colors">
+                    <Download size={13} /> PDF
+                  </button>
+                </div>
+              </div>
               <p className="section-sub mb-4">所有工程變更申請及審批狀態</p>
               {variationOrders.filter(v => v.projectId === currentProjectId).length === 0 ? (
                 <div className="text-center py-10 text-site-400 text-sm">此項目暫無變更令記錄</div>

@@ -21,6 +21,9 @@ function fromRow(row: any): IssueReport {
     notifyIds: row.notify_ids ?? [],
     photos: row.photos ?? [],
     currentTier: row.current_tier,
+    assignedToId: row.assigned_to_id ?? undefined,
+    assignedToName: row.assigned_to_name ?? undefined,
+    resolvePhoto: row.resolve_photo ?? undefined,
   }
 }
 
@@ -30,6 +33,9 @@ interface IssueContextType {
   addComment: (issueId: string, comment: Omit<IssueComment, 'id' | 'createdAt'>) => void
   updateStatus: (issueId: string, status: IssueReport['status']) => void
   escalateIssue: (issueId: string, toTier: IssueReport['currentTier'], byName: string, byRole: Role) => void
+  assignIssue: (issueId: string, toId: string, toName: string, byName: string) => void
+  reassignIssue: (issueId: string, toId: string, toName: string, reason: string, byName: string, byRole: Role) => void
+  resolveWithPhoto: (issueId: string, photo: string, byName: string, byRole: Role) => void
 }
 
 const Ctx = createContext<IssueContextType | null>(null)
@@ -46,6 +52,22 @@ export function IssueProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     supabase.from('issues').select('*').order('submitted_at', { ascending: false })
       .then(({ data }) => { if (data) setIssues(data.map(fromRow)) })
+
+    const channel = supabase
+      .channel('issues-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'issues' }, (payload) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const p = payload as any
+        if (payload.eventType === 'INSERT')
+          setIssues(prev => prev.some(i => i.id === p.new.id) ? prev : [fromRow(p.new), ...prev])
+        else if (payload.eventType === 'UPDATE')
+          setIssues(prev => prev.map(i => i.id === p.new.id ? fromRow(p.new) : i))
+        else if (payload.eventType === 'DELETE')
+          setIssues(prev => prev.filter(i => i.id !== p.old.id))
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [])
 
   const submitIssue = (issue: Omit<IssueReport, 'id' | 'submittedAt' | 'status' | 'comments' | 'currentTier'>) => {
@@ -100,8 +122,52 @@ export function IssueProvider({ children }: { children: ReactNode }) {
       .then(({ error }) => { if (error) console.error(error) })
   }
 
+  const assignIssue = (issueId: string, toId: string, toName: string, byName: string) => {
+    const issue = issues.find(i => i.id === issueId)
+    if (!issue) return
+    const systemComment: IssueComment = {
+      id: `CMT${Date.now()}`, authorId: 'system', authorName: byName, authorRole: 'foreman' as Role,
+      body: `[指派] 問題已指派至【${toName}】負責處理`,
+      createdAt: new Date().toISOString(),
+    }
+    const newComments = [...issue.comments, systemComment]
+    setIssues(prev => prev.map(i => i.id === issueId ? { ...i, assignedToId: toId, assignedToName: toName, comments: newComments } : i))
+    supabase.from('issues').update({ assigned_to_id: toId, assigned_to_name: toName, comments: newComments }).eq('id', issueId)
+      .then(({ error }) => { if (error) console.error(error) })
+  }
+
+  const reassignIssue = (issueId: string, toId: string, toName: string, reason: string, byName: string, byRole: Role) => {
+    const issue = issues.find(i => i.id === issueId)
+    if (!issue) return
+    const systemComment: IssueComment = {
+      id: `CMT${Date.now()}`, authorId: 'system', authorName: byName, authorRole: byRole,
+      body: `[轉交] ${byName} 將問題轉交至【${toName}】處理。原因：${reason}`,
+      createdAt: new Date().toISOString(),
+    }
+    const newComments = [...issue.comments, systemComment]
+    setIssues(prev => prev.map(i => i.id === issueId
+      ? { ...i, assignedToId: toId, assignedToName: toName, comments: newComments } : i))
+    supabase.from('issues').update({ assigned_to_id: toId, assigned_to_name: toName, comments: newComments }).eq('id', issueId)
+      .then(({ error }) => { if (error) console.error(error) })
+  }
+
+  const resolveWithPhoto = (issueId: string, photo: string, byName: string, byRole: Role) => {
+    const issue = issues.find(i => i.id === issueId)
+    if (!issue) return
+    const systemComment: IssueComment = {
+      id: `CMT${Date.now()}`, authorId: 'system', authorName: byName, authorRole: byRole,
+      body: `[已解決] ${byName} 已解決問題並提交相片記錄`,
+      createdAt: new Date().toISOString(),
+    }
+    const newComments = [...issue.comments, systemComment]
+    setIssues(prev => prev.map(i => i.id === issueId
+      ? { ...i, status: 'resolved', resolvePhoto: photo, comments: newComments } : i))
+    supabase.from('issues').update({ status: 'resolved', resolve_photo: photo, comments: newComments }).eq('id', issueId)
+      .then(({ error }) => { if (error) console.error(error) })
+  }
+
   return (
-    <Ctx.Provider value={{ issues, submitIssue, addComment, updateStatus, escalateIssue }}>
+    <Ctx.Provider value={{ issues, submitIssue, addComment, updateStatus, escalateIssue, assignIssue, reassignIssue, resolveWithPhoto }}>
       {children}
     </Ctx.Provider>
   )

@@ -29,6 +29,22 @@ export function QCProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     supabase.from('ncrs').select('*').order('date', { ascending: false })
       .then(({ data }) => { if (data) setNcrs(data.map(fromRow)) })
+
+    const channel = supabase
+      .channel('ncr-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ncrs' }, (payload) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const p = payload as any
+        if (payload.eventType === 'INSERT')
+          setNcrs(prev => prev.some(n => n.id === p.new.id) ? prev : [fromRow(p.new), ...prev])
+        else if (payload.eventType === 'UPDATE')
+          setNcrs(prev => prev.map(n => n.id === p.new.id ? fromRow(p.new) : n))
+        else if (payload.eventType === 'DELETE')
+          setNcrs(prev => prev.filter(n => n.id !== p.old.id))
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [])
 
   const raiseNCR = (ncr: Omit<NCR, 'id' | 'ncrNo' | 'status'>) => {

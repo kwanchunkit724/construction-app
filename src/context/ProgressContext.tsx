@@ -131,16 +131,62 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       .then(({ data }) => { if (data?.length) setProjects(data.map(projectFromRow)) })
     supabase.from('site_messages').select('*').order('sent_at', { ascending: false })
       .then(({ data }) => { if (data) setMessages(data.map(msgFromRow)) })
+
+    const projectChannel = supabase
+      .channel('project-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, (payload) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const p = payload as any
+        if (payload.eventType === 'INSERT')
+          setProjects(prev => prev.some(x => x.id === p.new.id) ? prev : [...prev, projectFromRow(p.new)])
+        else if (payload.eventType === 'UPDATE')
+          setProjects(prev => prev.map(x => x.id === p.new.id ? projectFromRow(p.new) : x))
+        else if (payload.eventType === 'DELETE')
+          setProjects(prev => prev.filter(x => x.id !== p.old.id))
+      })
+      .subscribe()
+
+    const msgChannel = supabase
+      .channel('message-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'site_messages' }, (payload) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const p = payload as any
+        if (payload.eventType === 'INSERT')
+          setMessages(prev => prev.some(x => x.id === p.new.id) ? prev : [msgFromRow(p.new), ...prev])
+        else if (payload.eventType === 'UPDATE')
+          setMessages(prev => prev.map(x => x.id === p.new.id ? msgFromRow(p.new) : x))
+        else if (payload.eventType === 'DELETE')
+          setMessages(prev => prev.filter(x => x.id !== p.old.id))
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(projectChannel)
+      supabase.removeChannel(msgChannel)
+    }
   }, [])
 
   useEffect(() => {
-    supabase.from('progress_items').select('*').eq('project_id', currentProjectId)
-      .then(({ data }) => {
-        setAllItems(prev => [
-          ...prev.filter(i => i.projectId !== currentProjectId),
-          ...(data ?? []).map(itemFromRow),
-        ])
-      })
+    const fetchItems = () =>
+      supabase.from('progress_items').select('*').eq('project_id', currentProjectId)
+        .then(({ data }) => {
+          if (data) setAllItems(prev => [
+            ...prev.filter(i => i.projectId !== currentProjectId),
+            ...rollUp(data.map(itemFromRow)),
+          ])
+        })
+
+    fetchItems()
+
+    const channel = supabase
+      .channel(`progress-items-${currentProjectId}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'progress_items',
+        filter: `project_id=eq.${currentProjectId}`,
+      }, fetchItems)
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [currentProjectId])
 
   // ── Helpers ───────────────────────────────────────────────────────────────

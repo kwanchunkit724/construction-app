@@ -50,6 +50,39 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
       .then(({ data }) => { if (data) setPtwRequests(data.map(ptwFromRow)) })
     supabase.from('toolbox_talks').select('*').order('date', { ascending: false })
       .then(({ data }) => { if (data) setToolboxTalks(data.map(tbtFromRow)) })
+
+    const ptwChannel = supabase
+      .channel('ptw-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ptw_requests' }, (payload) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const p = payload as any
+        if (payload.eventType === 'INSERT')
+          setPtwRequests(prev => prev.some(x => x.id === p.new.id) ? prev : [ptwFromRow(p.new), ...prev])
+        else if (payload.eventType === 'UPDATE')
+          setPtwRequests(prev => prev.map(x => x.id === p.new.id ? ptwFromRow(p.new) : x))
+        else if (payload.eventType === 'DELETE')
+          setPtwRequests(prev => prev.filter(x => x.id !== p.old.id))
+      })
+      .subscribe()
+
+    const tbtChannel = supabase
+      .channel('tbt-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'toolbox_talks' }, (payload) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const p = payload as any
+        if (payload.eventType === 'INSERT')
+          setToolboxTalks(prev => prev.some(x => x.id === p.new.id) ? prev : [tbtFromRow(p.new), ...prev])
+        else if (payload.eventType === 'UPDATE')
+          setToolboxTalks(prev => prev.map(x => x.id === p.new.id ? tbtFromRow(p.new) : x))
+        else if (payload.eventType === 'DELETE')
+          setToolboxTalks(prev => prev.filter(x => x.id !== p.old.id))
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(ptwChannel)
+      supabase.removeChannel(tbtChannel)
+    }
   }, [])
 
   const submitPTW = (ptw: Omit<PTWRequest, 'id' | 'ptwNo' | 'requestedAt' | 'status' | 'acknowledgedBy'>) => {

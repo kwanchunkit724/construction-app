@@ -41,6 +41,39 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
       .then(({ data }) => { if (data) setDrawings(data.map(drawingFromRow)) })
     supabase.from('submittals').select('*').order('submitted_at', { ascending: false })
       .then(({ data }) => { if (data) setSubmittals(data.map(submittalFromRow)) })
+
+    const drawChannel = supabase
+      .channel('drawing-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'drawings' }, (payload) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const p = payload as any
+        if (payload.eventType === 'INSERT')
+          setDrawings(prev => prev.some(d => d.id === p.new.id) ? prev : [drawingFromRow(p.new), ...prev])
+        else if (payload.eventType === 'UPDATE')
+          setDrawings(prev => prev.map(d => d.id === p.new.id ? drawingFromRow(p.new) : d))
+        else if (payload.eventType === 'DELETE')
+          setDrawings(prev => prev.filter(d => d.id !== p.old.id))
+      })
+      .subscribe()
+
+    const subChannel = supabase
+      .channel('submittal-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'submittals' }, (payload) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const p = payload as any
+        if (payload.eventType === 'INSERT')
+          setSubmittals(prev => prev.some(s => s.id === p.new.id) ? prev : [submittalFromRow(p.new), ...prev])
+        else if (payload.eventType === 'UPDATE')
+          setSubmittals(prev => prev.map(s => s.id === p.new.id ? submittalFromRow(p.new) : s))
+        else if (payload.eventType === 'DELETE')
+          setSubmittals(prev => prev.filter(s => s.id !== p.old.id))
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(drawChannel)
+      supabase.removeChannel(subChannel)
+    }
   }, [])
 
   const addDrawing = (d: Omit<DrawingRegisterItem, 'id'>) => {

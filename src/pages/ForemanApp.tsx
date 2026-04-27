@@ -1,10 +1,11 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   ClipboardList, Users, Package, AlertTriangle,
   CheckCircle, Clock, XCircle, Plus, ChevronRight,
   QrCode, Send, PhoneCall, ListTree, Shield, FileText
 } from 'lucide-react'
 import Navbar from '../components/Navbar'
+import { supabase } from '../lib/supabase'
 import ProgressTracker from '../components/ProgressTracker'
 import IssueBoard from '../components/IssueBoard'
 import { tasks, workers, materials, notifications } from '../data/mockData'
@@ -98,6 +99,14 @@ export default function ForemanApp() {
   const [taskStatuses, setTaskStatuses] = useState<Record<string, string>>({})
   const [showQR, setShowQR] = useState(false)
 
+  // Sub-supervisor list for issue assignment
+  const [subSups, setSubSups] = useState<{id:string;name:string;company:string}[]>([])
+  useEffect(() => {
+    supabase.from('profiles').select('id,name,company').eq('role','sub-supervisor')
+      .then(({ data }) => { if (data) setSubSups(data) })
+  }, [])
+  const [issueAssignTo, setIssueAssignTo] = useState('')
+
   // Issue form state
   const [issueCategory, setIssueCategory]     = useState('質量問題')
   const [issueSeverity, setIssueSeverity]     = useState<'normal'|'serious'|'urgent'>('normal')
@@ -150,6 +159,7 @@ export default function ForemanApp() {
 
   const handleSubmitIssue = () => {
     if (!issueDescription.trim() && issuePhotos.length === 0) return
+    const assignedSup = subSups.find(s => s.id === issueAssignTo)
     submitIssue({
       projectId: currentProjectId,
       category: issueCategory,
@@ -162,11 +172,14 @@ export default function ForemanApp() {
       submittedByRole: user?.role ?? 'foreman',
       notifyIds: [],
       photos: issuePhotos,
+      assignedToId: assignedSup?.id,
+      assignedToName: assignedSup?.name,
     })
     setIssueDescription('')
     setIssuePhotos([])
     setIssueTask('')
     setIssueSeverity('normal')
+    setIssueAssignTo('')
     setIssueSubmitted(true)
   }
 
@@ -252,7 +265,7 @@ export default function ForemanApp() {
 
         {/* Tabs */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-          <div className="flex border-b border-gray-100 overflow-x-auto">
+          <div className="grid grid-flow-col auto-cols-fr border-b border-gray-100">
             {tabs.map((tab) => {
               const Icon = tab.icon
               const isActive = activeTab === tab.id
@@ -260,14 +273,14 @@ export default function ForemanApp() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-3.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-1 justify-center ${
+                  className={`relative flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-4 py-2 sm:py-3.5 text-[10px] sm:text-sm font-medium border-b-2 transition-colors flex-1 ${
                     isActive ? 'border-amber-600 text-amber-700' : 'border-transparent text-gray-500 hover:text-gray-700'
                   }`}
                 >
-                  <Icon size={15} />
-                  <span className="hidden sm:inline">{tab.label}</span>
+                  <Icon size={15} className="flex-shrink-0" />
+                  <span className="leading-tight text-center">{tab.label}</span>
                   {tab.count > 0 && (
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${isActive ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+                    <span className={`absolute top-0.5 right-0.5 text-[9px] px-1 rounded-full font-bold ${isActive ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
                       {tab.count}
                     </span>
                   )}
@@ -576,6 +589,18 @@ export default function ForemanApp() {
                             ))}
                           </div>
                         </div>
+                        {subSups.length > 0 && (
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 mb-1 block">指派判頭（選填）</label>
+                            <select value={issueAssignTo} onChange={e => setIssueAssignTo(e.target.value)}
+                              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                              <option value="">不指派 / 視情況處理</option>
+                              {subSups.map(s => (
+                                <option key={s.id} value={s.id}>{s.name}（{s.company}）</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
                         <div>
                           <label className="text-sm font-medium text-gray-700 mb-1 block">問題描述 *</label>
                           <textarea rows={3} value={issueDescription} onChange={e => setIssueDescription(e.target.value)}
