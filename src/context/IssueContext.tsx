@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { startPolling } from '../lib/syncUtils'
 import { supabase } from '../lib/supabase'
 import type { IssueReport, IssueComment, Role } from '../types'
 
@@ -50,24 +51,10 @@ export function IssueProvider({ children }: { children: ReactNode }) {
   const [issues, setIssues] = useState<IssueReport[]>([])
 
   useEffect(() => {
-    supabase.from('issues').select('*').order('submitted_at', { ascending: false })
-      .then(({ data }) => { if (data) setIssues(data.map(fromRow)) })
-
-    const channel = supabase
-      .channel('issues-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'issues' }, (payload) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const p = payload as any
-        if (payload.eventType === 'INSERT')
-          setIssues(prev => prev.some(i => i.id === p.new.id) ? prev : [fromRow(p.new), ...prev])
-        else if (payload.eventType === 'UPDATE')
-          setIssues(prev => prev.map(i => i.id === p.new.id ? fromRow(p.new) : i))
-        else if (payload.eventType === 'DELETE')
-          setIssues(prev => prev.filter(i => i.id !== p.old.id))
-      })
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
+    const refetch = () =>
+      supabase.from('issues').select('*').order('submitted_at', { ascending: false })
+        .then(({ data }) => { if (data) setIssues(data.map(fromRow)) })
+    return startPolling(refetch)
   }, [])
 
   const submitIssue = (issue: Omit<IssueReport, 'id' | 'submittedAt' | 'status' | 'comments' | 'currentTier'>) => {

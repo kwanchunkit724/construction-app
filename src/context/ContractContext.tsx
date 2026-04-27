@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { startPolling } from '../lib/syncUtils'
 import { supabase } from '../lib/supabase'
 import type { SubContract, ContractItem } from '../types'
 
@@ -37,24 +38,10 @@ export function ContractProvider({ children }: { children: ReactNode }) {
   const [contracts, setContracts] = useState<SubContract[]>([])
 
   useEffect(() => {
-    supabase.from('sub_contracts').select('*').order('created_at', { ascending: false })
-      .then(({ data }) => { if (data) setContracts(data.map(fromRow)) })
-
-    const channel = supabase
-      .channel('sub-contracts-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sub_contracts' }, (payload) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const p = payload as any
-        if (payload.eventType === 'INSERT')
-          setContracts(prev => prev.some(c => c.id === p.new.id) ? prev : [fromRow(p.new), ...prev])
-        else if (payload.eventType === 'UPDATE')
-          setContracts(prev => prev.map(c => c.id === p.new.id ? fromRow(p.new) : c))
-        else if (payload.eventType === 'DELETE')
-          setContracts(prev => prev.filter(c => c.id !== p.old.id))
-      })
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
+    const refetch = () =>
+      supabase.from('sub_contracts').select('*').order('created_at', { ascending: false })
+        .then(({ data }) => { if (data) setContracts(data.map(fromRow)) })
+    return startPolling(refetch)
   }, [])
 
   const addContract = (c: Omit<SubContract, 'id' | 'createdAt'>) => {

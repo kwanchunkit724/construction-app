@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { startPolling } from '../lib/syncUtils'
 import { supabase } from '../lib/supabase'
 import type { ProgressItem, SiteMessage, Project, ProjectModule } from '../types'
 
@@ -127,43 +128,15 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
 
   // ── Load on mount ─────────────────────────────────────────────────────────
   useEffect(() => {
-    supabase.from('projects').select('*').order('created_at')
-      .then(({ data }) => { if (data?.length) setProjects(data.map(projectFromRow)) })
-    supabase.from('site_messages').select('*').order('sent_at', { ascending: false })
-      .then(({ data }) => { if (data) setMessages(data.map(msgFromRow)) })
-
-    const projectChannel = supabase
-      .channel('project-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, (payload) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const p = payload as any
-        if (payload.eventType === 'INSERT')
-          setProjects(prev => prev.some(x => x.id === p.new.id) ? prev : [...prev, projectFromRow(p.new)])
-        else if (payload.eventType === 'UPDATE')
-          setProjects(prev => prev.map(x => x.id === p.new.id ? projectFromRow(p.new) : x))
-        else if (payload.eventType === 'DELETE')
-          setProjects(prev => prev.filter(x => x.id !== p.old.id))
-      })
-      .subscribe()
-
-    const msgChannel = supabase
-      .channel('message-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'site_messages' }, (payload) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const p = payload as any
-        if (payload.eventType === 'INSERT')
-          setMessages(prev => prev.some(x => x.id === p.new.id) ? prev : [msgFromRow(p.new), ...prev])
-        else if (payload.eventType === 'UPDATE')
-          setMessages(prev => prev.map(x => x.id === p.new.id ? msgFromRow(p.new) : x))
-        else if (payload.eventType === 'DELETE')
-          setMessages(prev => prev.filter(x => x.id !== p.old.id))
-      })
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(projectChannel)
-      supabase.removeChannel(msgChannel)
-    }
+    const refetchProjects = () =>
+      supabase.from('projects').select('*').order('created_at')
+        .then(({ data }) => { if (data?.length) setProjects(data.map(projectFromRow)) })
+    const refetchMessages = () =>
+      supabase.from('site_messages').select('*').order('sent_at', { ascending: false })
+        .then(({ data }) => { if (data) setMessages(data.map(msgFromRow)) })
+    const stopProjects = startPolling(refetchProjects)
+    const stopMessages = startPolling(refetchMessages)
+    return () => { stopProjects(); stopMessages() }
   }, [])
 
   useEffect(() => {
@@ -175,18 +148,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
             ...rollUp(data.map(itemFromRow)),
           ])
         })
-
-    fetchItems()
-
-    const channel = supabase
-      .channel(`progress-items-${currentProjectId}`)
-      .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'progress_items',
-        filter: `project_id=eq.${currentProjectId}`,
-      }, fetchItems)
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
+    return startPolling(fetchItems)
   }, [currentProjectId])
 
   // ── Helpers ───────────────────────────────────────────────────────────────

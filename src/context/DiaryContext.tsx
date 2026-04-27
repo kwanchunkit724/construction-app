@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { startPolling } from '../lib/syncUtils'
 import { supabase } from '../lib/supabase'
 import type { DailyDiary } from '../types'
 
@@ -25,24 +26,10 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
   const [diaries, setDiaries] = useState<DailyDiary[]>([])
 
   useEffect(() => {
-    supabase.from('daily_diaries').select('*').order('date', { ascending: false })
-      .then(({ data }) => { if (data) setDiaries(data.map(fromRow)) })
-
-    const channel = supabase
-      .channel('diary-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_diaries' }, (payload) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const p = payload as any
-        if (payload.eventType === 'INSERT')
-          setDiaries(prev => prev.some(d => d.id === p.new.id) ? prev : [fromRow(p.new), ...prev])
-        else if (payload.eventType === 'UPDATE')
-          setDiaries(prev => prev.map(d => d.id === p.new.id ? fromRow(p.new) : d))
-        else if (payload.eventType === 'DELETE')
-          setDiaries(prev => prev.filter(d => d.id !== p.old.id))
-      })
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
+    const refetch = () =>
+      supabase.from('daily_diaries').select('*').order('date', { ascending: false })
+        .then(({ data }) => { if (data) setDiaries(data.map(fromRow)) })
+    return startPolling(refetch)
   }, [])
 
   const submitDiary = (diary: Omit<DailyDiary, 'id' | 'status'>) => {

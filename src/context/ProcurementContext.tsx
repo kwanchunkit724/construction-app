@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { startPolling } from '../lib/syncUtils'
 import { supabase } from '../lib/supabase'
 import type { MaterialRequest } from '../types'
 
@@ -30,24 +31,10 @@ export function ProcurementProvider({ children }: { children: ReactNode }) {
   const [requests, setRequests] = useState<MaterialRequest[]>([])
 
   useEffect(() => {
-    supabase.from('material_requests').select('*').order('requested_at', { ascending: false })
-      .then(({ data }) => { if (data) setRequests(data.map(fromRow)) })
-
-    const channel = supabase
-      .channel('procurement-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'material_requests' }, (payload) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const p = payload as any
-        if (payload.eventType === 'INSERT')
-          setRequests(prev => prev.some(r => r.id === p.new.id) ? prev : [fromRow(p.new), ...prev])
-        else if (payload.eventType === 'UPDATE')
-          setRequests(prev => prev.map(r => r.id === p.new.id ? fromRow(p.new) : r))
-        else if (payload.eventType === 'DELETE')
-          setRequests(prev => prev.filter(r => r.id !== p.old.id))
-      })
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
+    const refetch = () =>
+      supabase.from('material_requests').select('*').order('requested_at', { ascending: false })
+        .then(({ data }) => { if (data) setRequests(data.map(fromRow)) })
+    return startPolling(refetch)
   }, [])
 
   const submitRequest = (req: Omit<MaterialRequest, 'id' | 'requestNo' | 'requestedAt' | 'status'>) => {

@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { startPolling } from '../lib/syncUtils'
 import { supabase } from '../lib/supabase'
 import type { BOQItem, VariationOrder } from '../types'
 
@@ -44,43 +45,15 @@ export function CostProvider({ children }: { children: ReactNode }) {
   const [variationOrders, setVOs] = useState<VariationOrder[]>([])
 
   useEffect(() => {
-    supabase.from('boq_items').select('*').order('code')
-      .then(({ data }) => { if (data) setBoqItems(data.map(boqFromRow)) })
-    supabase.from('variation_orders').select('*').order('raised_at', { ascending: false })
-      .then(({ data }) => { if (data) setVOs(data.map(voFromRow)) })
-
-    const boqChannel = supabase
-      .channel('boq-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'boq_items' }, (payload) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const p = payload as any
-        if (payload.eventType === 'INSERT')
-          setBoqItems(prev => prev.some(b => b.id === p.new.id) ? prev : [...prev, boqFromRow(p.new)])
-        else if (payload.eventType === 'UPDATE')
-          setBoqItems(prev => prev.map(b => b.id === p.new.id ? boqFromRow(p.new) : b))
-        else if (payload.eventType === 'DELETE')
-          setBoqItems(prev => prev.filter(b => b.id !== p.old.id))
-      })
-      .subscribe()
-
-    const voChannel = supabase
-      .channel('vo-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'variation_orders' }, (payload) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const p = payload as any
-        if (payload.eventType === 'INSERT')
-          setVOs(prev => prev.some(v => v.id === p.new.id) ? prev : [voFromRow(p.new), ...prev])
-        else if (payload.eventType === 'UPDATE')
-          setVOs(prev => prev.map(v => v.id === p.new.id ? voFromRow(p.new) : v))
-        else if (payload.eventType === 'DELETE')
-          setVOs(prev => prev.filter(v => v.id !== p.old.id))
-      })
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(boqChannel)
-      supabase.removeChannel(voChannel)
-    }
+    const refetchBoq = () =>
+      supabase.from('boq_items').select('*').order('code')
+        .then(({ data }) => { if (data) setBoqItems(data.map(boqFromRow)) })
+    const refetchVo = () =>
+      supabase.from('variation_orders').select('*').order('raised_at', { ascending: false })
+        .then(({ data }) => { if (data) setVOs(data.map(voFromRow)) })
+    const stopBoq = startPolling(refetchBoq)
+    const stopVo = startPolling(refetchVo)
+    return () => { stopBoq(); stopVo() }
   }, [])
 
   const updateCompletedQty = (id: string, qty: number) => {
