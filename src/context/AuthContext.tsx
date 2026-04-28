@@ -185,10 +185,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.role, loadPendingUsers, loadAllUsers])
 
   const login = async (username: string, password: string) => {
-    const email = username.includes('@') ? username.trim() : toEmail(username)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) return { ok: false, error: '用戶名或密碼錯誤，請重試。' }
-    return { ok: true }
+    try {
+      const email = username.includes('@') ? username.trim() : toEmail(username)
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) return { ok: false, error: '用戶名或密碼錯誤，請重試。' }
+      return { ok: true }
+    } catch {
+      return { ok: false, error: '連線失敗，請檢查網絡後重試。' }
+    }
   }
 
   const logout = async () => { await supabase.auth.signOut() }

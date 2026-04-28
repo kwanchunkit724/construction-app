@@ -56,23 +56,29 @@ export default function Login() {
     e.preventDefault()
     if (!username.trim() || !password.trim()) { setError('請輸入用戶名和密碼。'); triggerShake(); return }
     setLoading(true); setError('')
-    const result = await login(username, password)
-    if (!result.ok) {
-      setLoading(false)
-      setError(result.error ?? '登入失敗')
-      triggerShake()
-      return
-    }
-    // Auth succeeded — wait up to 5s for profile to load, then clear spinner
-    const deadline = Date.now() + 5000
-    const poll = setInterval(() => {
-      if (Date.now() > deadline) {
-        clearInterval(poll)
+    try {
+      const result = await login(username, password)
+      if (!result.ok) {
         setLoading(false)
-        setError('帳戶正待管理員審批，或請聯絡管理員。')
+        setError(result.error ?? '登入失敗')
         triggerShake()
+        return
       }
-    }, 200)
+      // Auth succeeded — wait up to 5s for profile to load, then clear spinner
+      const deadline = Date.now() + 5000
+      const poll = setInterval(() => {
+        if (Date.now() > deadline) {
+          clearInterval(poll)
+          setLoading(false)
+          setError('帳戶正待管理員審批，或請聯絡管理員。')
+          triggerShake()
+        }
+      }, 200)
+    } catch {
+      setLoading(false)
+      setError('連線失敗，請檢查網絡後重試。')
+      triggerShake()
+    }
   }
 
   const handleRegister = async (e: FormEvent) => {
