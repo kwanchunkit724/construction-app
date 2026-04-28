@@ -916,13 +916,13 @@ export default function UnifiedDashboard() {
   // Which projects this user can see
   const myProjects = useMemo(() => {
     if (!user) return []
-    if (has('view:all') || user.role === 'owner') return projects
+    if (user.role === 'super-admin' || user.role === 'owner') return projects
     if (user.role === 'main-contractor') {
       const assigned = projects.filter(p => p.assignedPmIds?.includes(user.id))
       return assigned.length > 0 ? assigned : projects.filter(p => p.id === user.projectId)
     }
     return projects.filter(p => p.id === user.projectId)
-  }, [projects, user, has])
+  }, [projects, user])
 
   const currentProject = myProjects.find(p => p.id === currentProjectId) ?? myProjects[0]
 
