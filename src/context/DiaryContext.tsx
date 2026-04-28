@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
-import { startPolling } from '../lib/syncUtils'
+import { startPolling, triggerRefetch } from '../lib/syncUtils'
 import { supabase } from '../lib/supabase'
 import type { DailyDiary } from '../types'
 
@@ -44,6 +44,7 @@ export function DiaryProvider({ children }: { children: ReactNode }) {
       work_done: diary.workDone, issues_text: diary.issues, status: 'submitted',
     }).then(({ error }) => {
       if (error) { console.error(error); setDiaries(prev => prev.filter(d => d.id !== id)) }
+      else triggerRefetch()
     })
   }
 

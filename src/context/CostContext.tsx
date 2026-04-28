@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
-import { startPolling } from '../lib/syncUtils'
+import { startPolling, triggerRefetch } from '../lib/syncUtils'
 import { supabase } from '../lib/supabase'
 import type { BOQItem, VariationOrder } from '../types'
 
@@ -63,7 +63,7 @@ export function CostProvider({ children }: { children: ReactNode }) {
     if (!item) return
     supabase.from('boq_items')
       .update({ completed_qty: qty, completed_amount: qty * item.rate })
-      .eq('id', id).then(({ error }) => { if (error) console.error(error) })
+      .eq('id', id).then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const addVO = (vo: Omit<VariationOrder, 'id' | 'raisedAt' | 'status'>) => {
@@ -78,13 +78,14 @@ export function CostProvider({ children }: { children: ReactNode }) {
       raised_at: raisedAt, amount: vo.amount, type: vo.type, status: 'draft',
     }).then(({ error }) => {
       if (error) { console.error(error); setVOs(prev => prev.filter(v => v.id !== id)) }
+      else triggerRefetch()
     })
   }
 
   const submitVO = (id: string) => {
     setVOs(prev => prev.map(v => v.id === id ? { ...v, status: 'submitted' } : v))
     supabase.from('variation_orders').update({ status: 'submitted' }).eq('id', id)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const approveVO = (id: string, byName: string) => {
@@ -93,13 +94,13 @@ export function CostProvider({ children }: { children: ReactNode }) {
       ? { ...v, status: 'approved', approvedBy: byName, approvedAt } : v))
     supabase.from('variation_orders')
       .update({ status: 'approved', approved_by: byName, approved_at: approvedAt })
-      .eq('id', id).then(({ error }) => { if (error) console.error(error) })
+      .eq('id', id).then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const rejectVO = (id: string) => {
     setVOs(prev => prev.map(v => v.id === id ? { ...v, status: 'rejected' } : v))
     supabase.from('variation_orders').update({ status: 'rejected' }).eq('id', id)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const totalContractSum = boqItems.reduce((s, b) => s + b.contractAmount, 0)

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
-import { startPolling } from '../lib/syncUtils'
+import { startPolling, triggerRefetch } from '../lib/syncUtils'
 import { supabase } from '../lib/supabase'
 import type { IssueReport, IssueComment, Role } from '../types'
 
@@ -74,6 +74,7 @@ export function IssueProvider({ children }: { children: ReactNode }) {
       photos: issue.photos ?? [], current_tier: currentTier,
     }).then(({ error }) => {
       if (error) { console.error(error); setIssues(prev => prev.filter(i => i.id !== id)) }
+      else triggerRefetch()
     })
   }
 
@@ -85,13 +86,13 @@ export function IssueProvider({ children }: { children: ReactNode }) {
     const newStatus = issue.status === 'open' ? 'in-progress' as const : issue.status
     setIssues(prev => prev.map(i => i.id === issueId ? { ...i, comments: newComments, status: newStatus } : i))
     supabase.from('issues').update({ comments: newComments, status: newStatus }).eq('id', issueId)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const updateStatus = (issueId: string, status: IssueReport['status']) => {
     setIssues(prev => prev.map(i => i.id === issueId ? { ...i, status } : i))
     supabase.from('issues').update({ status }).eq('id', issueId)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const escalateIssue = (issueId: string, toTier: IssueReport['currentTier'], byName: string, byRole: Role) => {
@@ -106,7 +107,7 @@ export function IssueProvider({ children }: { children: ReactNode }) {
     setIssues(prev => prev.map(i => i.id === issueId
       ? { ...i, currentTier: toTier, status: 'in-progress', comments: newComments } : i))
     supabase.from('issues').update({ current_tier: toTier, status: 'in-progress', comments: newComments }).eq('id', issueId)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const assignIssue = (issueId: string, toId: string, toName: string, byName: string) => {
@@ -120,7 +121,7 @@ export function IssueProvider({ children }: { children: ReactNode }) {
     const newComments = [...issue.comments, systemComment]
     setIssues(prev => prev.map(i => i.id === issueId ? { ...i, assignedToId: toId, assignedToName: toName, comments: newComments } : i))
     supabase.from('issues').update({ assigned_to_id: toId, assigned_to_name: toName, comments: newComments }).eq('id', issueId)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const reassignIssue = (issueId: string, toId: string, toName: string, reason: string, byName: string, byRole: Role) => {
@@ -135,7 +136,7 @@ export function IssueProvider({ children }: { children: ReactNode }) {
     setIssues(prev => prev.map(i => i.id === issueId
       ? { ...i, assignedToId: toId, assignedToName: toName, comments: newComments } : i))
     supabase.from('issues').update({ assigned_to_id: toId, assigned_to_name: toName, comments: newComments }).eq('id', issueId)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const resolveWithPhoto = (issueId: string, photo: string, byName: string, byRole: Role) => {
@@ -150,7 +151,7 @@ export function IssueProvider({ children }: { children: ReactNode }) {
     setIssues(prev => prev.map(i => i.id === issueId
       ? { ...i, status: 'resolved', resolvePhoto: photo, comments: newComments } : i))
     supabase.from('issues').update({ status: 'resolved', resolve_photo: photo, comments: newComments }).eq('id', issueId)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   return (

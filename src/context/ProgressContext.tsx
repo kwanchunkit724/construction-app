@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
-import { startPolling } from '../lib/syncUtils'
+import { startPolling, triggerRefetch } from '../lib/syncUtils'
 import { supabase } from '../lib/supabase'
 import type { ProgressItem, SiteMessage, Project, ProjectModule } from '../types'
 
@@ -156,7 +156,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
 
   const persistItems = (rolled: ProgressItem[]) => {
     supabase.from('progress_items').upsert(rolled.map(itemToRow))
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const applyRollUp = (updater: (prev: ProgressItem[]) => ProgressItem[]) => {
@@ -187,6 +187,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       contract_value: p.contractValue, site_address: p.siteAddress,
     }).then(({ error }) => {
       if (error) { console.error(error); setProjects(prev => prev.filter(x => x.id !== id)) }
+      else triggerRefetch()
     })
   }
 
@@ -195,7 +196,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   const updateProjectModules = (projectId: string, modules: ProjectModule[]) => {
     setProjects(prev => prev.map(p => p.id === projectId ? { ...p, enabledModules: modules } : p))
     supabase.from('projects').update({ enabled_modules: modules }).eq('id', projectId)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const currentProject = projects.find(p => p.id === currentProjectId)
@@ -229,13 +230,13 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   const assignItem = (id: string, userIds: string[]) => {
     setAllItems(prev => prev.map(i => i.id === id ? { ...i, ownedBy: userIds } : i))
     supabase.from('progress_items').update({ owned_by: userIds }).eq('id', id)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const setDelegated = (id: string, userIds: string[]) => {
     setAllItems(prev => prev.map(i => i.id === id ? { ...i, delegatedTo: userIds } : i))
     supabase.from('progress_items').update({ delegated_to: userIds }).eq('id', id)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const delegateItem = (id: string, userId: string) => {
@@ -243,7 +244,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       if (i.id !== id) return i
       const delegatedTo = i.delegatedTo.includes(userId) ? i.delegatedTo : [...i.delegatedTo, userId]
       supabase.from('progress_items').update({ delegated_to: delegatedTo }).eq('id', id)
-        .then(({ error }) => { if (error) console.error(error) })
+        .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
       return { ...i, delegatedTo }
     }))
   }
@@ -255,6 +256,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     supabase.from('progress_items').insert(itemToRow(newItem))
       .then(({ error }) => {
         if (error) { console.error(error); setAllItems(prev => prev.filter(i => i.id !== id)) }
+        else triggerRefetch()
       })
   }
 
@@ -267,7 +269,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       }
       collect(id)
       supabase.from('progress_items').delete().in('id', [...toRemove])
-        .then(({ error }) => { if (error) console.error(error) })
+        .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
       return rollUp(prev.filter(i => !toRemove.has(i.id)))
     })
   }
@@ -286,6 +288,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       sent_at: sentAt, read_by: [msg.from], attachments: msg.attachments ?? [],
     }).then(({ error }) => {
       if (error) { console.error(error); setMessages(prev => prev.filter(m => m.id !== id)) }
+      else triggerRefetch()
     })
   }
 
@@ -294,7 +297,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       if (!msgIds.includes(m.id) || m.readBy.includes(userId)) return m
       const readBy = [...m.readBy, userId]
       supabase.from('site_messages').update({ read_by: readBy }).eq('id', m.id)
-        .then(({ error }) => { if (error) console.error(error) })
+        .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
       return { ...m, readBy }
     }))
   }

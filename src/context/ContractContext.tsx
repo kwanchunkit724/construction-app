@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
-import { startPolling } from '../lib/syncUtils'
+import { startPolling, triggerRefetch } from '../lib/syncUtils'
 import { supabase } from '../lib/supabase'
 import type { SubContract, ContractItem } from '../types'
 
@@ -65,6 +65,7 @@ export function ContractProvider({ children }: { children: ReactNode }) {
       created_by: c.createdBy,
     }).then(({ error }) => {
       if (error) { console.error(error); setContracts(prev => prev.filter(x => x.id !== id)) }
+      else triggerRefetch()
     })
   }
 
@@ -78,13 +79,13 @@ export function ContractProvider({ children }: { children: ReactNode }) {
     if (patch.items) row.items = patch.items
     if (patch.fileRef !== undefined) row.file_ref = patch.fileRef
     supabase.from('sub_contracts').update(row).eq('id', id)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const deleteContract = (id: string) => {
     setContracts(prev => prev.filter(c => c.id !== id))
     supabase.from('sub_contracts').delete().eq('id', id)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const addItem = (contractId: string, item: Omit<ContractItem, 'id'>) => {
@@ -93,7 +94,7 @@ export function ContractProvider({ children }: { children: ReactNode }) {
       if (c.id !== contractId) return c
       const items = [...c.items, newItem]
       supabase.from('sub_contracts').update({ items }).eq('id', contractId)
-        .then(({ error }) => { if (error) console.error(error) })
+        .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
       return { ...c, items }
     }))
   }
@@ -103,7 +104,7 @@ export function ContractProvider({ children }: { children: ReactNode }) {
       if (c.id !== contractId) return c
       const items = c.items.filter(i => i.id !== itemId)
       supabase.from('sub_contracts').update({ items }).eq('id', contractId)
-        .then(({ error }) => { if (error) console.error(error) })
+        .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
       return { ...c, items }
     }))
   }

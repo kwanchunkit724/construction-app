@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
-import { startPolling } from '../lib/syncUtils'
+import { startPolling, triggerRefetch } from '../lib/syncUtils'
 import { supabase } from '../lib/supabase'
 import type { NCR } from '../types'
 
@@ -46,6 +46,7 @@ export function QCProvider({ children }: { children: ReactNode }) {
       severity: ncr.severity, photos: ncr.photos, status: 'open',
     }).then(({ error }) => {
       if (error) { console.error(error); setNcrs(prev => prev.filter(n => n.id !== id)) }
+      else triggerRefetch()
     })
   }
 
@@ -56,14 +57,14 @@ export function QCProvider({ children }: { children: ReactNode }) {
     supabase.from('ncrs').update({
       status: 'corrective-action', corrective_action: action,
       corrective_due_date: dueDate, corrective_action_by: byName,
-    }).eq('id', id).then(({ error }) => { if (error) console.error(error) })
+    }).eq('id', id).then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const closeNCR = (id: string) => {
     const closedAt = new Date().toISOString()
     setNcrs(prev => prev.map(n => n.id === id ? { ...n, status: 'closed', closedAt } : n))
     supabase.from('ncrs').update({ status: 'closed', closed_at: closedAt }).eq('id', id)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   return (

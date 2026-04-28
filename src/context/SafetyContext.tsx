@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
-import { startPolling } from '../lib/syncUtils'
+import { startPolling, triggerRefetch } from '../lib/syncUtils'
 import { supabase } from '../lib/supabase'
 import type { PTWRequest, ToolboxTalk } from '../types'
 
@@ -73,6 +73,7 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
       risk_level: ptw.riskLevel, status: 'pending', acknowledged_by: [],
     }).then(({ error }) => {
       if (error) { console.error(error); setPtwRequests(prev => prev.filter(p => p.id !== id)) }
+      else triggerRefetch()
     })
   }
 
@@ -84,13 +85,13 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
     supabase.from('ptw_requests').update({
       status: 'approved', approved_by: byId, approved_by_name: byName,
       approved_at: approvedAt, conditions,
-    }).eq('id', id).then(({ error }) => { if (error) console.error(error) })
+    }).eq('id', id).then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const rejectPTW = (id: string, reason: string) => {
     setPtwRequests(prev => prev.map(p => p.id === id ? { ...p, status: 'rejected', rejectionReason: reason } : p))
     supabase.from('ptw_requests').update({ status: 'rejected', rejection_reason: reason }).eq('id', id)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const acknowledgePTW = (id: string, workerId: string) => {
@@ -98,7 +99,7 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
       if (p.id !== id || p.acknowledgedBy.includes(workerId)) return p
       const acknowledgedBy = [...p.acknowledgedBy, workerId]
       supabase.from('ptw_requests').update({ acknowledged_by: acknowledgedBy, status: 'active' }).eq('id', id)
-        .then(({ error }) => { if (error) console.error(error) })
+        .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
       return { ...p, acknowledgedBy, status: 'active' }
     }))
   }
@@ -107,7 +108,7 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
     const closedAt = new Date().toISOString()
     setPtwRequests(prev => prev.map(p => p.id === id ? { ...p, status: 'completed', closedBy: byId, closedAt } : p))
     supabase.from('ptw_requests').update({ status: 'completed', closed_by: byId, closed_at: closedAt }).eq('id', id)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const addToolboxTalk = (talk: Omit<ToolboxTalk, 'id'>) => {
@@ -121,6 +122,7 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
       duration: talk.duration, notes: talk.notes,
     }).then(({ error }) => {
       if (error) { console.error(error); setToolboxTalks(prev => prev.filter(t => t.id !== id)) }
+      else triggerRefetch()
     })
   }
 

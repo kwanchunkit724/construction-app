@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
-import { startPolling } from '../lib/syncUtils'
+import { startPolling, triggerRefetch } from '../lib/syncUtils'
 import { supabase } from '../lib/supabase'
 import type { DrawingRegisterItem, Submittal } from '../types'
 
@@ -60,13 +60,14 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
       status: d.status, distributed_to: d.distributedTo,
     }).then(({ error }) => {
       if (error) { console.error(error); setDrawings(prev => prev.filter(x => x.id !== id)) }
+      else triggerRefetch()
     })
   }
 
   const supersedDrawing = (id: string) => {
     setDrawings(prev => prev.map(d => d.id === id ? { ...d, status: 'superseded' } : d))
     supabase.from('drawings').update({ status: 'superseded' }).eq('id', id)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const addSubmittal = (s: Omit<Submittal, 'id'>) => {
@@ -79,13 +80,14 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
       submitted_at: s.submittedAt, status: s.status, remarks: s.remarks,
     }).then(({ error }) => {
       if (error) { console.error(error); setSubmittals(prev => prev.filter(x => x.id !== id)) }
+      else triggerRefetch()
     })
   }
 
   const updateSubmittalStatus = (id: string, status: Submittal['status'], remarks?: string) => {
     setSubmittals(prev => prev.map(s => s.id === id ? { ...s, status, remarks: remarks ?? s.remarks } : s))
     supabase.from('submittals').update({ status, remarks }).eq('id', id)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   return (

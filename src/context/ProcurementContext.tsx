@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
-import { startPolling } from '../lib/syncUtils'
+import { startPolling, triggerRefetch } from '../lib/syncUtils'
 import { supabase } from '../lib/supabase'
 import type { MaterialRequest } from '../types'
 
@@ -50,6 +50,7 @@ export function ProcurementProvider({ children }: { children: ReactNode }) {
       zone: req.zone, items: req.items, status: 'pending', notes: req.notes,
     }).then(({ error }) => {
       if (error) { console.error(error); setRequests(prev => prev.filter(r => r.id !== id)) }
+      else triggerRefetch()
     })
   }
 
@@ -58,27 +59,27 @@ export function ProcurementProvider({ children }: { children: ReactNode }) {
       ? { ...r, status: 'approved', approvedBy: byName, expectedDelivery } : r))
     supabase.from('material_requests')
       .update({ status: 'approved', approved_by: byName, expected_delivery: expectedDelivery })
-      .eq('id', id).then(({ error }) => { if (error) console.error(error) })
+      .eq('id', id).then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const markOrdered = (id: string) => {
     const orderedAt = new Date().toISOString()
     setRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'ordered', orderedAt } : r))
     supabase.from('material_requests').update({ status: 'ordered', ordered_at: orderedAt }).eq('id', id)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const markDelivered = (id: string) => {
     const deliveredAt = new Date().toISOString()
     setRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'delivered', deliveredAt } : r))
     supabase.from('material_requests').update({ status: 'delivered', delivered_at: deliveredAt }).eq('id', id)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   const rejectRequest = (id: string) => {
     setRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'rejected' } : r))
     supabase.from('material_requests').update({ status: 'rejected' }).eq('id', id)
-      .then(({ error }) => { if (error) console.error(error) })
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
   return (
