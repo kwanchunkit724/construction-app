@@ -43,6 +43,7 @@ export interface Project {
   numBasementLevels: number    // 0 if none
   zones: ProjectZone[]         // PM-defined zone breakdown
   enabledModules: ProjectModule[]  // super-admin controlled feature flags
+  assignedPmIds?: string[]     // PM user IDs assigned to manage this project
   client?: string
   startDate?: string
   targetEndDate?: string

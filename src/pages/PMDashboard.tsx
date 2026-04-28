@@ -463,11 +463,16 @@ export default function PMDashboard() {
   const { issues: issueReports } = useIssues()
   const { boqItems, variationOrders: allVOs } = useCost()
 
-  // Auto-switch to PM's own project on first mount only
+  // Only show projects this PM is assigned to
+  const myProjects = projects.filter(p => p.assignedPmIds?.includes(user?.id ?? ''))
+
+  // Auto-switch to first assigned project whenever assignments load/change
   useEffect(() => {
-    if (user?.projectId) switchProject(user.projectId)
+    if (!user || myProjects.length === 0) return
+    const alreadyOnAssigned = myProjects.some(p => p.id === currentProjectId)
+    if (!alreadyOnAssigned) switchProject(myProjects[0].id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [myProjects.length, user?.id])
 
   // Compute live KPIs from ProgressItems filtered to current project
   const level1Items = items.filter(i => i.level === 1)
@@ -548,8 +553,15 @@ export default function PMDashboard() {
               <p className="section-sub">切換及查看工程項目（新增項目請聯絡系統管理員）</p>
             </div>
 
+            {myProjects.length === 0 && (
+              <div className="text-center py-12 text-site-400">
+                <FolderOpen size={36} className="mx-auto mb-3 opacity-30" />
+                <p className="text-sm font-medium">尚未獲指派任何項目</p>
+                <p className="text-xs mt-1">請聯絡系統管理員為您指派項目</p>
+              </div>
+            )}
             <div className="space-y-3">
-              {projects.map(p => (
+              {myProjects.map(p => (
                 <div key={p.id} className={`flex items-start gap-4 p-4 rounded-xl border-2 transition-all ${
                   p.id === currentProjectId
                     ? 'border-safety-400 bg-safety-50'

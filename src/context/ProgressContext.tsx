@@ -17,6 +17,7 @@ function projectFromRow(row: any): Project {
     numBlocks: row.num_blocks ?? 1, hasBasement: row.has_basement ?? false,
     numBasementLevels: row.num_basement_levels ?? 0,
     zones: row.zones ?? [], enabledModules: row.enabled_modules ?? ALL_MODULE_KEYS,
+    assignedPmIds: row.assigned_pm_ids ?? [],
     client: row.client, startDate: row.start_date, targetEndDate: row.target_end_date,
     contractValue: row.contract_value, siteAddress: row.site_address,
   }
@@ -104,6 +105,7 @@ interface ProgressContextType {
   createProject: (p: Omit<Project, 'id' | 'createdAt'>) => void
   switchProject: (id: string) => void
   updateProjectModules: (projectId: string, modules: ProjectModule[]) => void
+  assignProjectPMs: (projectId: string, pmIds: string[]) => void
   isModuleEnabled: (module: ProjectModule) => boolean
   items: ProgressItem[]
   updateProgress: (id: string, value: number, notes: string, byName: string) => void
@@ -182,8 +184,9 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       created_at: createdAt, status: p.status, project_type: p.projectType,
       num_blocks: p.numBlocks, has_basement: p.hasBasement,
       num_basement_levels: p.numBasementLevels, zones: p.zones,
-      enabled_modules: newProject.enabledModules, client: p.client,
-      start_date: p.startDate, target_end_date: p.targetEndDate,
+      enabled_modules: newProject.enabledModules,
+      assigned_pm_ids: p.assignedPmIds ?? [],
+      client: p.client, start_date: p.startDate, target_end_date: p.targetEndDate,
       contract_value: p.contractValue, site_address: p.siteAddress,
     }).then(({ error }) => {
       if (error) { console.error(error); setProjects(prev => prev.filter(x => x.id !== id)) }
@@ -196,6 +199,12 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   const updateProjectModules = (projectId: string, modules: ProjectModule[]) => {
     setProjects(prev => prev.map(p => p.id === projectId ? { ...p, enabledModules: modules } : p))
     supabase.from('projects').update({ enabled_modules: modules }).eq('id', projectId)
+      .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
+  }
+
+  const assignProjectPMs = (projectId: string, pmIds: string[]) => {
+    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, assignedPmIds: pmIds } : p))
+    supabase.from('projects').update({ assigned_pm_ids: pmIds }).eq('id', projectId)
       .then(({ error }) => { if (error) console.error(error); else triggerRefetch() })
   }
 
@@ -305,7 +314,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={{
       projects, currentProjectId, currentProject, createProject, switchProject,
-      updateProjectModules, isModuleEnabled,
+      updateProjectModules, assignProjectPMs, isModuleEnabled,
       items, updateProgress, updateFloors, assignItem, setDelegated, delegateItem, addItem, deleteItem,
       messages, sendMessage, markRead,
     }}>

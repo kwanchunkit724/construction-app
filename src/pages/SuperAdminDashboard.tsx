@@ -265,6 +265,45 @@ function ModuleConfigPanel({ projectId, enabledModules }: { projectId: string; e
   )
 }
 
+// ── PM Assignment panel (per project) ────────────────────────────────────────
+function PMAssignPanel({ projectId, assignedPmIds }: { projectId: string; assignedPmIds: string[] }) {
+  const { allUsers } = useAuth()
+  const { assignProjectPMs } = useProgress()
+  const pmUsers = allUsers.filter(u => u.role === 'pm')
+  const [selected, setSelected] = useState<string[]>([...assignedPmIds])
+  const [saved, setSaved] = useState(false)
+
+  const toggle = (id: string) => {
+    setSelected(prev => { setSaved(false); return prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id] })
+  }
+
+  return (
+    <div className="mt-3 bg-blue-50 rounded-xl p-4 border border-blue-100">
+      <p className="text-xs font-bold text-gray-600 mb-3 uppercase tracking-wide">指派項目總監 (PM)</p>
+      {pmUsers.length === 0 ? (
+        <p className="text-xs text-gray-400">暫無已審批的 PM 帳戶，請先審批 PM 用戶申請</p>
+      ) : (
+        <div className="flex flex-wrap gap-2 mb-3">
+          {pmUsers.map(u => {
+            const on = selected.includes(u.id)
+            return (
+              <button key={u.id} onClick={() => toggle(u.id)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${on ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${on ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'}`}>{u.avatar}</span>
+                {u.name}
+              </button>
+            )
+          })}
+        </div>
+      )}
+      <button onClick={() => { assignProjectPMs(projectId, selected); setSaved(true) }}
+        className={`text-xs px-4 py-2 rounded-lg font-semibold transition-all ${saved ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
+        {saved ? '✓ 已儲存' : '儲存指派'}
+      </button>
+    </div>
+  )
+}
+
 // ── Main dashboard ────────────────────────────────────────────────────────────
 type AdminTab = 'projects' | 'applications' | 'users'
 
@@ -388,6 +427,7 @@ export default function SuperAdminDashboard() {
                           })}
                         </div>
                         <ModuleConfigPanel projectId={proj.id} enabledModules={proj.enabledModules} />
+                        <PMAssignPanel projectId={proj.id} assignedPmIds={proj.assignedPmIds ?? []} />
                       </div>
                     )}
                   </div>
