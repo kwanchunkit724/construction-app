@@ -186,19 +186,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (username: string, password: string) => {
     const email = username.includes('@') ? username.trim() : toEmail(username)
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      const { data: profile } = await supabase.from('profiles')
-        .select('approved').eq('username', username.toLowerCase().trim()).maybeSingle()
-      if (profile && !profile.approved) return { ok: false, error: '帳戶正待管理員審批，請稍候。' }
-      return { ok: false, error: '用戶名或密碼錯誤，請重試。' }
-    }
-    const { data: profile } = await supabase.from('profiles')
-      .select('approved').eq('id', data.user.id).single()
-    if (!profile?.approved) {
-      await supabase.auth.signOut()
-      return { ok: false, error: '帳戶正待管理員審批，請稍候。' }
-    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) return { ok: false, error: '用戶名或密碼錯誤，請重試。' }
     return { ok: true }
   }
 

@@ -57,8 +57,22 @@ export default function Login() {
     if (!username.trim() || !password.trim()) { setError('請輸入用戶名和密碼。'); triggerShake(); return }
     setLoading(true); setError('')
     const result = await login(username, password)
-    setLoading(false)
-    if (!result.ok) { setError(result.error ?? '登入失敗'); triggerShake() }
+    if (!result.ok) {
+      setLoading(false)
+      setError(result.error ?? '登入失敗')
+      triggerShake()
+      return
+    }
+    // Auth succeeded — wait up to 5s for profile to load, then clear spinner
+    const deadline = Date.now() + 5000
+    const poll = setInterval(() => {
+      if (Date.now() > deadline) {
+        clearInterval(poll)
+        setLoading(false)
+        setError('帳戶正待管理員審批，或請聯絡管理員。')
+        triggerShake()
+      }
+    }, 200)
   }
 
   const handleRegister = async (e: FormEvent) => {
