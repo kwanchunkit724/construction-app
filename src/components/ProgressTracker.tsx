@@ -4,7 +4,7 @@ import {
   Users, CheckCircle2, AlertTriangle, Clock, Minus,
   Filter, X, Send, Plus, Layers, Trash2,
 } from 'lucide-react'
-import { useAuth, DEMO_ACCOUNTS } from '../context/AuthContext'
+import { useAuth } from '../context/AuthContext'
 import { useProgress } from '../context/ProgressContext'
 import type { ProgressItem } from '../types'
 
@@ -53,14 +53,15 @@ function AssignModal({
   onClose: () => void
 }) {
   const { assignItem, setDelegated } = useProgress()
+  const { allUsers } = useAuth()
   const [selected, setSelected] = useState<string[]>(
     mode === 'assign' ? [...item.ownedBy] : [...item.delegatedTo]
   )
 
-  const candidates = DEMO_ACCOUNTS.filter(a =>
+  const candidates = allUsers.filter(a =>
     mode === 'assign'
-      ? (a.role === 'pe' || a.role === 'foreman')
-      : a.role === 'sub-supervisor'
+      ? a.role === 'main-contractor'
+      : a.role === 'sub-contractor'
   )
 
   const toggle = (id: string) =>
@@ -585,12 +586,13 @@ function ProgressRow({
   canAdd: boolean
   canDelete: boolean
 }) {
+  const { allUsers } = useAuth()
   const [confirmDel, setConfirmDel] = useState(false)
   const children = allItems.filter(i => i.parentId === item.id)
   const isOpen = expanded.has(item.id)
 
-  const ownerNames = DEMO_ACCOUNTS.filter(a => item.ownedBy.includes(a.id)).map(a => a.name)
-  const delegateeNames = DEMO_ACCOUNTS.filter(a => item.delegatedTo.includes(a.id)).map(a => a.name)
+  const ownerNames = allUsers.filter(a => item.ownedBy.includes(a.id)).map(a => a.name)
+  const delegateeNames = allUsers.filter(a => item.delegatedTo.includes(a.id)).map(a => a.name)
 
   const StatusIcon = STATUS_ICON[item.status] ?? Minus
   const diff = item.actualProgress - item.plannedProgress
@@ -768,7 +770,7 @@ export default function ProgressTracker() {
   const { user } = useAuth()
   const { items, deleteItem } = useProgress()
 
-  const role = user?.role
+  const perms = user?.permissions ?? []
   const userId = user?.id ?? ''
 
   const [expanded, setExpanded] = useState<Set<string>>(
@@ -782,26 +784,18 @@ export default function ProgressTracker() {
   const [delegating, setDelegating] = useState<ProgressItem | null>(null)
   const [addingParent, setAddingParent] = useState<ProgressItem | null | undefined>(undefined)
 
-  const canAdd    = role === 'pm'
-  const canDelete = role === 'pm'
+  const canAdd    = perms.includes('view:all')
+  const canDelete = perms.includes('view:all')
 
   const visibleRoots = useMemo(() => {
     const rootItems = items.filter(i => i.parentId === null)
-    if (role === 'pm' || role === 'cp') return rootItems
-    if (role === 'pe' || role === 'foreman') {
-      return rootItems.filter(root => {
-        const desc = getAllDescendants(root.id, items)
-        return desc.some(d => d.ownedBy.includes(userId)) || root.ownedBy.includes(userId)
-      })
-    }
-    if (role === 'sub-supervisor') {
-      return rootItems.filter(root => {
-        const desc = getAllDescendants(root.id, items)
-        return desc.some(d => d.delegatedTo.includes(userId))
-      })
-    }
-    return rootItems
-  }, [items, role, userId])
+    if (perms.includes('view:all')) return rootItems
+    return rootItems.filter(root => {
+      const desc = getAllDescendants(root.id, items)
+      return root.ownedBy.includes(userId) || root.delegatedTo.includes(userId) ||
+        desc.some(d => d.ownedBy.includes(userId) || d.delegatedTo.includes(userId))
+    })
+  }, [items, perms, userId])
 
   const filteredRoots = visibleRoots.filter(r => {
     if (filterZone !== 'all' && r.zone !== filterZone) return false
@@ -824,9 +818,8 @@ export default function ProgressTracker() {
   })
 
   const itemCanUpdate = (item: ProgressItem) => {
-    if (role === 'pm') return true
-    if ((role === 'pe' || role === 'foreman') && item.ownedBy.includes(userId)) return true
-    if (role === 'sub-supervisor' && (item.delegatedTo.includes(userId) || item.ownedBy.includes(userId))) return true
+    if (perms.includes('view:all')) return true
+    if (perms.includes('update:progress') && (item.ownedBy.includes(userId) || item.delegatedTo.includes(userId))) return true
     return false
   }
 
@@ -871,7 +864,7 @@ export default function ProgressTracker() {
           <option value="all">全部狀態</option>
           {Object.entries(STATUS_ZH).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
-        {role !== 'pm' && role !== 'cp' && (
+        {!perms.includes('view:all') && (
           <button
             onClick={() => setShowMyItems(prev => !prev)}
             className={`text-xs px-3 py-1.5 rounded-lg font-medium border transition-colors ${
@@ -925,8 +918,8 @@ export default function ProgressTracker() {
                 onAddChild={setAddingParent}
                 onDelete={item => deleteItem(item.id)}
                 canUpdate={itemCanUpdate}
-                canAssign={role === 'pm'}
-                canDelegate={role === 'pe' || role === 'foreman'}
+                canAssign={perms.includes('view:all')}
+                canDelegate={perms.includes('update:progress') && !perms.includes('view:all')}
                 canAdd={canAdd}
                 canDelete={canDelete}
               />

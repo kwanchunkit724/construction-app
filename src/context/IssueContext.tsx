@@ -59,8 +59,7 @@ export function IssueProvider({ children }: { children: ReactNode }) {
 
   const submitIssue = (issue: Omit<IssueReport, 'id' | 'submittedAt' | 'status' | 'comments' | 'currentTier'>) => {
     const currentTier: IssueReport['currentTier'] =
-      issue.submittedByRole === 'worker' ? 'sub-supervisor' :
-      issue.submittedByRole === 'sub-supervisor' ? 'foreman-pe' : 'pm'
+      issue.submittedByRole === 'sub-contractor' ? 'foreman-pe' : 'pm'
     const id = `ISS${Date.now()}`
     const submittedAt = new Date().toISOString()
     const newIssue: IssueReport = { ...issue, id, submittedAt, status: 'open', comments: [], currentTier }

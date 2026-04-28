@@ -28,22 +28,10 @@ const STATUS_ZH: Record<string, string> = {
 const STATUS_ICON: Record<string, React.ElementType> = {
   open: Clock, 'in-progress': AlertTriangle, resolved: CheckCircle2, closed: XCircle,
 }
-const ROLE_COLOR: Record<string, string> = {
-  pm: 'bg-blue-600', pe: 'bg-emerald-600', cp: 'bg-orange-500',
-  foreman: 'bg-amber-600', worker: 'bg-green-600', 'sub-supervisor': 'bg-purple-600',
-  system: 'bg-gray-400',
-}
 const TIER_ZH: Record<IssueReport['currentTier'], string> = {
-  'sub-supervisor': '判頭打理',
-  'foreman-pe':     '工頭/工程師',
+  'sub-supervisor': '判頭處理',
+  'foreman-pe':     '總承建商',
   pm:               '總監',
-}
-
-function myTier(role: string): IssueReport['currentTier'] | null {
-  if (role === 'sub-supervisor') return 'sub-supervisor'
-  if (role === 'foreman' || role === 'pe') return 'foreman-pe'
-  if (role === 'pm') return 'pm'
-  return null
 }
 
 interface SubProfile { id: string; name: string; company: string }
@@ -52,42 +40,38 @@ export default function IssueBoard({ projectId }: { projectId?: string }) {
   const { issues, addComment, updateStatus, escalateIssue, assignIssue, reassignIssue, resolveWithPhoto } = useIssues()
   const { user } = useAuth()
 
+  // Permission helpers
+  const perms = user?.permissions ?? []
+  const canManage  = perms.includes('manage:issues') || perms.includes('view:all')
+  const canReport  = perms.includes('report:issues')
+  const canAssign  = perms.includes('assign:tasks')
+  const canDelegate = perms.includes('view:delegated-items')
+
   const [expanded, setExpanded]         = useState<Set<string>>(new Set())
   const [commentText, setCommentText]   = useState<Record<string, string>>({})
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterSev, setFilterSev]       = useState('all')
 
-  // Sub-supervisor list for assignment
   const [subSups, setSubSups] = useState<SubProfile[]>([])
   useEffect(() => {
-    supabase.from('profiles').select('id,name,company').eq('role', 'sub-supervisor')
+    supabase.from('profiles').select('id,name,company').eq('role', 'sub-contractor')
       .then(({ data }) => { if (data) setSubSups(data as SubProfile[]) })
   }, [])
 
-  // Assign panel state (foreman assigning to sub-sup)
-  const [assigningId, setAssigningId]     = useState<string | null>(null)
-  const [assignTarget, setAssignTarget]   = useState('')
-
-  // Reassign panel state (sub-sup transferring to another sub-sup)
-  const [reassignId, setReassignId]       = useState<string | null>(null)
+  const [assigningId, setAssigningId]       = useState<string | null>(null)
+  const [assignTarget, setAssignTarget]     = useState('')
+  const [reassignId, setReassignId]         = useState<string | null>(null)
   const [reassignTarget, setReassignTarget] = useState('')
   const [reassignReason, setReassignReason] = useState('')
-
-  // Resolve-with-photo state
-  const [resolveId, setResolveId]         = useState<string | null>(null)
+  const [resolveId, setResolveId]           = useState<string | null>(null)
   const [resolvePhotoUrl, setResolvePhotoUrl] = useState('')
-
-  const tier = user ? myTier(user.role) : null
 
   const tierFilter = (issue: IssueReport): boolean => {
     if (!user) return false
-    if (user.role === 'cp') return true
-    if (user.role === 'sub-supervisor') {
-      // See issues assigned directly to me, or unassigned sub-supervisor-tier issues
-      return issue.currentTier === 'sub-supervisor' &&
-        (!issue.assignedToId || issue.assignedToId === user.id)
-    }
-    return tier !== null && issue.currentTier === tier
+    if (canManage) return true
+    if (canDelegate) return issue.currentTier === 'sub-supervisor' && (!issue.assignedToId || issue.assignedToId === user.id)
+    if (canReport) return issue.submittedBy === user.id
+    return false
   }
 
   const filtered = issues
@@ -105,30 +89,6 @@ export default function IssueBoard({ projectId }: { projectId?: string }) {
     addComment(issueId, { authorId: user.id, authorName: user.name, authorRole: user.role, body: text })
     setCommentText(prev => ({ ...prev, [issueId]: '' }))
   }
-
-  const nextTier = (issue: IssueReport): IssueReport['currentTier'] =>
-    issue.currentTier === 'sub-supervisor' ? 'foreman-pe' : 'pm'
-
-  const canEscalate = (issue: IssueReport) =>
-    user !== null && tier !== null && issue.currentTier === tier &&
-    issue.currentTier !== 'pm' && issue.status !== 'resolved' && issue.status !== 'closed'
-
-  const canResolve = (issue: IssueReport) =>
-    user !== null && tier !== null && issue.currentTier === tier &&
-    issue.status !== 'resolved' && issue.status !== 'closed'
-
-  // Foreman/PE can assign unassigned sub-supervisor issues
-  const canAssign = (issue: IssueReport) =>
-    user !== null && (user.role === 'foreman' || user.role === 'pe') &&
-    issue.currentTier === 'sub-supervisor' && !issue.assignedToId &&
-    issue.status !== 'resolved' && issue.status !== 'closed'
-
-  // Sub-sup can reassign to another sub-sup
-  const canReassign = (issue: IssueReport) =>
-    user !== null && user.role === 'sub-supervisor' &&
-    issue.currentTier === 'sub-supervisor' &&
-    (issue.assignedToId === user.id || !issue.assignedToId) &&
-    issue.status !== 'resolved' && issue.status !== 'closed'
 
   const doAssign = (issueId: string) => {
     if (!assignTarget || !user) return
@@ -154,7 +114,6 @@ export default function IssueBoard({ projectId }: { projectId?: string }) {
 
   return (
     <div>
-      {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-4 items-center">
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
           className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none">
@@ -182,7 +141,6 @@ export default function IssueBoard({ projectId }: { projectId?: string }) {
           const StatusIcon = STATUS_ICON[issue.status]
           return (
             <div key={issue.id} className="border border-gray-200 rounded-xl overflow-hidden">
-              {/* Header row */}
               <button onClick={() => toggle(issue.id)}
                 className="w-full flex items-start gap-3 p-4 hover:bg-gray-50 transition-colors text-left">
                 {isOpen ? <ChevronDown size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
@@ -216,10 +174,8 @@ export default function IssueBoard({ projectId }: { projectId?: string }) {
                 </div>
               </button>
 
-              {/* Expanded detail */}
               {isOpen && (
                 <div className="border-t border-gray-100 bg-gray-50/50 p-4 space-y-4">
-                  {/* Detail fields */}
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div><span className="text-gray-400">類別：</span><span className="font-medium text-gray-700">{issue.category}</span></div>
                     <div><span className="text-gray-400">地點：</span><span className="font-medium text-gray-700">{issue.location}</span></div>
@@ -227,18 +183,15 @@ export default function IssueBoard({ projectId }: { projectId?: string }) {
                     <div><span className="text-gray-400">上報人：</span><span className="font-medium text-gray-700">{issue.submittedByName}</span></div>
                     <div><span className="text-gray-400">當前層級：</span><span className="font-medium text-purple-700">{TIER_ZH[issue.currentTier]}</span></div>
                     {issue.assignedToName && (
-                      <div><span className="text-gray-400">指派判頭：</span><span className="font-medium text-purple-700">{issue.assignedToName}</span></div>
+                      <div><span className="text-gray-400">指派至：</span><span className="font-medium text-purple-700">{issue.assignedToName}</span></div>
                     )}
                   </div>
 
                   <p className="text-sm text-gray-700 bg-white border border-gray-100 rounded-lg p-3">{issue.description}</p>
 
-                  {/* Photos */}
                   {issue.photos && issue.photos.length > 0 && (
                     <div>
-                      <p className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
-                        <Image size={11} /> 現場照片 ({issue.photos.length})
-                      </p>
+                      <p className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><Image size={11} /> 現場照片</p>
                       <div className="grid grid-cols-3 gap-1.5">
                         {issue.photos.map((src, idx) => (
                           <img key={idx} src={src} alt={`photo-${idx + 1}`}
@@ -248,140 +201,115 @@ export default function IssueBoard({ projectId }: { projectId?: string }) {
                     </div>
                   )}
 
-                  {/* Resolve photo preview */}
                   {issue.resolvePhoto && (
                     <div>
-                      <p className="text-xs font-semibold text-green-600 mb-2 flex items-center gap-1">
-                        <CheckCircle2 size={11} /> 解決相片
-                      </p>
-                      <img src={issue.resolvePhoto} alt="resolve"
-                        className="w-32 aspect-square object-cover rounded-lg border border-green-200" />
+                      <p className="text-xs font-semibold text-green-600 mb-2 flex items-center gap-1"><CheckCircle2 size={11} /> 解決相片</p>
+                      <img src={issue.resolvePhoto} alt="resolve" className="w-32 aspect-square object-cover rounded-lg border border-green-200" />
                     </div>
                   )}
 
-                  {/* ── FOREMAN/PE: assign unassigned issue to a sub-supervisor ── */}
-                  {canAssign(issue) && (
+                  {/* Assign to sub-contractor (for users with assign:tasks permission) */}
+                  {canAssign && issue.currentTier === 'sub-supervisor' && !issue.assignedToId &&
+                   issue.status !== 'resolved' && issue.status !== 'closed' && (
                     assigningId === issue.id ? (
                       <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 space-y-2">
                         <p className="text-xs font-semibold text-purple-800">指派至判頭</p>
                         <select value={assignTarget} onChange={e => setAssignTarget(e.target.value)}
-                          className="w-full text-sm border border-purple-300 rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500">
+                          className="w-full text-sm border border-purple-300 rounded-lg px-3 py-2 focus:outline-none">
                           <option value="">選擇判頭...</option>
-                          {subSups.map(s => (
-                            <option key={s.id} value={s.id}>{s.name} ({s.company})</option>
-                          ))}
+                          {subSups.map(s => <option key={s.id} value={s.id}>{s.name} ({s.company})</option>)}
                         </select>
                         <div className="flex gap-2">
                           <button onClick={() => doAssign(issue.id)} disabled={!assignTarget}
-                            className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white py-2 rounded-lg text-sm font-semibold transition-colors">
-                            確認指派
-                          </button>
+                            className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white py-2 rounded-lg text-sm font-semibold">確認指派</button>
                           <button onClick={() => { setAssigningId(null); setAssignTarget('') }}
-                            className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors">
-                            取消
-                          </button>
+                            className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-lg text-sm hover:bg-gray-50">取消</button>
                         </div>
                       </div>
                     ) : (
                       <button onClick={() => setAssigningId(issue.id)}
-                        className="w-full flex items-center justify-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-xl text-sm font-semibold transition-colors">
+                        className="w-full flex items-center justify-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-xl text-sm font-semibold">
                         <UserCheck size={14} /> 指派至判頭
                       </button>
                     )
                   )}
 
-                  {/* ── SUB-SUPERVISOR: resolve with photo or reassign ── */}
-                  {user?.role === 'sub-supervisor' && canReassign(issue) && (
+                  {/* Sub-contractor: resolve with photo or reassign */}
+                  {canDelegate && issue.currentTier === 'sub-supervisor' &&
+                   issue.status !== 'resolved' && issue.status !== 'closed' && (
                     <div className="space-y-2">
-                      {/* Resolve with photo */}
                       {resolveId === issue.id ? (
                         <div className="bg-green-50 border border-green-200 rounded-xl p-3 space-y-2">
                           <p className="text-xs font-semibold text-green-800">解決問題 — 上傳相片</p>
                           <input type="url" value={resolvePhotoUrl} onChange={e => setResolvePhotoUrl(e.target.value)}
                             placeholder="相片網址（或直接提交）"
-                            className="w-full text-sm border border-green-300 rounded-lg px-3 py-2 focus:outline-none focus:border-green-500" />
+                            className="w-full text-sm border border-green-300 rounded-lg px-3 py-2 focus:outline-none" />
                           <div className="flex gap-2">
                             <button onClick={() => doResolveWithPhoto(issue.id)}
-                              className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-semibold transition-colors">
-                              確認解決
-                            </button>
+                              className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-semibold">確認解決</button>
                             <button onClick={() => setResolveId(null)}
-                              className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors">
-                              取消
-                            </button>
+                              className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-lg text-sm hover:bg-gray-50">取消</button>
                           </div>
                         </div>
                       ) : (
                         <button onClick={() => { setResolveId(issue.id); setReassignId(null) }}
-                          className="w-full flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 text-white py-2 rounded-xl text-sm font-semibold transition-colors">
+                          className="w-full flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 text-white py-2 rounded-xl text-sm font-semibold">
                           <Camera size={14} /> 解決並補相片
                         </button>
                       )}
-
-                      {/* Reassign to another sub-supervisor */}
                       {reassignId === issue.id ? (
                         <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 space-y-2">
                           <p className="text-xs font-semibold text-orange-800">轉交至其他判頭</p>
                           <select value={reassignTarget} onChange={e => setReassignTarget(e.target.value)}
-                            className="w-full text-sm border border-orange-300 rounded-lg px-3 py-2 focus:outline-none focus:border-orange-500">
+                            className="w-full text-sm border border-orange-300 rounded-lg px-3 py-2 focus:outline-none">
                             <option value="">選擇判頭...</option>
-                            {subSups.filter(s => s.id !== user.id).map(s => (
-                              <option key={s.id} value={s.id}>{s.name} ({s.company})</option>
-                            ))}
+                            {subSups.filter(s => s.id !== user?.id).map(s => <option key={s.id} value={s.id}>{s.name} ({s.company})</option>)}
                           </select>
                           <textarea value={reassignReason} onChange={e => setReassignReason(e.target.value)}
                             rows={2} placeholder="請說明轉交原因（必填）..."
-                            className="w-full text-sm border border-orange-300 rounded-lg px-3 py-2 focus:outline-none focus:border-orange-500 resize-none" />
+                            className="w-full text-sm border border-orange-300 rounded-lg px-3 py-2 focus:outline-none resize-none" />
                           <div className="flex gap-2">
-                            <button onClick={() => doReassign(issue.id)}
-                              disabled={!reassignTarget || !reassignReason.trim()}
-                              className="flex-1 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white py-2 rounded-lg text-sm font-semibold transition-colors">
-                              確認轉交
-                            </button>
+                            <button onClick={() => doReassign(issue.id)} disabled={!reassignTarget || !reassignReason.trim()}
+                              className="flex-1 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white py-2 rounded-lg text-sm font-semibold">確認轉交</button>
                             <button onClick={() => { setReassignId(null); setReassignTarget(''); setReassignReason('') }}
-                              className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors">
-                              取消
-                            </button>
+                              className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-lg text-sm hover:bg-gray-50">取消</button>
                           </div>
                         </div>
                       ) : (
                         <button onClick={() => { setReassignId(issue.id); setResolveId(null) }}
-                          className="w-full flex items-center justify-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-xl text-sm font-semibold transition-colors">
+                          className="w-full flex items-center justify-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-xl text-sm font-semibold">
                           <RefreshCw size={14} /> 轉交至其他判頭
                         </button>
                       )}
                     </div>
                   )}
 
-                  {/* ── Standard escalate/resolve for non-sub-sup roles ── */}
-                  {user?.role !== 'sub-supervisor' && canResolve(issue) && (
-                    <div className="flex gap-2">
-                      <button onClick={() => updateStatus(issue.id, 'resolved')}
-                        className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors">
-                        <CheckCircle2 size={14} /> 標記解決
-                      </button>
-                      {canEscalate(issue) && (
-                        <button onClick={() => escalateIssue(issue.id, nextTier(issue), user!.name, user!.role)}
-                          className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors">
-                          <ArrowUpCircle size={14} />
-                          {issue.currentTier === 'sub-supervisor' ? '上報工頭 ↑' : '上報總監 ↑'}
+                  {/* Manager: resolve / escalate / change status */}
+                  {canManage && issue.status !== 'resolved' && issue.status !== 'closed' && (
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <button onClick={() => updateStatus(issue.id, 'resolved')}
+                          className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5">
+                          <CheckCircle2 size={14} /> 標記解決
                         </button>
-                      )}
-                    </div>
-                  )}
-
-                  {/* PM status panel */}
-                  {user?.role === 'pm' && issue.currentTier === 'pm' && (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs text-gray-500">更改狀態：</span>
-                      {(['open', 'in-progress', 'resolved', 'closed'] as IssueReport['status'][]).map(s => (
-                        <button key={s} onClick={() => updateStatus(issue.id, s)}
-                          className={`text-[10px] px-2.5 py-1 rounded-lg border font-medium transition-all ${
-                            issue.status === s ? STATUS_STYLE[s] + ' border-current' : 'border-gray-200 text-gray-400 hover:border-gray-300'
-                          }`}>
-                          {STATUS_ZH[s]}
-                        </button>
-                      ))}
+                        {issue.currentTier !== 'pm' && (
+                          <button onClick={() => escalateIssue(issue.id, 'pm', user!.name, user!.role)}
+                            className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5">
+                            <ArrowUpCircle size={14} /> 上報 ↑
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-gray-500">更改狀態：</span>
+                        {(['open', 'in-progress', 'resolved', 'closed'] as IssueReport['status'][]).map(s => (
+                          <button key={s} onClick={() => updateStatus(issue.id, s)}
+                            className={`text-[10px] px-2.5 py-1 rounded-lg border font-medium transition-all ${
+                              issue.status === s ? STATUS_STYLE[s] + ' border-current' : 'border-gray-200 text-gray-400 hover:border-gray-300'
+                            }`}>
+                            {STATUS_ZH[s]}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -394,7 +322,7 @@ export default function IssueBoard({ projectId }: { projectId?: string }) {
                     <div className="space-y-2 mb-3">
                       {issue.comments.map(c => (
                         <div key={c.id} className="flex gap-2.5">
-                          <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold ${ROLE_COLOR[c.authorRole] ?? ROLE_COLOR['system']}`}>
+                          <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center bg-blue-600 text-white text-xs font-bold">
                             {c.authorId === 'system' ? '↑' : c.authorName.slice(0, 1)}
                           </div>
                           <div className="flex-1 bg-white border border-gray-100 rounded-xl px-3 py-2">
@@ -409,11 +337,10 @@ export default function IssueBoard({ projectId }: { projectId?: string }) {
                     </div>
                   </div>
 
-                  {/* Add comment */}
-                  {user && user.role !== 'worker' && (
+                  {(canManage || canReport || canDelegate) && (
                     <div className="flex gap-2">
-                      <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold ${ROLE_COLOR[user.role] ?? 'bg-gray-500'}`}>
-                        {user.avatar}
+                      <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center bg-blue-600 text-white text-xs font-bold">
+                        {user?.avatar}
                       </div>
                       <div className="flex-1 flex gap-2">
                         <input value={commentText[issue.id] ?? ''}
@@ -421,8 +348,7 @@ export default function IssueBoard({ projectId }: { projectId?: string }) {
                           onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendComment(issue.id)}
                           placeholder="輸入回覆或處理方案..."
                           className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-blue-400" />
-                        <button onClick={() => sendComment(issue.id)}
-                          disabled={!commentText[issue.id]?.trim()}
+                        <button onClick={() => sendComment(issue.id)} disabled={!commentText[issue.id]?.trim()}
                           className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1">
                           <Send size={11} /> 回覆
                         </button>

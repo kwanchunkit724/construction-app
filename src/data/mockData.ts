@@ -350,7 +350,7 @@ export const siteMessages: SiteMessage[] = [
   {
     id: 'MSG001',
     type: 'progress-report',
-    from: 'U006', fromName: '王建國', fromRole: 'sub-supervisor',
+    from: 'U006', fromName: '王建國', fromRole: 'sub-contractor',
     to: ['U004', 'U002'], toNames: ['麥偉強 (工頭)', '張志豪 (工程師)'],
     subject: '【進度匯報】Zone C — 26-30/F 模板安裝進度更新',
     body: '截至今日下午，26-30/F 模板安裝完成 62%，較計劃進度落後約 18%。主要原因：上周連續兩日大雨，無法施工；今日人手 14 名，預計明後天可追回 10% 進度。',
@@ -362,7 +362,7 @@ export const siteMessages: SiteMessage[] = [
   {
     id: 'MSG002',
     type: 'issue-report',
-    from: 'U006', fromName: '王建國', fromRole: 'sub-supervisor',
+    from: 'U006', fromName: '王建國', fromRole: 'sub-contractor',
     to: ['U004', 'U002', 'U001'], toNames: ['麥偉強 (工頭)', '張志豪 (工程師)', '李建明 (總監)'],
     subject: '【問題上報】Zone C 28/F 鋼筋碰撞問題',
     body: '在 28/F C 軸鋼筋施工時，發現有位置與機電預埋管位置碰撞，需設計單位澄清。已暫停該位置施工，影響約 15 名工人。請工程師盡快確認圖則更改。',
@@ -373,7 +373,7 @@ export const siteMessages: SiteMessage[] = [
   {
     id: 'MSG003',
     type: 'general',
-    from: 'U004', fromName: '麥偉強', fromRole: 'foreman',
+    from: 'U004', fromName: '麥偉強', fromRole: 'main-contractor',
     to: ['U006'], toNames: ['王建國 (判頭打理)'],
     subject: '委派：PC4-1 至 PC4-3 進度管理',
     body: '現委派你負責管理 31-35/F 模板、鋼筋及澆築三個工序的進度更新，請每日下午 5 時前在系統更新實際進度百分比，如有問題即時上報。',
@@ -385,7 +385,7 @@ export const siteMessages: SiteMessage[] = [
   {
     id: 'MSG004',
     type: 'progress-report',
-    from: 'U006', fromName: '王建國', fromRole: 'sub-supervisor',
+    from: 'U006', fromName: '王建國', fromRole: 'sub-contractor',
     to: ['U004'], toNames: ['麥偉強 (工頭)'],
     subject: '【每日更新】Zone B 核心筒 21-31/F 進度',
     body: '今日完成 29/F 核心筒鋼筋綁紮驗收，30/F 模板安裝進行中，預計明日完成。整體進度符合計劃。',

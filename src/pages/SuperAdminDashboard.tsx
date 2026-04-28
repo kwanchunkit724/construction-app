@@ -269,7 +269,7 @@ function ModuleConfigPanel({ projectId, enabledModules }: { projectId: string; e
 function PMAssignPanel({ projectId, assignedPmIds }: { projectId: string; assignedPmIds: string[] }) {
   const { allUsers } = useAuth()
   const { assignProjectPMs } = useProgress()
-  const pmUsers = allUsers.filter(u => u.role === 'pm')
+  const pmUsers = allUsers.filter(u => u.role === 'main-contractor')
   const [selected, setSelected] = useState<string[]>([...assignedPmIds])
   const [saved, setSaved] = useState(false)
 

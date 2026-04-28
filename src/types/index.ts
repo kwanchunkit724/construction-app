@@ -1,4 +1,4 @@
-export type Role = 'super-admin' | 'pm' | 'pe' | 'cp' | 'foreman' | 'worker' | 'sub-supervisor' | 'qs' | 'site-agent' | 'doc-controller' | 'qc' | 'procurement' | 'er'
+export type Role = 'super-admin' | 'owner' | 'main-contractor' | 'sub-contractor'
 
 // ── Project modules (feature flags set by super-admin) ────────────────────────
 export type ProjectModule =
