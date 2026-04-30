@@ -12,6 +12,8 @@ workflows:
         XCODE_SCHEME: "App"
         XCODE_PROJECT: "ios/App/App.xcodeproj"
         TEAM_ID: "C22JSRYW54"
+        VITE_SUPABASE_URL: "https://syyntodkvexkbpjrskjj.supabase.co"
+        VITE_SUPABASE_ANON_KEY: "sb_publishable_BHKTjGCKkot6GVa2M6BCMQ_0qBAl1jP"
       node: latest
 
     scripts:
@@ -105,6 +107,8 @@ workflows:
         XCODE_SCHEME: "App"
         XCODE_PROJECT: "ios/App/App.xcodeproj"
         TEAM_ID: "C22JSRYW54"
+        VITE_SUPABASE_URL: "https://syyntodkvexkbpjrskjj.supabase.co"
+        VITE_SUPABASE_ANON_KEY: "sb_publishable_BHKTjGCKkot6GVa2M6BCMQ_0qBAl1jP"
       node: latest
 
     triggering:
