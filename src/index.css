@@ -2,12 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* overflow-x: clip prevents horizontal scroll without creating a scroll
+   container, so position:sticky headers continue to work on iOS Safari */
+html {
+  overflow-x: clip;
+}
+
 @layer base {
   * {
     box-sizing: border-box;
-  }
-  html, body {
-    overflow-x: hidden;
   }
   body {
     @apply bg-site-50 text-site-700 antialiased;
