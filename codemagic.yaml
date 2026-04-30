@@ -34,9 +34,11 @@ workflows:
       - name: Fetch App Store signing files
         script: |
           keychain initialize
+          echo "$CERTIFICATE_PRIVATE_KEY" > /tmp/cert_key.pem
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
-            --create
+            --create \
+            --certificate-key /tmp/cert_key.pem
           keychain add-certificates
 
       - name: Archive app
@@ -135,9 +137,11 @@ workflows:
       - name: Fetch App Store signing files
         script: |
           keychain initialize
+          echo "$CERTIFICATE_PRIVATE_KEY" > /tmp/cert_key.pem
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
-            --create
+            --create \
+            --certificate-key /tmp/cert_key.pem
           keychain add-certificates
 
       - name: Archive app
