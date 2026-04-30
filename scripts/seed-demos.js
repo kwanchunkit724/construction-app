@@ -31,12 +31,20 @@ const SUB_PERMS      = ['report:issues','update:progress','view:delegated-items'
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 async function createUser(email, password, profile) {
+  let userId = null
   const { data, error } = await supabase.auth.admin.createUser({
     email, password, email_confirm: true,
     user_metadata: { name: profile.name },
   })
-  if (error) { console.warn(`  ⚠ ${email}: ${error.message}`); return null }
-  const userId = data.user.id
+  if (error) {
+    // User already exists — look up their ID from profiles
+    const { data: existing } = await supabase
+      .from('profiles').select('id').eq('username', profile.username).single()
+    if (existing) { userId = existing.id; console.log(`  ↺ ${profile.name} (${profile.username}) already exists`) }
+    else { console.warn(`  ⚠ ${email}: ${error.message}`); return null }
+  } else {
+    userId = data.user.id
+  }
   await supabase.from('profiles').upsert({
     id: userId, username: profile.username, name: profile.name,
     role: profile.role, role_zh: profile.roleZh, trade: profile.trade,
@@ -44,12 +52,12 @@ async function createUser(email, password, profile) {
     project_id: profile.projectId, approved: true,
     permissions: profile.permissions,
   })
-  console.log(`  ✓ ${profile.name} (${profile.username}) → ${profile.role}`)
+  if (!error) console.log(`  ✓ ${profile.name} (${profile.username}) → ${profile.role}`)
   return userId
 }
 
 async function insert(table, rows) {
-  const { error } = await supabase.from(table).insert(rows)
+  const { error } = await supabase.from(table).upsert(rows, { onConflict: 'id', ignoreDuplicates: true })
   if (error) console.warn(`  ⚠ ${table}: ${error.message}`)
 }
 
@@ -144,10 +152,10 @@ async function seedShort() {
   await insert('daily_diaries', [
     { id:'DDY-SH-001', project_id:PID, date:'2026-04-28', author_id:sub1Id, author_name:'鄭電氣',
       zone:'辦公區', weather:'sunny', temperature:28, manpower_total:6, equipment:'升降台×1',
-      work_done:'完成B區電線管安裝80%，開始C區線管布設', issues:'部分位置因結構問題需改路', status:'submitted' },
+      work_done:'完成B區電線管安裝80%，開始C區線管布設', issues_text:'部分位置因結構問題需改路', status:'submitted' },
     { id:'DDY-SH-002', project_id:PID, date:'2026-04-27', author_id:sub3Id, author_name:'何裝修',
       zone:'接待區', weather:'cloudy', temperature:26, manpower_total:4, equipment:'',
-      work_done:'完成接待區地面找平工作，批盪共 45㎡', issues:'', status:'submitted' },
+      work_done:'完成接待區地面找平工作，批盪共 45㎡', issues_text:'', status:'submitted' },
   ])
 
   // NCR
@@ -184,11 +192,11 @@ async function seedShort() {
   // Drawings
   await insert('drawings', [
     { id:'DRW-SH-01', project_id:PID, drawing_no:'E-101', title:'8/F 電氣總平面圖', revision:'B',
-      issue_date:'2026-03-10', discipline:'mep', status:'current', uploaded_by:pmId, zone:'辦公區' },
+      issue_date:'2026-03-10', discipline:'mep', status:'current' },
     { id:'DRW-SH-02', project_id:PID, drawing_no:'A-101', title:'8/F 平面佈置圖', revision:'C',
-      issue_date:'2026-02-28', discipline:'architectural', status:'current', uploaded_by:pmId, zone:'辦公區' },
+      issue_date:'2026-02-28', discipline:'architectural', status:'current' },
     { id:'DRW-SH-03', project_id:PID, drawing_no:'A-102', title:'8/F 天花佈置圖', revision:'A',
-      issue_date:'2026-02-28', discipline:'architectural', status:'under-review', uploaded_by:pmId, zone:'辦公區' },
+      issue_date:'2026-02-28', discipline:'architectural', status:'under-review' },
   ])
 
   // Material requests
@@ -361,15 +369,15 @@ async function seedMid() {
     { id:'DDY-MD-001', project_id:PID, date:'2026-04-28', author_id:sub1Id, author_name:'黃鋼鐵',
       zone:'主樓', weather:'cloudy', temperature:25, manpower_total:12,
       equipment:'焊接機×2, 切割機×1',
-      work_done:'2樓東翼結構鋼柱焊接完成8支，鋼梁安裝進行中', issues:'2樓發現裂縫，已上報PM', status:'submitted' },
+      work_done:'2樓東翼結構鋼柱焊接完成8支，鋼梁安裝進行中', issues_text:'2樓發現裂縫，已上報PM', status:'submitted' },
     { id:'DDY-MD-002', project_id:PID, date:'2026-04-28', author_id:sub2Id, author_name:'趙機電',
       zone:'全棟', weather:'cloudy', temperature:25, manpower_total:8,
       equipment:'線管彎管機×1',
-      work_done:'地下至1樓電纜橋架安裝完成，2樓橋架開始安裝', issues:'', status:'submitted' },
+      work_done:'地下至1樓電纜橋架安裝完成，2樓橋架開始安裝', issues_text:'', status:'submitted' },
     { id:'DDY-MD-003', project_id:PID, date:'2026-04-27', author_id:sub4Id, author_name:'馮外牆',
       zone:'全棟', weather:'sunny', temperature:27, manpower_total:10,
       equipment:'高壓清洗機×2',
-      work_done:'南面外牆高壓清洗完成，共約300㎡', issues:'', status:'submitted' },
+      work_done:'南面外牆高壓清洗完成，共約300㎡', issues_text:'', status:'submitted' },
   ])
 
   await insert('ncrs', [
@@ -409,10 +417,10 @@ async function seedMid() {
   ])
 
   await insert('drawings', [
-    { id:'DRW-MD-01', project_id:PID, drawing_no:'S-101', title:'地下層結構加固平面圖', revision:'C', issue_date:'2026-01-15', discipline:'structural', status:'current', uploaded_by:pmId, zone:'地下' },
-    { id:'DRW-MD-02', project_id:PID, drawing_no:'S-201', title:'1-2樓結構加固平面圖', revision:'B', issue_date:'2026-02-01', discipline:'structural', status:'current', uploaded_by:pmId, zone:'主樓' },
-    { id:'DRW-MD-03', project_id:PID, drawing_no:'M-101', title:'機電總平面圖', revision:'A', issue_date:'2025-11-30', discipline:'mep', status:'under-review', uploaded_by:pmId, zone:'全棟' },
-    { id:'DRW-MD-04', project_id:PID, drawing_no:'A-101', title:'室內裝修平面圖', revision:'B', issue_date:'2026-03-15', discipline:'architectural', status:'current', uploaded_by:pmId, zone:'主樓' },
+    { id:'DRW-MD-01', project_id:PID, drawing_no:'S-101', title:'地下層結構加固平面圖', revision:'C', issue_date:'2026-01-15', discipline:'structural', status:'current' },
+    { id:'DRW-MD-02', project_id:PID, drawing_no:'S-201', title:'1-2樓結構加固平面圖', revision:'B', issue_date:'2026-02-01', discipline:'structural', status:'current' },
+    { id:'DRW-MD-03', project_id:PID, drawing_no:'M-101', title:'機電總平面圖', revision:'A', issue_date:'2025-11-30', discipline:'mep', status:'under-review' },
+    { id:'DRW-MD-04', project_id:PID, drawing_no:'A-101', title:'室內裝修平面圖', revision:'B', issue_date:'2026-03-15', discipline:'architectural', status:'current' },
   ])
 
   console.log('  ✅ Mid-term scenario seeded successfully')
@@ -623,19 +631,19 @@ async function seedLong() {
     { id:'DDY-LG-001', project_id:PID, date:'2026-04-28', author_id:sub3Id, author_name:'何混凝土',
       zone:'低層', weather:'sunny', temperature:29, manpower_total:25,
       equipment:'混凝土泵×1, 震動器×4, 塔吊×1',
-      work_done:'5樓板模板安裝完成，配筋工作進行中，預計明天澆築', issues:'模板支撐出現移位，已即時上報並停工', status:'submitted' },
+      work_done:'5樓板模板安裝完成，配筋工作進行中，預計明天澆築', issues_text:'模板支撐出現移位，已即時上報並停工', status:'submitted' },
     { id:'DDY-LG-002', project_id:PID, date:'2026-04-28', author_id:sub2Id, author_name:'郭結構鋼',
       zone:'低層', weather:'sunny', temperature:29, manpower_total:18,
       equipment:'焊接機×4, 塔吊×1',
-      work_done:'4樓鋼柱焊接完成12條，鋼梁吊裝6支', issues:'', status:'submitted' },
+      work_done:'4樓鋼柱焊接完成12條，鋼梁吊裝6支', issues_text:'', status:'submitted' },
     { id:'DDY-LG-003', project_id:PID, date:'2026-04-27', author_id:sub4Id, author_name:'徐機電',
       zone:'地庫', weather:'sunny', temperature:28, manpower_total:15,
       equipment:'線管彎管機×2',
-      work_done:'B2層電纜橋架安裝完成，B1層電纜橋架開始安裝', issues:'', status:'submitted' },
+      work_done:'B2層電纜橋架安裝完成，B1層電纜橋架開始安裝', issues_text:'', status:'submitted' },
     { id:'DDY-LG-004', project_id:PID, date:'2026-04-26', author_id:sub1Id, author_name:'黃地基',
       zone:'全地盤', weather:'cloudy', temperature:26, manpower_total:5,
       equipment:'',
-      work_done:'協助後續工程驗收地基文件，清理地基設備', issues:'', status:'submitted' },
+      work_done:'協助後續工程驗收地基文件，清理地基設備', issues_text:'', status:'submitted' },
   ])
 
   await insert('ncrs', [
@@ -690,12 +698,12 @@ async function seedLong() {
   ])
 
   await insert('drawings', [
-    { id:'DRW-LG-01', project_id:PID, drawing_no:'S-001', title:'地基平面圖', revision:'D', issue_date:'2025-07-15', discipline:'structural', status:'current', uploaded_by:docId, zone:'全地盤' },
-    { id:'DRW-LG-02', project_id:PID, drawing_no:'S-401', title:'4樓結構平面圖', revision:'B', issue_date:'2026-02-10', discipline:'structural', status:'current', uploaded_by:docId, zone:'低層' },
-    { id:'DRW-LG-03', project_id:PID, drawing_no:'S-502', title:'5樓結構平面圖', revision:'A', issue_date:'2026-03-01', discipline:'structural', status:'under-review', uploaded_by:docId, zone:'低層' },
-    { id:'DRW-LG-04', project_id:PID, drawing_no:'M-101', title:'地庫機電管道綜合圖', revision:'B', issue_date:'2026-01-20', discipline:'mep', status:'current', uploaded_by:docId, zone:'地庫' },
-    { id:'DRW-LG-05', project_id:PID, drawing_no:'M-201', title:'B2層防排煙平面圖', revision:'A', issue_date:'2026-01-20', discipline:'mep', status:'under-review', uploaded_by:docId, zone:'地庫' },
-    { id:'DRW-LG-06', project_id:PID, drawing_no:'A-001', title:'外牆幕牆立面圖', revision:'C', issue_date:'2026-03-15', discipline:'architectural', status:'current', uploaded_by:docId, zone:'全棟' },
+    { id:'DRW-LG-01', project_id:PID, drawing_no:'S-001', title:'地基平面圖', revision:'D', issue_date:'2025-07-15', discipline:'structural', status:'current' },
+    { id:'DRW-LG-02', project_id:PID, drawing_no:'S-401', title:'4樓結構平面圖', revision:'B', issue_date:'2026-02-10', discipline:'structural', status:'current' },
+    { id:'DRW-LG-03', project_id:PID, drawing_no:'S-502', title:'5樓結構平面圖', revision:'A', issue_date:'2026-03-01', discipline:'structural', status:'under-review' },
+    { id:'DRW-LG-04', project_id:PID, drawing_no:'M-101', title:'地庫機電管道綜合圖', revision:'B', issue_date:'2026-01-20', discipline:'mep', status:'current' },
+    { id:'DRW-LG-05', project_id:PID, drawing_no:'M-201', title:'B2層防排煙平面圖', revision:'A', issue_date:'2026-01-20', discipline:'mep', status:'under-review' },
+    { id:'DRW-LG-06', project_id:PID, drawing_no:'A-001', title:'外牆幕牆立面圖', revision:'C', issue_date:'2026-03-15', discipline:'architectural', status:'current' },
   ])
 
   console.log('  ✅ Long-term scenario seeded successfully')
