@@ -37,7 +37,7 @@ workflows:
             --type IOS_APP_STORE \
             --create
           keychain add-certificates
-          xcode-project use-profiles
+          xcode-project use-profiles --custom-export-options '{"method":"app-store","teamID":"C22JSRYW54"}'
 
       - name: Build IPA
         script: |
@@ -97,7 +97,7 @@ workflows:
             --type IOS_APP_STORE \
             --create
           keychain add-certificates
-          xcode-project use-profiles
+          xcode-project use-profiles --custom-export-options '{"method":"app-store","teamID":"C22JSRYW54"}'
 
       - name: Build IPA
         script: |
