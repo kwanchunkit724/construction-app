@@ -31,3 +31,12 @@ lifecycle-config.json
 
 # Claude Code internal tools
 .claude/
+
+# Capacitor iOS — keep the project, ignore build artifacts
+ios/App/Pods/
+ios/App/App.xcworkspace/xcuserdata/
+ios/App/DerivedData/
+ios/.DS_Store
+
+# Capacitor Android (future)
+android/
