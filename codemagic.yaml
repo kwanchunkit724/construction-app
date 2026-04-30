@@ -8,6 +8,8 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.kwanchunkit.constructionapp
+      groups:
+        - app_store_credentials
       vars:
         BUNDLE_ID: "com.kwanchunkit.constructionapp"
         XCODE_SCHEME: "App"
@@ -75,6 +77,8 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.kwanchunkit.constructionapp
+      groups:
+        - app_store_credentials
       vars:
         BUNDLE_ID: "com.kwanchunkit.constructionapp"
         XCODE_SCHEME: "App"
