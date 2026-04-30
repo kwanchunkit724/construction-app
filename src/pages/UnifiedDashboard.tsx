@@ -3,8 +3,9 @@ import {
   LayoutDashboard, TrendingUp, AlertCircle, Shield, BookOpen,
   Package, FileText, CheckSquare, ShoppingCart, LogOut,
   Building2, ChevronDown, Plus, X, Send, CheckCircle2,
-  Clock, AlertTriangle, ClipboardList, Layers,
+  Clock, AlertTriangle, ClipboardList, Layers, MessageSquare, Star,
 } from 'lucide-react'
+import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useProgress } from '../context/ProgressContext'
 import { useIssues } from '../context/IssueContext'
@@ -898,6 +899,120 @@ function IssuesSection({ projectId }: { projectId: string }) {
   )
 }
 
+// ── Feedback Modal ────────────────────────────────────────────────────────────
+const SCENARIOS = [
+  { value: 'short',   label: '短期合約 (1-6個月)' },
+  { value: 'mid',     label: '中期合約 (6-12個月)' },
+  { value: 'long',    label: '長期合約 (12-36個月)' },
+  { value: 'general', label: '一般使用' },
+]
+const CATEGORIES = ['工作流程', '功能缺失', '介面設計', '其他']
+
+function FeedbackModal({ onClose }: { onClose: () => void }) {
+  const { user } = useAuth()
+  const [rating, setRating]     = useState(0)
+  const [hovered, setHovered]   = useState(0)
+  const [category, setCategory] = useState(CATEGORIES[0])
+  const [scenario, setScenario] = useState('general')
+  const [message, setMessage]   = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [done, setDone]         = useState(false)
+  const [error, setError]       = useState('')
+
+  const submit = async () => {
+    if (rating === 0) { setError('請選擇星級評分'); return }
+    if (!message.trim()) { setError('請填寫意見'); return }
+    setSubmitting(true); setError('')
+    const { error: dbErr } = await supabase.from('demo_feedback').insert({
+      scenario, user_id: user?.id, username: user?.username,
+      user_name: user?.name, role_zh: user?.roleZh,
+      rating, category, message: message.trim(),
+    })
+    setSubmitting(false)
+    if (dbErr) { setError('提交失敗，請稍後再試'); return }
+    setDone(true)
+    setTimeout(onClose, 1800)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <MessageSquare size={16} className="text-blue-600" />
+            <span className="font-bold text-gray-900">提交使用意見</span>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+
+        {done ? (
+          <div className="px-5 py-10 text-center">
+            <CheckCircle2 size={40} className="mx-auto mb-3 text-green-500" />
+            <p className="font-bold text-gray-900">感謝您的意見！</p>
+            <p className="text-sm text-gray-400 mt-1">您的回饋已成功提交</p>
+          </div>
+        ) : (
+          <div className="px-5 py-4 space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-gray-600 block mb-1.5">使用場景</label>
+              <select value={scenario} onChange={e => setScenario(e.target.value)}
+                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                {SCENARIOS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-gray-600 block mb-1.5">整體評分</label>
+              <div className="flex gap-1">
+                {[1,2,3,4,5].map(n => (
+                  <button key={n}
+                    onMouseEnter={() => setHovered(n)} onMouseLeave={() => setHovered(0)}
+                    onClick={() => setRating(n)}
+                    className="transition-transform hover:scale-110">
+                    <Star size={28} className={`${n <= (hovered || rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} transition-colors`} />
+                  </button>
+                ))}
+                {rating > 0 && (
+                  <span className="text-xs text-gray-500 self-center ml-1">
+                    {['', '非常差', '較差', '一般', '良好', '非常好'][rating]}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-gray-600 block mb-1.5">意見類別</label>
+              <div className="flex flex-wrap gap-2">
+                {CATEGORIES.map(c => (
+                  <button key={c} onClick={() => setCategory(c)}
+                    className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${category === c ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 text-gray-600 hover:border-blue-300'}`}>
+                    {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-gray-600 block mb-1.5">詳細意見</label>
+              <textarea value={message} onChange={e => setMessage(e.target.value)}
+                rows={4} placeholder="請描述您的使用體驗、遇到的問題或改善建議…"
+                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-300" />
+            </div>
+
+            {error && <p className="text-xs text-red-500">{error}</p>}
+
+            <button onClick={submit} disabled={submitting}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-colors">
+              {submitting ? <Clock size={14} className="animate-spin" /> : <Send size={14} />}
+              {submitting ? '提交中…' : '提交意見'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main Unified Dashboard ────────────────────────────────────────────────────
 export default function UnifiedDashboard() {
   const { user, logout } = useAuth()
@@ -912,6 +1027,7 @@ export default function UnifiedDashboard() {
 
   const [activeModule, setActiveModule] = useState<ModuleKey>('overview')
   const [showProjectPicker, setShowProjectPicker] = useState(false)
+  const [showFeedback, setShowFeedback] = useState(false)
 
   // Which projects this user can see
   const myProjects = useMemo(() => {
@@ -1025,6 +1141,16 @@ export default function UnifiedDashboard() {
           renderSection()
         )}
       </main>
+
+      {/* ── Floating feedback button ───────────────────────────────────── */}
+      <button
+        onClick={() => setShowFeedback(true)}
+        className="fixed bottom-5 right-5 z-40 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-lg transition-all hover:shadow-xl active:scale-95">
+        <MessageSquare size={14} />
+        提交意見
+      </button>
+
+      {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
     </div>
   )
 }

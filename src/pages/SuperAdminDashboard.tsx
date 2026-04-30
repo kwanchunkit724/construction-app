@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   Shield, FolderPlus, Users, CheckCircle, XCircle,
   Building2, ChevronDown, ChevronRight, ToggleLeft, ToggleRight,
-  LogOut, Clock, Layers, X, Plus,
+  LogOut, Clock, Layers, X, Plus, MessageSquare, Star,
 } from 'lucide-react'
+import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useProgress } from '../context/ProgressContext'
 import { ALL_MODULES } from '../types'
@@ -304,8 +305,110 @@ function PMAssignPanel({ projectId, assignedPmIds }: { projectId: string; assign
   )
 }
 
+// ── Feedback Panel ────────────────────────────────────────────────────────────
+interface FeedbackRow {
+  id: string; scenario: string; username: string | null; user_name: string | null
+  role_zh: string | null; rating: number; category: string; message: string; created_at: string
+}
+
+const SCENARIO_LABEL: Record<string, string> = {
+  short: '短期合約 (1-6個月)', mid: '中期合約 (6-12個月)',
+  long: '長期合約 (12-36個月)', general: '一般使用',
+}
+
+function FeedbackPanel() {
+  const [rows, setRows]       = useState<FeedbackRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filter, setFilter]   = useState<string>('all')
+
+  useEffect(() => {
+    supabase.from('demo_feedback').select('*').order('created_at', { ascending: false })
+      .then(({ data }) => { setRows((data ?? []) as FeedbackRow[]); setLoading(false) })
+  }, [])
+
+  const scenarios = ['all', 'short', 'mid', 'long', 'general']
+  const visible = filter === 'all' ? rows : rows.filter(r => r.scenario === filter)
+
+  const avgRating = visible.length
+    ? (visible.reduce((s, r) => s + r.rating, 0) / visible.length).toFixed(1)
+    : '—'
+
+  const categoryCounts = visible.reduce<Record<string, number>>((acc, r) => {
+    acc[r.category] = (acc[r.category] ?? 0) + 1; return acc
+  }, {})
+  const topCategory = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—'
+
+  return (
+    <div>
+      <h2 className="text-lg font-bold text-gray-900 mb-1">用戶意見匯總</h2>
+      <p className="text-xs text-gray-400 mb-5">收集自各示範場景的使用回饋</p>
+
+      {/* Stats row */}
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        {[
+          { label: '總意見數', value: String(rows.length) },
+          { label: '平均評分', value: avgRating + ' / 5' },
+          { label: '最多類別', value: topCategory },
+        ].map(s => (
+          <div key={s.label} className="bg-white rounded-2xl border border-gray-200 p-4 text-center">
+            <p className="text-2xl font-black text-gray-900">{s.value}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{s.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Scenario filter */}
+      <div className="flex gap-2 flex-wrap mb-4">
+        {scenarios.map(s => (
+          <button key={s} onClick={() => setFilter(s)}
+            className={`text-xs px-3 py-1.5 rounded-full border font-semibold transition-all ${filter === s ? 'bg-rose-600 text-white border-rose-600' : 'border-gray-200 text-gray-500 hover:border-rose-300'}`}>
+            {s === 'all' ? '全部' : SCENARIO_LABEL[s]}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="text-center py-10 text-gray-400 text-sm">載入中…</div>
+      ) : visible.length === 0 ? (
+        <div className="text-center py-16 text-gray-400">
+          <MessageSquare size={40} className="mx-auto mb-3 opacity-30" />
+          <p className="text-sm">尚無意見記錄</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {visible.map(r => (
+            <div key={r.id} className="bg-white rounded-2xl border border-gray-200 p-4">
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div>
+                  <span className="font-semibold text-gray-900 text-sm">{r.user_name ?? r.username ?? '匿名'}</span>
+                  {r.role_zh && <span className="text-xs text-gray-400 ml-1.5">· {r.role_zh}</span>}
+                  <span className="text-xs text-blue-600 font-medium ml-2 bg-blue-50 px-2 py-0.5 rounded-full">
+                    {SCENARIO_LABEL[r.scenario] ?? r.scenario}
+                  </span>
+                </div>
+                <div className="flex gap-0.5 flex-shrink-0">
+                  {[1,2,3,4,5].map(n => (
+                    <Star key={n} size={13} className={n <= r.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />
+                  ))}
+                </div>
+              </div>
+              <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 mb-1.5">
+                {r.category}
+              </span>
+              <p className="text-sm text-gray-700 leading-relaxed">{r.message}</p>
+              <p className="text-[10px] text-gray-400 mt-2">
+                {new Date(r.created_at).toLocaleString('zh-HK')}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main dashboard ────────────────────────────────────────────────────────────
-type AdminTab = 'projects' | 'applications' | 'users'
+type AdminTab = 'projects' | 'applications' | 'users' | 'feedback'
 
 export default function SuperAdminDashboard() {
   const { user, logout, pendingUsers, approveUser, rejectUser, allUsers } = useAuth()
@@ -319,6 +422,7 @@ export default function SuperAdminDashboard() {
     { id: 'projects',      label: '項目管理',   icon: Building2 },
     { id: 'applications',  label: '用戶申請',   icon: Clock,  badge: pendingUsers.length },
     { id: 'users',         label: '用戶管理',   icon: Users },
+    { id: 'feedback',      label: '用戶意見',   icon: MessageSquare },
   ]
 
   const projectUserCount = useMemo(() => {
@@ -536,6 +640,9 @@ export default function SuperAdminDashboard() {
             </div>
           </div>
         )}
+
+        {/* ── Feedback tab ── */}
+        {activeTab === 'feedback' && <FeedbackPanel />}
       </div>
 
       {showCreateModal && <CreateProjectModal onClose={() => setShowCreateModal(false)} />}
