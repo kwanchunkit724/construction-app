@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { ProgressProvider } from './context/ProgressContext'
 import { IssueProvider } from './context/IssueContext'
@@ -26,7 +26,7 @@ export default function App() {
       <IssueProvider>
       <ContractProvider>
       <ProgressProvider>
-        <BrowserRouter>
+        <HashRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<Navigate to="/login" replace />} />
@@ -41,7 +41,7 @@ export default function App() {
 
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
-        </BrowserRouter>
+        </HashRouter>
       </ProgressProvider>
       </ContractProvider>
       </IssueProvider>
