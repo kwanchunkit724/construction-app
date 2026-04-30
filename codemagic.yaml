@@ -39,15 +39,10 @@ workflows:
             --create \
             --certificate-key "@env:CERTIFICATE_PRIVATE_KEY"
           keychain add-certificates
+          xcode-project use-profiles
 
       - name: Archive app
         script: |
-          PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
-          PROFILE_PATH=$(ls "$PROFILES_DIR"/*.mobileprovision 2>/dev/null | head -1)
-          PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" | plutil -extract UUID raw -)
-          CERT_IDENTITY=$(security find-identity -v -p codesigning | grep -E "Apple Distribution|iPhone Distribution" | head -1 | awk -F'"' '{print $2}')
-          echo "Profile UUID: $PROFILE_UUID"
-          echo "Certificate: $CERT_IDENTITY"
           xcodebuild \
             -project "$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME" \
@@ -55,17 +50,10 @@ workflows:
             -archivePath /tmp/App.xcarchive \
             archive \
             -destination "generic/platform=iOS" \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_IDENTITY="$CERT_IDENTITY" \
-            PROVISIONING_PROFILE="$PROFILE_UUID" \
             COMPILER_INDEX_STORE_ENABLE=NO
 
       - name: Export IPA
         script: |
-          PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
-          PROFILE_PATH=$(ls "$PROFILES_DIR"/*.mobileprovision 2>/dev/null | head -1)
-          PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" | plutil -extract UUID raw -)
           cat > /tmp/ExportOptions.plist << EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -73,10 +61,6 @@ workflows:
           <dict>
             <key>method</key><string>app-store</string>
             <key>teamID</key><string>$TEAM_ID</string>
-            <key>provisioningProfiles</key>
-            <dict>
-              <key>$BUNDLE_ID</key><string>$PROFILE_UUID</string>
-            </dict>
             <key>uploadSymbols</key><true/>
             <key>compileBitcode</key><false/>
           </dict>
@@ -141,15 +125,10 @@ workflows:
             --create \
             --certificate-key "@env:CERTIFICATE_PRIVATE_KEY"
           keychain add-certificates
+          xcode-project use-profiles
 
       - name: Archive app
         script: |
-          PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
-          PROFILE_PATH=$(ls "$PROFILES_DIR"/*.mobileprovision 2>/dev/null | head -1)
-          PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" | plutil -extract UUID raw -)
-          CERT_IDENTITY=$(security find-identity -v -p codesigning | grep -E "Apple Distribution|iPhone Distribution" | head -1 | awk -F'"' '{print $2}')
-          echo "Profile UUID: $PROFILE_UUID"
-          echo "Certificate: $CERT_IDENTITY"
           xcodebuild \
             -project "$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME" \
@@ -157,17 +136,10 @@ workflows:
             -archivePath /tmp/App.xcarchive \
             archive \
             -destination "generic/platform=iOS" \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_IDENTITY="$CERT_IDENTITY" \
-            PROVISIONING_PROFILE="$PROFILE_UUID" \
             COMPILER_INDEX_STORE_ENABLE=NO
 
       - name: Export IPA
         script: |
-          PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
-          PROFILE_PATH=$(ls "$PROFILES_DIR"/*.mobileprovision 2>/dev/null | head -1)
-          PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" | plutil -extract UUID raw -)
           cat > /tmp/ExportOptions.plist << EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -175,10 +147,6 @@ workflows:
           <dict>
             <key>method</key><string>app-store</string>
             <key>teamID</key><string>$TEAM_ID</string>
-            <key>provisioningProfiles</key>
-            <dict>
-              <key>$BUNDLE_ID</key><string>$PROFILE_UUID</string>
-            </dict>
             <key>uploadSymbols</key><true/>
             <key>compileBitcode</key><false/>
           </dict>
