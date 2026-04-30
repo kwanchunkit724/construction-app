@@ -1130,7 +1130,7 @@ export default function UnifiedDashboard() {
       </header>
 
       {/* ── Main content ───────────────────────────────────────────────── */}
-      <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-6">
+      <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-6 min-w-0">
         {myProjects.length === 0 ? (
           <div className="text-center py-20 text-gray-400">
             <ClipboardList size={48} className="mx-auto mb-3 opacity-30" />
