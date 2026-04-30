@@ -31,14 +31,12 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-// Force SW update + page reload whenever phone opens the app
-if ('serviceWorker' in navigator) {
+// SW only on web (file:// = Capacitor native — SW not supported on file:// and causes issues)
+if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
   navigator.serviceWorker.ready.then(reg => {
-    // Reload page the moment a new SW takes control (skipWaiting already active)
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       window.location.reload()
     })
-    // Actively check for new SW every time the tab becomes visible (phone wake-up, tab switch)
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') reg.update()
     })
