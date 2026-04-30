@@ -6,6 +6,9 @@
   * {
     box-sizing: border-box;
   }
+  html, body {
+    overflow-x: hidden;
+  }
   body {
     @apply bg-site-50 text-site-700 antialiased;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft JhengHei', 'PingFang HK', sans-serif;
