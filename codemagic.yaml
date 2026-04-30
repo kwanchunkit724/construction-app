@@ -5,9 +5,6 @@ workflows:
     instance_type: mac_mini_m2
 
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.kwanchunkit.constructionapp
       groups:
         - app_store_credentials
       vars:
@@ -25,7 +22,6 @@ workflows:
 
       - name: Add iOS platform
         script: |
-          # Only add if ios/ doesn't already exist in the build
           if [ ! -d "ios" ]; then
             npx cap add ios
           fi
@@ -45,8 +41,14 @@ workflows:
           agvtool new-version -all $BUILD_NUMBER
         working_directory: ios/App
 
-      - name: Set up code signing
-        script: xcode-project use-profiles
+      - name: Fetch signing certificates and profiles
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
 
       - name: Build IPA
         script: |
@@ -66,7 +68,7 @@ workflows:
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
-        submit_to_app_store: false   # set true when ready for full release
+        submit_to_app_store: false
 
   ios-testflight:
     name: iOS TestFlight (Quick Test Build)
@@ -74,9 +76,6 @@ workflows:
     instance_type: mac_mini_m2
 
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.kwanchunkit.constructionapp
       groups:
         - app_store_credentials
       vars:
@@ -113,8 +112,14 @@ workflows:
           cd ios/App
           pod install --repo-update
 
-      - name: Set up code signing
-        script: xcode-project use-profiles
+      - name: Fetch signing certificates and profiles
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
 
       - name: Build IPA
         script: |
