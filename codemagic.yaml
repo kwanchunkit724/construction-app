@@ -10,7 +10,7 @@ workflows:
       vars:
         BUNDLE_ID: "com.kwanchunkit.constructionapp"
         XCODE_SCHEME: "App"
-        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_PROJECT: "ios/App/App.xcodeproj"
       node: latest
 
     scripts:
@@ -22,11 +22,6 @@ workflows:
 
       - name: Sync Capacitor
         script: npx cap sync ios
-
-      - name: Install CocoaPods
-        script: |
-          cd ios/App
-          pod install --repo-update
 
       - name: Set bundle version from build number
         script: |
@@ -47,7 +42,7 @@ workflows:
       - name: Build IPA
         script: |
           xcode-project build-ipa \
-            --workspace "$XCODE_WORKSPACE" \
+            --project "$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME" \
             --archive-flags="-destination 'generic/platform=iOS'"
 
@@ -75,7 +70,7 @@ workflows:
       vars:
         BUNDLE_ID: "com.kwanchunkit.constructionapp"
         XCODE_SCHEME: "App"
-        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_PROJECT: "ios/App/App.xcodeproj"
       node: latest
 
     triggering:
@@ -95,11 +90,6 @@ workflows:
       - name: Sync Capacitor
         script: npx cap sync ios
 
-      - name: Install CocoaPods
-        script: |
-          cd ios/App
-          pod install --repo-update
-
       - name: Fetch signing certificates and profiles
         script: |
           keychain initialize
@@ -112,7 +102,7 @@ workflows:
       - name: Build IPA
         script: |
           xcode-project build-ipa \
-            --workspace "$XCODE_WORKSPACE" \
+            --project "$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME"
 
     artifacts:
