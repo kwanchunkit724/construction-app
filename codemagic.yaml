@@ -27,7 +27,8 @@ workflows:
         script: npx cap sync ios
 
       - name: Set bundle version from build number
-        script: agvtool new-version -all $CM_BUILD_NUMBER
+        script: |
+          agvtool new-version -all "$(date +%s)"
         working_directory: ios/App
 
       - name: Fetch App Store signing files
@@ -126,7 +127,8 @@ workflows:
         script: npx cap sync ios
 
       - name: Set bundle version from build number
-        script: agvtool new-version -all $CM_BUILD_NUMBER
+        script: |
+          agvtool new-version -all "$(date +%s)"
         working_directory: ios/App
 
       - name: Fetch App Store signing files
