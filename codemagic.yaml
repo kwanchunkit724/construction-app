@@ -54,13 +54,20 @@ workflows:
 
       - name: Export IPA
         script: |
+          PROFILE_UUID=$(security cms -D -i /tmp/App.xcarchive/Products/Applications/App.app/embedded.mobileprovision | plutil -extract UUID raw -)
+          echo "Exporting with profile UUID: $PROFILE_UUID"
           cat > /tmp/ExportOptions.plist << EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-            <key>method</key><string>app-store</string>
+            <key>method</key><string>app-store-connect</string>
             <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>$BUNDLE_ID</key><string>$PROFILE_UUID</string>
+            </dict>
             <key>uploadSymbols</key><true/>
             <key>compileBitcode</key><false/>
           </dict>
@@ -140,13 +147,20 @@ workflows:
 
       - name: Export IPA
         script: |
+          PROFILE_UUID=$(security cms -D -i /tmp/App.xcarchive/Products/Applications/App.app/embedded.mobileprovision | plutil -extract UUID raw -)
+          echo "Exporting with profile UUID: $PROFILE_UUID"
           cat > /tmp/ExportOptions.plist << EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-            <key>method</key><string>app-store</string>
+            <key>method</key><string>app-store-connect</string>
             <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>$BUNDLE_ID</key><string>$PROFILE_UUID</string>
+            </dict>
             <key>uploadSymbols</key><true/>
             <key>compileBitcode</key><false/>
           </dict>
