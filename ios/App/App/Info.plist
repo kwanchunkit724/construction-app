@@ -47,5 +47,13 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>需要使用相機拍攝現場問題照片</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>需要從相簿選取現場問題照片</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>需要儲存照片到相簿</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>拍攝影片時可能需要錄音</string>
 </dict>
 </plist>
