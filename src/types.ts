@@ -142,3 +142,78 @@ export function computeRollup(leaves: ProgressItem[]): Rollup {
   const planned = Math.round(leaves.reduce((s, x) => s + x.planned_progress, 0) / leaves.length)
   return { actual, planned, status: deriveStatus(actual, planned), leafCount: leaves.length }
 }
+
+// ── Phase 4: Issue Tracking ─────────────────────────────────
+export type IssueStatus = 'open' | 'resolved'
+export type IssueHandlerRole = 'pm' | 'main_contractor' | 'subcontractor' | 'admin'
+export type IssueAction = 'reported' | 'commented' | 'escalated' | 'resolved' | 'reopened'
+
+export interface Issue {
+  id: string
+  project_id: string
+  reporter_id: string
+  reporter_role: GlobalRole
+  title: string
+  description: string
+  current_handler_role: IssueHandlerRole
+  status: IssueStatus
+  resolved_by: string | null
+  resolved_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface IssueComment {
+  id: string
+  issue_id: string
+  author_id: string
+  action: IssueAction
+  body: string
+  from_role: string | null
+  to_role: string | null
+  created_at: string
+}
+
+export const ISSUE_STATUS_ZH: Record<IssueStatus, string> = {
+  open: '處理中',
+  resolved: '已解決',
+}
+
+export const ISSUE_HANDLER_ZH: Record<IssueHandlerRole, string> = {
+  pm: 'PM',
+  main_contractor: '總承建商',
+  subcontractor: '判頭',
+  admin: '系統管理員',
+}
+
+export const ISSUE_ACTION_ZH: Record<IssueAction, string> = {
+  reported: '報告問題',
+  commented: '留言',
+  escalated: '上呈',
+  resolved: '標記為已解決',
+  reopened: '重新開啟',
+}
+
+// Initial handler when an issue is reported (escalation routing)
+export function getInitialHandler(reporterRole: GlobalRole): IssueHandlerRole {
+  switch (reporterRole) {
+    case 'subcontractor_worker': return 'subcontractor'
+    case 'subcontractor': return 'main_contractor'
+    case 'main_contractor': return 'pm'
+    case 'owner': return 'pm'
+    case 'pm': return 'pm'
+    case 'admin': return 'pm'
+    default: return 'pm'
+  }
+}
+
+// Next handler when current escalates further. Null = terminal (no further escalation).
+export function getNextHandler(current: IssueHandlerRole): IssueHandlerRole | null {
+  switch (current) {
+    case 'subcontractor': return 'main_contractor'
+    case 'main_contractor': return 'pm'
+    case 'pm': return null
+    case 'admin': return null
+    default: return null
+  }
+}

@@ -3,6 +3,7 @@ import { useParams, useNavigate, Navigate } from 'react-router-dom'
 import {
   ChevronLeft, Plus, Building2, RefreshCw,
   CheckCircle2, AlertTriangle, Clock, Minus,
+  ListChecks, AlertCircle,
 } from 'lucide-react'
 import { Spinner } from '../components/Spinner'
 import { BottomNav } from '../components/BottomNav'
@@ -10,10 +11,15 @@ import { ProgressBar } from '../components/ProgressBar'
 import { ProgressItemCard } from '../components/ProgressItemCard'
 import { CreateItemModal } from '../components/CreateItemModal'
 import { UpdateProgressModal } from '../components/UpdateProgressModal'
+import { IssueCard } from '../components/IssueCard'
+import { CreateIssueModal } from '../components/CreateIssueModal'
 import { ProgressProvider, useProgress } from '../contexts/ProgressContext'
+import { IssuesProvider, useIssues } from '../contexts/IssuesContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH } from '../types'
 import type { ProgressItem, ProgressStatus, Zone } from '../types'
+
+type Tab = 'progress' | 'issues'
 
 const STATUS_ICON: Record<ProgressStatus, typeof Minus> = {
   'not-started': Minus,
@@ -35,7 +41,9 @@ export default function ProjectDetail() {
   if (!id) return <Navigate to="/home" replace />
   return (
     <ProgressProvider projectId={id}>
-      <ProjectDetailInner projectId={id} />
+      <IssuesProvider projectId={id}>
+        <ProjectDetailInner projectId={id} />
+      </IssuesProvider>
     </ProgressProvider>
   )
 }
@@ -49,13 +57,18 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const navigate = useNavigate()
   const { projects } = useProjects()
   const { loading, items, fetchError, canEdit, refetch, deleteItem } = useProgress()
+  const { issues, myRoleInProject } = useIssues()
 
   const project = projects.find(p => p.id === projectId)
 
+  const [tab, setTab] = useState<Tab>('progress')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [createCtx, setCreateCtx] = useState<CreateContext | null>(null)
   const [updating, setUpdating] = useState<ProgressItem | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [createIssueOpen, setCreateIssueOpen] = useState(false)
+
+  const openIssueCount = issues.filter(i => i.status === 'open').length
 
   const roots = useMemo(() => items.filter(i => i.parent_id === null), [items])
 
@@ -127,47 +140,67 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
         </div>
       </header>
 
-      <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-4 pb-24">
-        {leaves.length > 0 && (
-          <div className="grid grid-cols-4 gap-2 mb-4">
-            <Stat label="已完成" count={completed} color="text-green-700 bg-green-50 border-green-200" />
-            <Stat label="進行中" count={inProgress} color="text-blue-700 bg-blue-50 border-blue-200" />
-            <Stat label="落後" count={delayed} color="text-red-700 bg-red-50 border-red-200" />
-            <Stat label="未開始" count={notStarted} color="text-site-700 bg-site-50 border-site-200" />
-          </div>
-        )}
+      {/* Tabs */}
+      <div className="bg-white border-b border-site-200 sticky top-[calc(env(safe-area-inset-top)+44px)] z-20">
+        <div className="max-w-2xl mx-auto flex">
+          <TabButton active={tab === 'progress'} onClick={() => setTab('progress')} icon={ListChecks} label="進度" />
+          <TabButton active={tab === 'issues'} onClick={() => setTab('issues')} icon={AlertCircle} label="問題" badge={openIssueCount} />
+        </div>
+      </div>
 
+      <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-4 pb-24">
         {fetchError && (
           <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-3">
             ⚠ 讀取失敗：{fetchError}
           </div>
         )}
 
-        {loading ? (
-          <div className="py-10 flex justify-center"><Spinner size={28} /></div>
-        ) : project.zones.length === 0 ? (
-          <div className="card p-10 text-center">
-            <Building2 size={36} className="mx-auto text-site-300 mb-2" />
-            <p className="text-sm text-site-600">此工地尚未設定分區</p>
-            <p className="text-xs text-site-400 mt-1">請 Admin 在「管理」頁編輯工地加入分區</p>
-          </div>
-        ) : (
-          <div className="space-y-5">
-            {project.zones.map(zone => (
-              <ZoneSection
-                key={zone.id}
-                zone={zone}
-                items={items}
-                expanded={expandedSet}
-                canEdit={canEdit}
-                onToggle={toggle}
-                onAddRoot={() => setCreateCtx({ parent: null, zone })}
-                onUpdate={setUpdating}
-                onAddChild={parent => setCreateCtx({ parent, zone: zoneOf(parent, zone) })}
-                onDelete={item => deleteItem(item.id)}
-              />
-            ))}
-          </div>
+        {tab === 'progress' && (
+          <>
+            {leaves.length > 0 && (
+              <div className="grid grid-cols-4 gap-2 mb-4">
+                <Stat label="已完成" count={completed} color="text-green-700 bg-green-50 border-green-200" />
+                <Stat label="進行中" count={inProgress} color="text-blue-700 bg-blue-50 border-blue-200" />
+                <Stat label="落後" count={delayed} color="text-red-700 bg-red-50 border-red-200" />
+                <Stat label="未開始" count={notStarted} color="text-site-700 bg-site-50 border-site-200" />
+              </div>
+            )}
+
+            {loading ? (
+              <div className="py-10 flex justify-center"><Spinner size={28} /></div>
+            ) : project.zones.length === 0 ? (
+              <div className="card p-10 text-center">
+                <Building2 size={36} className="mx-auto text-site-300 mb-2" />
+                <p className="text-sm text-site-600">此工地尚未設定分區</p>
+                <p className="text-xs text-site-400 mt-1">請 Admin 在「管理」頁編輯工地加入分區</p>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {project.zones.map(zone => (
+                  <ZoneSection
+                    key={zone.id}
+                    zone={zone}
+                    items={items}
+                    expanded={expandedSet}
+                    canEdit={canEdit}
+                    onToggle={toggle}
+                    onAddRoot={() => setCreateCtx({ parent: null, zone })}
+                    onUpdate={setUpdating}
+                    onAddChild={parent => setCreateCtx({ parent, zone: zoneOf(parent, zone) })}
+                    onDelete={item => deleteItem(item.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {tab === 'issues' && (
+          <IssuesTab
+            projectId={projectId}
+            canReport={!!myRoleInProject}
+            onCreate={() => setCreateIssueOpen(true)}
+          />
         )}
       </main>
 
@@ -186,7 +219,91 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
         onClose={() => setUpdating(null)}
         item={updating}
       />
+      <CreateIssueModal
+        open={createIssueOpen}
+        onClose={() => setCreateIssueOpen(false)}
+        projectId={projectId}
+      />
     </div>
+  )
+}
+
+function TabButton({
+  active, onClick, icon: Icon, label, badge,
+}: {
+  active: boolean
+  onClick: () => void
+  icon: typeof ListChecks
+  label: string
+  badge?: number
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-semibold border-b-2 transition-colors ${
+        active ? 'border-safety-500 text-safety-600' : 'border-transparent text-site-400 hover:text-site-700'
+      }`}
+    >
+      <Icon size={16} />
+      {label}
+      {typeof badge === 'number' && badge > 0 && (
+        <span className="ml-1 text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full font-bold leading-none">
+          {badge}
+        </span>
+      )}
+    </button>
+  )
+}
+
+function IssuesTab({
+  projectId, canReport, onCreate,
+}: {
+  projectId: string
+  canReport: boolean
+  onCreate: () => void
+}) {
+  const { loading, issues } = useIssues()
+  const open = issues.filter(i => i.status === 'open')
+  const resolved = issues.filter(i => i.status === 'resolved')
+
+  return (
+    <>
+      {canReport && (
+        <button onClick={onCreate} className="btn-primary w-full mb-4">
+          <Plus size={20} /> 報告新問題
+        </button>
+      )}
+
+      {loading ? (
+        <div className="py-10 flex justify-center"><Spinner size={28} /></div>
+      ) : issues.length === 0 ? (
+        <div className="card p-10 text-center">
+          <AlertCircle size={36} className="mx-auto text-site-300 mb-2" />
+          <p className="text-sm text-site-600">未有問題記錄</p>
+        </div>
+      ) : (
+        <>
+          {open.length > 0 && (
+            <section className="mb-5">
+              <div className="flex items-center justify-between px-1 mb-2">
+                <h3 className="font-bold text-site-900">處理中</h3>
+                <span className="text-xs font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{open.length}</span>
+              </div>
+              {open.map(issue => <IssueCard key={issue.id} issue={issue} projectId={projectId} />)}
+            </section>
+          )}
+          {resolved.length > 0 && (
+            <section>
+              <div className="flex items-center justify-between px-1 mb-2">
+                <h3 className="font-bold text-site-900">已解決</h3>
+                <span className="text-xs font-semibold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{resolved.length}</span>
+              </div>
+              {resolved.map(issue => <IssueCard key={issue.id} issue={issue} projectId={projectId} />)}
+            </section>
+          )}
+        </>
+      )}
+    </>
   )
 }
 
