@@ -64,6 +64,7 @@ export const SUB_ROLE_ZH: Record<NonNullable<SubRole>, string> = {
 
 // ── Phase 3: Progress Tracking ──────────────────────────────
 export type ProgressStatus = 'not-started' | 'in-progress' | 'completed' | 'delayed' | 'blocked'
+export type TrackingMode = 'percentage' | 'floors'
 
 export interface ProgressItem {
   id: string
@@ -79,9 +80,30 @@ export interface ProgressItem {
   actual_progress: number
   status: ProgressStatus
   notes: string
+  tracking_mode: TrackingMode
+  floor_labels: string[]
+  floors_completed: string[]
+  assigned_to: string[]
+  delegated_to: string[]
   last_updated_by: string | null
   last_updated_at: string
   created_at: string
+}
+
+export interface ProgressHistoryEntry {
+  id: string
+  item_id: string
+  actual_progress: number
+  floors_completed: string[]
+  notes: string
+  updated_by: string | null
+  created_at: string
+}
+
+// Helper: compute progress from floors_completed
+export function floorsToProgress(completed: string[], all: string[]): number {
+  if (all.length === 0) return 0
+  return Math.round((completed.length / all.length) * 100)
 }
 
 export const PROGRESS_STATUS_ZH: Record<ProgressStatus, string> = {

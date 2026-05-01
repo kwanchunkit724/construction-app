@@ -1,12 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ChevronRight, ChevronDown, Plus, Trash2, Edit3,
   CheckCircle2, AlertTriangle, Clock, Minus,
+  Layers, Users, UserPlus, History,
 } from 'lucide-react'
 import { ProgressBar } from './ProgressBar'
 import { useProgress } from '../contexts/ProgressContext'
 import { PROGRESS_STATUS_ZH, computeRollup, getDescendantLeaves } from '../types'
-import type { ProgressItem, ProgressStatus } from '../types'
+import type { ProgressItem, ProgressStatus, UserProfile } from '../types'
+import { supabase } from '../lib/supabase'
 
 const STATUS_STYLE: Record<ProgressStatus, string> = {
   'not-started': 'bg-site-100 text-site-500',
@@ -27,14 +29,50 @@ const LEVEL_BORDER: Record<number, string> = {
   2: 'border-l-4 border-l-blue-400',
 }
 
+// Lightweight in-memory profile cache shared across cards
+const profileCache: Record<string, UserProfile> = {}
+const pending: Record<string, Promise<UserProfile | null>> = {}
+
+function getProfile(id: string): Promise<UserProfile | null> {
+  const cached = profileCache[id]
+  if (cached) return Promise.resolve(cached)
+  const inFlight = pending[id]
+  if (inFlight) return inFlight
+  const p = (async () => {
+    const { data } = await supabase.from('user_profiles').select('*').eq('id', id).maybeSingle()
+    if (data) profileCache[id] = data as UserProfile
+    delete pending[id]
+    return (data as UserProfile | null) ?? null
+  })()
+  pending[id] = p
+  return p
+}
+
+function useProfiles(ids: string[]): Record<string, UserProfile> {
+  const [snap, setSnap] = useState<Record<string, UserProfile>>({})
+  useEffect(() => {
+    let cancelled = false
+    Promise.all(ids.map(getProfile)).then(rows => {
+      if (cancelled) return
+      const next: Record<string, UserProfile> = {}
+      rows.forEach((p, i) => { if (p) next[ids[i]] = p })
+      setSnap(prev => ({ ...prev, ...next }))
+    })
+    return () => { cancelled = true }
+  }, [ids.join(',')]) // eslint-disable-line react-hooks/exhaustive-deps
+  return snap
+}
+
 export function ProgressItemCard({
-  item, expanded, onToggle, onUpdate, onAddChild, onDelete,
+  item, expanded, onToggle, onUpdate, onAddChild, onAssign, onHistory, onDelete,
 }: {
   item: ProgressItem
   expanded: Set<string>
   onToggle: (id: string) => void
   onUpdate: (item: ProgressItem) => void
   onAddChild: (parent: ProgressItem) => void
+  onAssign: (item: ProgressItem) => void
+  onHistory: (item: ProgressItem) => void
   onDelete: (item: ProgressItem) => void
 }) {
   const { items, canEdit } = useProgress()
@@ -44,7 +82,6 @@ export function ProgressItemCard({
   const isLeaf = children.length === 0
   const isOpen = expanded.has(item.id)
 
-  // Leaves use stored value. Non-leaves use rollup of descendant leaves.
   const displayActual = isLeaf
     ? item.actual_progress
     : computeRollup(getDescendantLeaves(items, item.id)).actual
@@ -60,6 +97,10 @@ export function ProgressItemCard({
   const indentRem = (item.level - 1) * 1
   const levelBorder = LEVEL_BORDER[item.level] ?? 'border-l-4 border-l-site-200'
   const cardBg = item.level === 1 ? 'bg-safety-50/40' : 'bg-white'
+
+  const isFloors = item.tracking_mode === 'floors'
+  const assigneeIds = [...item.assigned_to, ...item.delegated_to]
+  const profiles = useProfiles(assigneeIds)
 
   return (
     <div style={{ marginLeft: `${indentRem}rem` }}>
@@ -85,6 +126,11 @@ export function ProgressItemCard({
                     {!isLeaf && (
                       <span className="text-[9px] bg-site-100 text-site-500 px-1.5 py-0.5 rounded-full font-medium">
                         自動匯總
+                      </span>
+                    )}
+                    {isLeaf && isFloors && (
+                      <span className="inline-flex items-center gap-0.5 text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium">
+                        <Layers size={9} />{item.floors_completed.length}/{item.floor_labels.length}層
                       </span>
                     )}
                   </div>
@@ -113,6 +159,22 @@ export function ProgressItemCard({
                 </span>
               </div>
 
+              {/* Assignee chips (leaf only — assignment lives at leaf level) */}
+              {isLeaf && (item.assigned_to.length > 0 || item.delegated_to.length > 0) && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {item.assigned_to.map(id => (
+                    <span key={`o-${id}`} className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">
+                      <Users size={9} />{profiles[id]?.name ?? '...'}
+                    </span>
+                  ))}
+                  {item.delegated_to.map(id => (
+                    <span key={`d-${id}`} className="inline-flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">
+                      <UserPlus size={9} />{profiles[id]?.name ?? '...'}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {canEdit && (
                 <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-site-100">
                   {isLeaf && (
@@ -121,6 +183,22 @@ export function ProgressItemCard({
                       className="text-[11px] bg-safety-500 hover:bg-safety-600 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 min-h-0"
                     >
                       <Edit3 size={11} /> 更新
+                    </button>
+                  )}
+                  {isLeaf && (
+                    <button
+                      onClick={() => onAssign(item)}
+                      className="text-[11px] bg-site-700 hover:bg-site-800 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 min-h-0"
+                    >
+                      <Users size={11} /> 指派
+                    </button>
+                  )}
+                  {isLeaf && (
+                    <button
+                      onClick={() => onHistory(item)}
+                      className="text-[11px] border border-site-200 text-site-600 hover:bg-site-50 px-2.5 py-1 rounded-lg flex items-center gap-1 min-h-0"
+                    >
+                      <History size={11} /> 歷史
                     </button>
                   )}
                   <button
@@ -169,6 +247,8 @@ export function ProgressItemCard({
           onToggle={onToggle}
           onUpdate={onUpdate}
           onAddChild={onAddChild}
+          onAssign={onAssign}
+          onHistory={onHistory}
           onDelete={onDelete}
         />
       ))}

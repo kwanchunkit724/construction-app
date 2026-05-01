@@ -11,6 +11,8 @@ import { ProgressBar } from '../components/ProgressBar'
 import { ProgressItemCard } from '../components/ProgressItemCard'
 import { CreateItemModal } from '../components/CreateItemModal'
 import { UpdateProgressModal } from '../components/UpdateProgressModal'
+import { AssignmentModal } from '../components/AssignmentModal'
+import { HistoryModal } from '../components/HistoryModal'
 import { IssueCard } from '../components/IssueCard'
 import { CreateIssueModal } from '../components/CreateIssueModal'
 import { ProgressProvider, useProgress } from '../contexts/ProgressContext'
@@ -65,6 +67,8 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [createCtx, setCreateCtx] = useState<CreateContext | null>(null)
   const [updating, setUpdating] = useState<ProgressItem | null>(null)
+  const [assigning, setAssigning] = useState<ProgressItem | null>(null)
+  const [historyItem, setHistoryItem] = useState<ProgressItem | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [createIssueOpen, setCreateIssueOpen] = useState(false)
 
@@ -187,6 +191,8 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
                     onAddRoot={() => setCreateCtx({ parent: null, zone })}
                     onUpdate={setUpdating}
                     onAddChild={parent => setCreateCtx({ parent, zone: zoneOf(parent, zone) })}
+                    onAssign={setAssigning}
+                    onHistory={setHistoryItem}
                     onDelete={item => deleteItem(item.id)}
                   />
                 ))}
@@ -218,6 +224,16 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
         open={!!updating}
         onClose={() => setUpdating(null)}
         item={updating}
+      />
+      <AssignmentModal
+        open={!!assigning}
+        onClose={() => setAssigning(null)}
+        item={assigning}
+      />
+      <HistoryModal
+        open={!!historyItem}
+        onClose={() => setHistoryItem(null)}
+        item={historyItem}
       />
       <CreateIssueModal
         open={createIssueOpen}
@@ -309,7 +325,7 @@ function IssuesTab({
 
 function ZoneSection({
   zone, items, expanded, canEdit,
-  onToggle, onAddRoot, onUpdate, onAddChild, onDelete,
+  onToggle, onAddRoot, onUpdate, onAddChild, onAssign, onHistory, onDelete,
 }: {
   zone: Zone
   items: ProgressItem[]
@@ -319,6 +335,8 @@ function ZoneSection({
   onAddRoot: () => void
   onUpdate: (item: ProgressItem) => void
   onAddChild: (parent: ProgressItem) => void
+  onAssign: (item: ProgressItem) => void
+  onHistory: (item: ProgressItem) => void
   onDelete: (item: ProgressItem) => void
 }) {
   const zoneRoots = items.filter(i => i.parent_id === null && i.zone_id === zone.id)
@@ -381,6 +399,8 @@ function ZoneSection({
               onToggle={onToggle}
               onUpdate={onUpdate}
               onAddChild={onAddChild}
+              onAssign={onAssign}
+              onHistory={onHistory}
               onDelete={onDelete}
             />
           ))}
