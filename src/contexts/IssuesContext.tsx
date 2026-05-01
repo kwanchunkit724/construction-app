@@ -11,7 +11,8 @@ interface IssuesContextType {
   fetchError: string | null
   myRoleInProject: GlobalRole | null  // user's role in this project (for permission checks)
   refetch: () => Promise<void>
-  createIssue: (title: string, description: string) => Promise<{ error: string | null; id?: string }>
+  createIssue: (title: string, description: string, photos: string[]) => Promise<{ error: string | null; id?: string }>
+  uploadPhoto: (file: File) => Promise<{ url: string | null; error: string | null }>
   fetchComments: (issueId: string) => Promise<IssueComment[]>
   addComment: (issueId: string, body: string) => Promise<{ error: string | null }>
   escalateIssue: (issueId: string, comment: string) => Promise<{ error: string | null }>
@@ -72,7 +73,7 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
     return () => { supabase.removeChannel(channel) }
   }, [projectId, refetch])
 
-  async function createIssue(title: string, description: string) {
+  async function createIssue(title: string, description: string, photos: string[]) {
     if (!profile) return { error: '未登入' }
     if (!myRoleInProject) return { error: '你不是此工地的成員' }
 
@@ -83,6 +84,7 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
       reporter_role: myRoleInProject,
       title: title.trim(),
       description: description.trim(),
+      photos,
       current_handler_role: handler,
       status: 'open',
     }).select().single()
@@ -99,6 +101,18 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
 
     await refetch()
     return { error: null, id: data.id }
+  }
+
+  async function uploadPhoto(file: File): Promise<{ url: string | null; error: string | null }> {
+    if (!profile) return { url: null, error: '未登入' }
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+    const fileName = `${profile.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+    const { error: upErr } = await supabase.storage
+      .from('issue-photos')
+      .upload(fileName, file, { contentType: file.type, upsert: false })
+    if (upErr) return { url: null, error: upErr.message }
+    const { data } = supabase.storage.from('issue-photos').getPublicUrl(fileName)
+    return { url: data.publicUrl, error: null }
   }
 
   async function fetchComments(issueId: string): Promise<IssueComment[]> {
@@ -192,7 +206,7 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
   return (
     <IssuesContext.Provider value={{
       loading, issues, fetchError, myRoleInProject, refetch,
-      createIssue, fetchComments, addComment,
+      createIssue, uploadPhoto, fetchComments, addComment,
       escalateIssue, resolveIssue, reopenIssue,
     }}>
       {children}

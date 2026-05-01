@@ -155,6 +155,7 @@ export interface Issue {
   reporter_role: GlobalRole
   title: string
   description: string
+  photos: string[]
   current_handler_role: IssueHandlerRole
   status: IssueStatus
   resolved_by: string | null

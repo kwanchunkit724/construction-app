@@ -14,6 +14,7 @@ create table issues (
   reporter_role text not null,  -- snapshot at time of reporting
   title text not null,
   description text not null default '',
+  photos jsonb not null default '[]'::jsonb,  -- array of public URLs
   current_handler_role text not null check (current_handler_role in (
     'pm', 'main_contractor', 'subcontractor', 'admin'
   )),
@@ -120,3 +121,27 @@ create policy "Members add comments to their issues"
 -- ── Realtime ──────────────────────────────────────────────────
 alter publication supabase_realtime add table issues;
 alter publication supabase_realtime add table issue_comments;
+
+-- ── Storage bucket for issue photos ──────────────────────────
+insert into storage.buckets (id, name, public)
+values ('issue-photos', 'issue-photos', true)
+on conflict (id) do nothing;
+
+-- Drop existing policies on storage.objects for this bucket (idempotent)
+drop policy if exists "Public read issue photos" on storage.objects;
+drop policy if exists "Authenticated upload issue photos" on storage.objects;
+drop policy if exists "Owner deletes issue photos" on storage.objects;
+
+create policy "Public read issue photos"
+  on storage.objects for select
+  using (bucket_id = 'issue-photos');
+
+create policy "Authenticated upload issue photos"
+  on storage.objects for insert
+  to authenticated
+  with check (bucket_id = 'issue-photos');
+
+create policy "Owner deletes issue photos"
+  on storage.objects for delete
+  to authenticated
+  using (bucket_id = 'issue-photos' and owner = auth.uid());

@@ -172,6 +172,22 @@ function IssueDetailInner({ projectId, issueId }: { projectId: string; issueId: 
             <p className="text-sm text-site-700 mt-3 whitespace-pre-wrap">{issue.description}</p>
           )}
 
+          {issue.photos.length > 0 && (
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {issue.photos.map((url, i) => (
+                <a
+                  key={i}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="aspect-square rounded-xl overflow-hidden bg-site-100 border border-site-200"
+                >
+                  <img src={url} alt={`照片 ${i + 1}`} className="w-full h-full object-cover" />
+                </a>
+              ))}
+            </div>
+          )}
+
           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-site-100 flex-wrap">
             <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-semibold ${statusStyle}`}>
               <StatusIcon size={11} /> {ISSUE_STATUS_ZH[issue.status]}
