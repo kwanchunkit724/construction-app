@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Plus, Building2, UserCog, Trash2, ChevronRight } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Plus, Building2, UserCog, Trash2, RefreshCw } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { CreateProjectModal } from '../components/CreateProjectModal'
@@ -8,19 +8,49 @@ import { useProjects } from '../contexts/ProjectsContext'
 import type { Project } from '../types'
 
 export default function AdminProjects() {
-  const { loading, projects, deleteProject } = useProjects()
+  const { loading, projects, fetchError, refetch, deleteProject } = useProjects()
   const [createOpen, setCreateOpen] = useState(false)
   const [assigning, setAssigning] = useState<Project | null>(null)
   const [confirmDelId, setConfirmDelId] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+
+  // Force a fresh fetch every time admin opens this page
+  useEffect(() => { refetch() }, [refetch])
+
+  async function manualRefresh() {
+    setRefreshing(true)
+    await refetch()
+    setRefreshing(false)
+  }
 
   return (
     <AppLayout title="管理">
-      <button
-        onClick={() => setCreateOpen(true)}
-        className="btn-primary w-full mb-4"
-      >
-        <Plus size={20} /> 新增工地項目
-      </button>
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => setCreateOpen(true)}
+          className="btn-primary flex-1"
+        >
+          <Plus size={20} /> 新增工地項目
+        </button>
+        <button
+          onClick={manualRefresh}
+          disabled={refreshing}
+          className="btn-ghost flex-shrink-0 px-4"
+          aria-label="刷新"
+        >
+          <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+        </button>
+      </div>
+
+      {fetchError && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-3">
+          ⚠ 讀取失敗：{fetchError}
+        </div>
+      )}
+
+      <div className="text-xs text-site-400 mb-2">
+        當前可見項目：{projects.length}
+      </div>
 
       {loading ? (
         <div className="py-10 flex justify-center"><Spinner size={28} /></div>

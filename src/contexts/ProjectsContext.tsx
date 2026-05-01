@@ -7,6 +7,7 @@ interface ProjectsContextType {
   loading: boolean
   projects: Project[]
   memberships: ProjectMember[]
+  fetchError: string | null
   refetch: () => Promise<void>
   // Admin
   createProject: (name: string, zones: Zone[]) => Promise<{ error: string | null }>
@@ -26,6 +27,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [projects, setProjects] = useState<Project[]>([])
   const [memberships, setMemberships] = useState<ProjectMember[]>([])
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
   const refetch = useCallback(async () => {
     if (!session) return
@@ -33,10 +35,20 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       supabase.from('projects').select('*').order('created_at', { ascending: false }),
       supabase.from('project_members').select('*').order('applied_at', { ascending: false }),
     ])
-    if (projRes.error) console.error('projects:', projRes.error)
-    else setProjects(projRes.data as Project[])
-    if (memRes.error) console.error('memberships:', memRes.error)
-    else setMemberships(memRes.data as ProjectMember[])
+    const errors: string[] = []
+    if (projRes.error) {
+      console.error('projects fetch error:', projRes.error)
+      errors.push(`projects: ${projRes.error.message}`)
+    } else {
+      setProjects(projRes.data as Project[])
+    }
+    if (memRes.error) {
+      console.error('memberships fetch error:', memRes.error)
+      errors.push(`memberships: ${memRes.error.message}`)
+    } else {
+      setMemberships(memRes.data as ProjectMember[])
+    }
+    setFetchError(errors.length ? errors.join(' | ') : null)
   }, [session])
 
   useEffect(() => {
@@ -133,7 +145,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   return (
     <ProjectsContext.Provider value={{
-      loading, projects, memberships, refetch,
+      loading, projects, memberships, fetchError, refetch,
       createProject, assignPMs, deleteProject,
       applyToProject,
       approveMembership, rejectMembership,
