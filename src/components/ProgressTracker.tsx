@@ -29,9 +29,9 @@ const BAR_COLOR: Record<string, string> = {
   'completed': 'bg-green-500', 'delayed': 'bg-red-500', 'blocked': 'bg-orange-500',
 }
 
-function ProgressBar({ value, planned, status }: { value: number; planned: number; status: string }) {
+function ProgressBar({ value, planned, status, className = 'w-28' }: { value: number; planned: number; status: string; className?: string }) {
   return (
-    <div className="relative h-2 bg-gray-100 rounded-full w-28 overflow-hidden">
+    <div className={`relative h-2 bg-gray-100 rounded-full overflow-hidden ${className}`}>
       <div
         className="absolute top-0 bottom-0 w-0.5 bg-gray-400 z-10"
         style={{ left: `${Math.min(planned, 100)}%` }}
@@ -565,8 +565,13 @@ function AddItemModal({
   )
 }
 
-// ── Single tree row ──────────────────────────────────────────────────────────
-function ProgressRow({
+// ── Single tree card (mobile-first, no table) ───────────────────────────────
+const LEVEL_BORDER: Record<number, string> = {
+  1: 'border-l-4 border-l-blue-400',
+  2: 'border-l-4 border-l-gray-300',
+}
+
+function ProgressCard({
   item, allItems, expanded, onToggle,
   onUpdate, onAssign, onDelegate, onAddChild, onDelete,
   canUpdate, canAssign, canDelegate, canAdd, canDelete,
@@ -597,153 +602,155 @@ function ProgressRow({
   const StatusIcon = STATUS_ICON[item.status] ?? Minus
   const diff = item.actualProgress - item.plannedProgress
 
-  const indentPx = (item.level - 1) * 20
-  const rowBg = item.level === 1 ? 'bg-gray-50 font-semibold' : 'bg-white'
-  const textSize = item.level === 1 ? 'text-sm' : 'text-xs'
+  const indentRem = (item.level - 1) * 1
+  const levelBorder = LEVEL_BORDER[item.level] ?? 'border-l-4 border-l-gray-200'
+  const cardBg = item.level === 1 ? 'bg-blue-50/40' : 'bg-white'
 
-  // Floor mode display
   const isFloors = item.trackingMode === 'floors' && item.floorLabels.length > 0
   const floorDone = item.floorsCompleted.length
   const floorTotal = item.floorLabels.length
 
+  const hasActions = canUpdate(item) || canAssign || (canDelegate && item.level > 1) || canAdd || canDelete
+
   return (
-    <>
-      <tr className={`border-b border-gray-100 hover:bg-blue-50/40 transition-colors group ${rowBg}`}>
-        {/* Code + toggle */}
-        <td className="py-2.5 pr-2" style={{ paddingLeft: `${indentPx}px` }}>
-          <div className="flex items-center gap-1">
-            {children.length > 0 ? (
-              <button onClick={() => onToggle(item.id)} className="text-gray-400 hover:text-gray-700 flex-shrink-0">
-                {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              </button>
-            ) : (
-              <span className="w-[14px] flex-shrink-0" />
-            )}
-            <span className={`font-mono ${textSize} text-gray-500 whitespace-nowrap`}>{item.code}</span>
+    <div style={{ marginLeft: `${indentRem}rem` }}>
+      <div className={`rounded-xl border border-gray-200 shadow-sm mb-1.5 overflow-hidden ${levelBorder} ${cardBg}`}>
+        <div className="p-3">
+          {/* Row 1: toggle + code + title + status */}
+          <div className="flex items-start gap-2">
+            <button
+              onClick={() => children.length > 0 ? onToggle(item.id) : undefined}
+              className={`flex-shrink-0 mt-0.5 ${children.length > 0 ? 'text-gray-500 hover:text-gray-800' : 'text-transparent cursor-default'}`}
+            >
+              {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+            </button>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-mono text-[11px] text-gray-400 flex-shrink-0">{item.code}</span>
+                    <span className={`font-semibold text-gray-900 ${item.level === 1 ? 'text-sm' : 'text-xs'} leading-snug`}>
+                      {item.title}
+                    </span>
+                    {isFloors && (
+                      <span className="inline-flex items-center gap-0.5 text-[9px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                        <Layers size={8} />{floorDone}/{floorTotal}層
+                      </span>
+                    )}
+                  </div>
+                  {item.notes && (
+                    <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{item.notes}</p>
+                  )}
+                </div>
+                <span className={`flex-shrink-0 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_STYLE[item.status]}`}>
+                  <StatusIcon size={9} />
+                  {STATUS_ZH[item.status]}
+                </span>
+              </div>
+
+              {/* Row 2: progress bar + % + deviation */}
+              <div className="flex items-center gap-2 mt-2">
+                <ProgressBar
+                  value={item.actualProgress}
+                  planned={item.plannedProgress}
+                  status={item.status}
+                  className="flex-1"
+                />
+                <span className={`text-xs font-bold flex-shrink-0 ${item.status === 'delayed' ? 'text-red-600' : 'text-gray-700'}`}>
+                  {item.actualProgress}%
+                </span>
+                <span className={`text-[11px] font-semibold flex-shrink-0 ${diff < -5 ? 'text-red-500' : diff >= 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                  ({diff >= 0 ? '+' : ''}{diff}%)
+                </span>
+              </div>
+
+              {/* Row 3: assignees */}
+              {(ownerNames.length > 0 || delegateeNames.length > 0) && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {ownerNames.map(n => (
+                    <span key={n} className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full">
+                      <Users size={9} />{n}
+                    </span>
+                  ))}
+                  {delegateeNames.map(n => (
+                    <span key={n} className="inline-flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full">
+                      <UserPlus size={9} />{n}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Row 4: action buttons (always visible — no hover needed on mobile) */}
+              {hasActions && (
+                <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-gray-100">
+                  {canUpdate(item) && (
+                    <button
+                      onClick={() => onUpdate(item)}
+                      className="text-[11px] bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded-lg"
+                    >
+                      更新
+                    </button>
+                  )}
+                  {canAssign && (
+                    <button
+                      onClick={() => onAssign(item)}
+                      className="text-[11px] bg-gray-600 hover:bg-gray-700 text-white px-2.5 py-1 rounded-lg"
+                    >
+                      指派
+                    </button>
+                  )}
+                  {canDelegate && item.level > 1 && (
+                    <button
+                      onClick={() => onDelegate(item)}
+                      className="text-[11px] bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1 rounded-lg"
+                    >
+                      委派
+                    </button>
+                  )}
+                  {canAdd && (
+                    <button
+                      onClick={() => onAddChild(item)}
+                      className="text-[11px] bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded-lg flex items-center gap-0.5"
+                    >
+                      <Plus size={10} />細項
+                    </button>
+                  )}
+                  {canDelete && !confirmDel && (
+                    <button
+                      onClick={() => setConfirmDel(true)}
+                      className="text-[11px] bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 px-2.5 py-1 rounded-lg flex items-center gap-0.5"
+                    >
+                      <Trash2 size={10} />刪除
+                    </button>
+                  )}
+                  {canDelete && confirmDel && (
+                    <span className="flex items-center gap-1">
+                      <span className="text-[11px] text-red-600 font-semibold">確認刪除?</span>
+                      <button
+                        onClick={() => onDelete(item)}
+                        className="text-[11px] bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded-lg"
+                      >
+                        確認
+                      </button>
+                      <button
+                        onClick={() => setConfirmDel(false)}
+                        className="text-[11px] border border-gray-200 text-gray-500 px-2.5 py-1 rounded-lg hover:bg-gray-50"
+                      >
+                        取消
+                      </button>
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </td>
-
-        {/* Title */}
-        <td className={`py-2.5 pr-3 ${textSize} text-gray-800 max-w-[200px]`}>
-          <div className="flex items-center gap-1.5">
-            <p className="truncate">{item.title}</p>
-            {isFloors && (
-              <span className="flex-shrink-0 inline-flex items-center gap-0.5 text-[9px] bg-purple-100 text-purple-600 px-1 py-0.5 rounded">
-                <Layers size={8} />{floorDone}/{floorTotal}層
-              </span>
-            )}
-          </div>
-          {item.notes && <p className="text-[10px] text-gray-400 truncate mt-0.5">{item.notes}</p>}
-        </td>
-
-        {/* Progress */}
-        <td className="py-2.5 pr-3">
-          <div className="flex items-center gap-2">
-            <ProgressBar value={item.actualProgress} planned={item.plannedProgress} status={item.status} />
-            <span className={`text-xs font-bold w-8 text-right ${item.status === 'delayed' ? 'text-red-600' : 'text-gray-700'}`}>
-              {item.actualProgress}%
-            </span>
-          </div>
-        </td>
-
-        {/* Δ vs plan */}
-        <td className="py-2.5 pr-3 text-xs text-right whitespace-nowrap">
-          <span className={`font-semibold ${diff < -5 ? 'text-red-500' : diff >= 0 ? 'text-green-600' : 'text-gray-400'}`}>
-            {diff >= 0 ? '+' : ''}{diff}%
-          </span>
-        </td>
-
-        {/* Status */}
-        <td className="py-2.5 pr-3">
-          <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_STYLE[item.status]}`}>
-            <StatusIcon size={10} />
-            {STATUS_ZH[item.status]}
-          </span>
-        </td>
-
-        {/* Assignees */}
-        <td className="py-2.5 pr-3 max-w-[130px]">
-          <div className="text-[10px] text-gray-500 space-y-0.5">
-            {ownerNames.map(n => (
-              <span key={n} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded mr-1">
-                <Users size={9} />{n}
-              </span>
-            ))}
-            {delegateeNames.map(n => (
-              <span key={n} className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded mr-1">
-                <UserPlus size={9} />{n}
-              </span>
-            ))}
-          </div>
-        </td>
-
-        {/* Actions */}
-        <td className="py-2.5">
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap">
-            {canUpdate(item) && (
-              <button
-                onClick={() => onUpdate(item)}
-                className="text-[10px] bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-lg whitespace-nowrap"
-              >
-                更新
-              </button>
-            )}
-            {canAssign && (
-              <button
-                onClick={() => onAssign(item)}
-                className="text-[10px] bg-gray-600 hover:bg-gray-700 text-white px-2 py-1 rounded-lg whitespace-nowrap"
-              >
-                指派
-              </button>
-            )}
-            {canDelegate && item.level > 1 && (
-              <button
-                onClick={() => onDelegate(item)}
-                className="text-[10px] bg-amber-600 hover:bg-amber-700 text-white px-2 py-1 rounded-lg whitespace-nowrap"
-              >
-                委派
-              </button>
-            )}
-            {canAdd && (
-              <button
-                onClick={() => onAddChild(item)}
-                className="text-[10px] bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded-lg whitespace-nowrap flex items-center gap-0.5"
-              >
-                <Plus size={9} />細項
-              </button>
-            )}
-            {canDelete && !confirmDel && (
-              <button
-                onClick={() => setConfirmDel(true)}
-                className="text-[10px] bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 px-2 py-1 rounded-lg whitespace-nowrap flex items-center gap-0.5"
-              >
-                <Trash2 size={9} />刪除
-              </button>
-            )}
-            {canDelete && confirmDel && (
-              <span className="flex items-center gap-1">
-                <span className="text-[10px] text-red-600 font-semibold whitespace-nowrap">確認刪除?</span>
-                <button
-                  onClick={() => onDelete(item)}
-                  className="text-[10px] bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-lg whitespace-nowrap"
-                >
-                  確認
-                </button>
-                <button
-                  onClick={() => setConfirmDel(false)}
-                  className="text-[10px] border border-gray-200 text-gray-500 px-2 py-1 rounded-lg whitespace-nowrap hover:bg-gray-50"
-                >
-                  取消
-                </button>
-              </span>
-            )}
-          </div>
-        </td>
-      </tr>
+        </div>
+      </div>
 
       {/* Children */}
       {isOpen && children.map(child => (
-        <ProgressRow
+        <ProgressCard
           key={child.id}
           item={child}
           allItems={allItems}
@@ -761,7 +768,7 @@ function ProgressRow({
           canDelete={canDelete}
         />
       ))}
-    </>
+    </div>
   )
 }
 
@@ -890,42 +897,27 @@ export default function ProgressTracker() {
         )}
       </div>
 
-      {/* Tree table */}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[700px]">
-          <thead>
-            <tr className="text-left text-[10px] text-gray-400 border-b-2 border-gray-200 uppercase tracking-wider">
-              <th className="pb-2 pr-2 font-medium w-28">編號</th>
-              <th className="pb-2 pr-3 font-medium">工序名稱</th>
-              <th className="pb-2 pr-3 font-medium w-44">進度</th>
-              <th className="pb-2 pr-3 font-medium w-14 text-right">偏差</th>
-              <th className="pb-2 pr-3 font-medium w-20">狀態</th>
-              <th className="pb-2 pr-3 font-medium w-36">負責人</th>
-              <th className="pb-2 font-medium w-32">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredRoots.map(root => (
-              <ProgressRow
-                key={root.id}
-                item={root}
-                allItems={items}
-                expanded={expanded}
-                onToggle={toggle}
-                onUpdate={setUpdating}
-                onAssign={setAssigning}
-                onDelegate={setDelegating}
-                onAddChild={setAddingParent}
-                onDelete={item => deleteItem(item.id)}
-                canUpdate={itemCanUpdate}
-                canAssign={perms.includes('view:all')}
-                canDelegate={perms.includes('update:progress') && !perms.includes('view:all')}
-                canAdd={canAdd}
-                canDelete={canDelete}
-              />
-            ))}
-          </tbody>
-        </table>
+      {/* Card list — no table, no horizontal scroll */}
+      <div>
+        {filteredRoots.map(root => (
+          <ProgressCard
+            key={root.id}
+            item={root}
+            allItems={items}
+            expanded={expanded}
+            onToggle={toggle}
+            onUpdate={setUpdating}
+            onAssign={setAssigning}
+            onDelegate={setDelegating}
+            onAddChild={setAddingParent}
+            onDelete={item => deleteItem(item.id)}
+            canUpdate={itemCanUpdate}
+            canAssign={perms.includes('view:all')}
+            canDelegate={perms.includes('update:progress') && !perms.includes('view:all')}
+            canAdd={canAdd}
+            canDelete={canDelete}
+          />
+        ))}
         {filteredRoots.length === 0 && (
           <div className="text-center py-12 text-gray-400 text-sm">
             沒有符合條件的工序項目
