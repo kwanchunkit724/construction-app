@@ -1,56 +1,27 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './context/AuthContext'
-import { ProgressProvider } from './context/ProgressContext'
-import { IssueProvider } from './context/IssueContext'
-import { SafetyProvider } from './context/SafetyContext'
-import { QCProvider } from './context/QCContext'
-import { DiaryProvider } from './context/DiaryContext'
-import { ProcurementProvider } from './context/ProcurementContext'
-import { CostProvider } from './context/CostContext'
-import { DocumentProvider } from './context/DocumentContext'
-import { ContractProvider } from './context/ContractContext'
-import ProtectedRoute from './components/ProtectedRoute'
+import { AuthProvider } from './contexts/AuthContext'
+import { ProtectedRoute } from './components/ProtectedRoute'
 import Login from './pages/Login'
-import SuperAdminDashboard from './pages/SuperAdminDashboard'
-import UnifiedDashboard from './pages/UnifiedDashboard'
+import Signup from './pages/Signup'
+import Home from './pages/Home'
+import Projects from './pages/Projects'
+import Profile from './pages/Profile'
+import AdminProjects from './pages/AdminProjects'
 
 export default function App() {
   return (
     <AuthProvider>
-      <SafetyProvider>
-      <QCProvider>
-      <DiaryProvider>
-      <ProcurementProvider>
-      <CostProvider>
-      <DocumentProvider>
-      <IssueProvider>
-      <ContractProvider>
-      <ProgressProvider>
-        <HashRouter>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/" element={<Navigate to="/login" replace />} />
-
-            <Route path="/admin" element={
-              <ProtectedRoute adminOnly><SuperAdminDashboard /></ProtectedRoute>
-            }/>
-
-            <Route path="/dashboard" element={
-              <ProtectedRoute><UnifiedDashboard /></ProtectedRoute>
-            }/>
-
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          </Routes>
-        </HashRouter>
-      </ProgressProvider>
-      </ContractProvider>
-      </IssueProvider>
-      </DocumentProvider>
-      </CostProvider>
-      </ProcurementProvider>
-      </DiaryProvider>
-      </QCProvider>
-      </SafetyProvider>
+      <HashRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+          <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminProjects /></ProtectedRoute>} />
+          <Route path="*" element={<Navigate to="/home" replace />} />
+        </Routes>
+      </HashRouter>
     </AuthProvider>
   )
 }
