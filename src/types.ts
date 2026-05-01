@@ -100,3 +100,45 @@ export function deriveStatus(actual: number, planned: number): ProgressStatus {
   if (actual < planned - 5) return 'delayed'
   return 'in-progress'
 }
+
+// ── Roll-up helpers ─────────────────────────────────────────
+// A leaf is an item with no children. Leaves carry manual progress.
+// Non-leaves (and zones) aggregate progress from descendant leaves.
+
+export function isLeaf(item: ProgressItem, allItems: ProgressItem[]): boolean {
+  return !allItems.some(i => i.parent_id === item.id)
+}
+
+export function getDescendantLeaves(allItems: ProgressItem[], parentId: string): ProgressItem[] {
+  const directChildren = allItems.filter(i => i.parent_id === parentId)
+  if (directChildren.length === 0) return []
+  return directChildren.flatMap(c => {
+    const grandChildren = allItems.filter(i => i.parent_id === c.id)
+    return grandChildren.length === 0 ? [c] : getDescendantLeaves(allItems, c.id)
+  })
+}
+
+export function getZoneLeaves(allItems: ProgressItem[], zoneId: string): ProgressItem[] {
+  // All level-1 items in this zone, then walk down to leaves
+  const roots = allItems.filter(i => i.parent_id === null && i.zone_id === zoneId)
+  return roots.flatMap(r => {
+    const isRootLeaf = !allItems.some(i => i.parent_id === r.id)
+    return isRootLeaf ? [r] : getDescendantLeaves(allItems, r.id)
+  })
+}
+
+export interface Rollup {
+  actual: number
+  planned: number
+  status: ProgressStatus
+  leafCount: number
+}
+
+export function computeRollup(leaves: ProgressItem[]): Rollup {
+  if (leaves.length === 0) {
+    return { actual: 0, planned: 0, status: 'not-started', leafCount: 0 }
+  }
+  const actual = Math.round(leaves.reduce((s, x) => s + x.actual_progress, 0) / leaves.length)
+  const planned = Math.round(leaves.reduce((s, x) => s + x.planned_progress, 0) / leaves.length)
+  return { actual, planned, status: deriveStatus(actual, planned), leafCount: leaves.length }
+}

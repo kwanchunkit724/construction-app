@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { ProgressBar } from './ProgressBar'
 import { useProgress } from '../contexts/ProgressContext'
-import { PROGRESS_STATUS_ZH } from '../types'
+import { PROGRESS_STATUS_ZH, computeRollup, getDescendantLeaves } from '../types'
 import type { ProgressItem, ProgressStatus } from '../types'
 
 const STATUS_STYLE: Record<ProgressStatus, string> = {
@@ -41,10 +41,22 @@ export function ProgressItemCard({
   const [confirmDel, setConfirmDel] = useState(false)
 
   const children = items.filter(i => i.parent_id === item.id)
+  const isLeaf = children.length === 0
   const isOpen = expanded.has(item.id)
 
-  const StatusIcon = STATUS_ICON[item.status] ?? Minus
-  const diff = item.actual_progress - item.planned_progress
+  // Leaves use stored value. Non-leaves use rollup of descendant leaves.
+  const displayActual = isLeaf
+    ? item.actual_progress
+    : computeRollup(getDescendantLeaves(items, item.id)).actual
+  const displayPlanned = isLeaf
+    ? item.planned_progress
+    : computeRollup(getDescendantLeaves(items, item.id)).planned
+  const displayStatus: ProgressStatus = isLeaf
+    ? item.status
+    : computeRollup(getDescendantLeaves(items, item.id)).status
+
+  const StatusIcon = STATUS_ICON[displayStatus] ?? Minus
+  const diff = displayActual - displayPlanned
   const indentRem = (item.level - 1) * 1
   const levelBorder = LEVEL_BORDER[item.level] ?? 'border-l-4 border-l-site-200'
   const cardBg = item.level === 1 ? 'bg-safety-50/40' : 'bg-white'
@@ -55,8 +67,8 @@ export function ProgressItemCard({
         <div className="p-3">
           <div className="flex items-start gap-2">
             <button
-              onClick={() => children.length > 0 && onToggle(item.id)}
-              className={`flex-shrink-0 mt-0.5 ${children.length > 0 ? 'text-site-500 hover:text-site-800' : 'text-transparent cursor-default'}`}
+              onClick={() => !isLeaf && onToggle(item.id)}
+              className={`flex-shrink-0 mt-0.5 ${!isLeaf ? 'text-site-500 hover:text-site-800' : 'text-transparent cursor-default'}`}
               aria-label={isOpen ? '收起' : '展開'}
             >
               {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
@@ -70,26 +82,31 @@ export function ProgressItemCard({
                     <span className={`font-semibold text-site-900 ${item.level === 1 ? 'text-sm' : 'text-xs'} leading-snug`}>
                       {item.title}
                     </span>
+                    {!isLeaf && (
+                      <span className="text-[9px] bg-site-100 text-site-500 px-1.5 py-0.5 rounded-full font-medium">
+                        自動匯總
+                      </span>
+                    )}
                   </div>
-                  {item.notes && (
+                  {item.notes && isLeaf && (
                     <p className="text-[10px] text-site-400 mt-0.5 line-clamp-2">{item.notes}</p>
                   )}
                 </div>
-                <span className={`flex-shrink-0 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_STYLE[item.status]}`}>
+                <span className={`flex-shrink-0 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_STYLE[displayStatus]}`}>
                   <StatusIcon size={9} />
-                  {PROGRESS_STATUS_ZH[item.status]}
+                  {PROGRESS_STATUS_ZH[displayStatus]}
                 </span>
               </div>
 
               <div className="flex items-center gap-2 mt-2">
                 <ProgressBar
-                  value={item.actual_progress}
-                  planned={item.planned_progress}
-                  status={item.status}
+                  value={displayActual}
+                  planned={displayPlanned}
+                  status={displayStatus}
                   className="flex-1"
                 />
-                <span className={`text-xs font-bold flex-shrink-0 ${item.status === 'delayed' ? 'text-red-600' : 'text-site-700'}`}>
-                  {item.actual_progress}%
+                <span className={`text-xs font-bold flex-shrink-0 ${displayStatus === 'delayed' ? 'text-red-600' : 'text-site-700'}`}>
+                  {displayActual}%
                 </span>
                 <span className={`text-[11px] font-semibold flex-shrink-0 ${diff < -5 ? 'text-red-500' : diff >= 0 ? 'text-green-600' : 'text-site-400'}`}>
                   ({diff >= 0 ? '+' : ''}{diff}%)
@@ -98,12 +115,14 @@ export function ProgressItemCard({
 
               {canEdit && (
                 <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-site-100">
-                  <button
-                    onClick={() => onUpdate(item)}
-                    className="text-[11px] bg-safety-500 hover:bg-safety-600 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 min-h-0"
-                  >
-                    <Edit3 size={11} /> 更新
-                  </button>
+                  {isLeaf && (
+                    <button
+                      onClick={() => onUpdate(item)}
+                      className="text-[11px] bg-safety-500 hover:bg-safety-600 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 min-h-0"
+                    >
+                      <Edit3 size={11} /> 更新
+                    </button>
+                  )}
                   <button
                     onClick={() => onAddChild(item)}
                     className="text-[11px] bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 min-h-0"

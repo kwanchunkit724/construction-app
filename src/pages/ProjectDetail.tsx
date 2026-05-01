@@ -1,14 +1,34 @@
 import { useMemo, useState } from 'react'
 import { useParams, useNavigate, Navigate } from 'react-router-dom'
-import { ChevronLeft, Plus, Building2, RefreshCw } from 'lucide-react'
+import {
+  ChevronLeft, Plus, Building2, RefreshCw,
+  CheckCircle2, AlertTriangle, Clock, Minus,
+} from 'lucide-react'
 import { Spinner } from '../components/Spinner'
 import { BottomNav } from '../components/BottomNav'
+import { ProgressBar } from '../components/ProgressBar'
 import { ProgressItemCard } from '../components/ProgressItemCard'
 import { CreateItemModal } from '../components/CreateItemModal'
 import { UpdateProgressModal } from '../components/UpdateProgressModal'
 import { ProgressProvider, useProgress } from '../contexts/ProgressContext'
 import { useProjects } from '../contexts/ProjectsContext'
-import type { ProgressItem } from '../types'
+import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH } from '../types'
+import type { ProgressItem, ProgressStatus, Zone } from '../types'
+
+const STATUS_ICON: Record<ProgressStatus, typeof Minus> = {
+  'not-started': Minus,
+  'in-progress': Clock,
+  'completed': CheckCircle2,
+  'delayed': AlertTriangle,
+  'blocked': AlertTriangle,
+}
+const STATUS_PILL: Record<ProgressStatus, string> = {
+  'not-started': 'bg-site-100 text-site-500',
+  'in-progress': 'bg-blue-100 text-blue-700',
+  'completed': 'bg-green-100 text-green-700',
+  'delayed': 'bg-red-100 text-red-700',
+  'blocked': 'bg-orange-100 text-orange-700',
+}
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>()
@@ -20,6 +40,11 @@ export default function ProjectDetail() {
   )
 }
 
+interface CreateContext {
+  parent: ProgressItem | null
+  zone: Zone
+}
+
 function ProjectDetailInner({ projectId }: { projectId: string }) {
   const navigate = useNavigate()
   const { projects } = useProjects()
@@ -28,13 +53,13 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const project = projects.find(p => p.id === projectId)
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const [createParent, setCreateParent] = useState<ProgressItem | null | undefined>(undefined)
+  const [createCtx, setCreateCtx] = useState<CreateContext | null>(null)
   const [updating, setUpdating] = useState<ProgressItem | null>(null)
   const [refreshing, setRefreshing] = useState(false)
 
   const roots = useMemo(() => items.filter(i => i.parent_id === null), [items])
 
-  // Auto-expand all level-1 items first time data loads
+  // Auto-expand all level-1 items first time
   const autoExpanded = useMemo(() => {
     if (expanded.size > 0) return expanded
     return new Set(roots.map(r => r.id))
@@ -66,7 +91,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
     )
   }
 
-  // Stats
+  // Stats — leaves only (across whole project)
   const leaves = items.filter(i => !items.some(c => c.parent_id === i.id))
   const completed = leaves.filter(i => i.status === 'completed').length
   const inProgress = leaves.filter(i => i.status === 'in-progress').length
@@ -74,6 +99,13 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const notStarted = leaves.filter(i => i.status === 'not-started').length
 
   const expandedSet = expanded.size === 0 ? autoExpanded : expanded
+
+  // Find a zone to use as fallback when adding from a child item (sub-items inherit parent's zone)
+  const projectZones = project.zones
+  function zoneOf(parent: ProgressItem | null, fallbackZone: Zone): Zone {
+    if (!parent) return fallbackZone
+    return projectZones.find(z => z.id === parent.zone_id) ?? fallbackZone
+  }
 
   return (
     <div className="min-h-screen bg-site-50 flex flex-col">
@@ -96,7 +128,6 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
       </header>
 
       <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-4 pb-24">
-        {/* Stats */}
         {leaves.length > 0 && (
           <div className="grid grid-cols-4 gap-2 mb-4">
             <Stat label="已完成" count={completed} color="text-green-700 bg-green-50 border-green-200" />
@@ -112,34 +143,27 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
           </div>
         )}
 
-        {canEdit && (
-          <button
-            onClick={() => setCreateParent(null)}
-            className="btn-primary w-full mb-3"
-          >
-            <Plus size={20} /> 加入大項
-          </button>
-        )}
-
         {loading ? (
           <div className="py-10 flex justify-center"><Spinner size={28} /></div>
-        ) : roots.length === 0 ? (
+        ) : project.zones.length === 0 ? (
           <div className="card p-10 text-center">
             <Building2 size={36} className="mx-auto text-site-300 mb-2" />
-            <p className="text-sm text-site-600">還未有任何進度項目</p>
-            {canEdit && <p className="text-xs text-site-400 mt-1">點擊上方按鈕加入第一個大項</p>}
-            {!canEdit && <p className="text-xs text-site-400 mt-1">你目前是唯讀身份</p>}
+            <p className="text-sm text-site-600">此工地尚未設定分區</p>
+            <p className="text-xs text-site-400 mt-1">請 Admin 在「管理」頁編輯工地加入分區</p>
           </div>
         ) : (
-          <div>
-            {roots.map(root => (
-              <ProgressItemCard
-                key={root.id}
-                item={root}
+          <div className="space-y-5">
+            {project.zones.map(zone => (
+              <ZoneSection
+                key={zone.id}
+                zone={zone}
+                items={items}
                 expanded={expandedSet}
+                canEdit={canEdit}
                 onToggle={toggle}
+                onAddRoot={() => setCreateCtx({ parent: null, zone })}
                 onUpdate={setUpdating}
-                onAddChild={p => setCreateParent(p)}
+                onAddChild={parent => setCreateCtx({ parent, zone: zoneOf(parent, zone) })}
                 onDelete={item => deleteItem(item.id)}
               />
             ))}
@@ -149,12 +173,12 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
 
       <BottomNav />
 
-      {createParent !== undefined && (
+      {createCtx && (
         <CreateItemModal
-          open={createParent !== undefined}
-          onClose={() => setCreateParent(undefined)}
-          parent={createParent}
-          zones={project.zones}
+          open={!!createCtx}
+          onClose={() => setCreateCtx(null)}
+          parent={createCtx.parent}
+          zone={createCtx.zone}
         />
       )}
       <UpdateProgressModal
@@ -163,6 +187,89 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
         item={updating}
       />
     </div>
+  )
+}
+
+function ZoneSection({
+  zone, items, expanded, canEdit,
+  onToggle, onAddRoot, onUpdate, onAddChild, onDelete,
+}: {
+  zone: Zone
+  items: ProgressItem[]
+  expanded: Set<string>
+  canEdit: boolean
+  onToggle: (id: string) => void
+  onAddRoot: () => void
+  onUpdate: (item: ProgressItem) => void
+  onAddChild: (parent: ProgressItem) => void
+  onDelete: (item: ProgressItem) => void
+}) {
+  const zoneRoots = items.filter(i => i.parent_id === null && i.zone_id === zone.id)
+  const rollup = computeRollup(getZoneLeaves(items, zone.id))
+  const StatusIcon = STATUS_ICON[rollup.status] ?? Minus
+
+  return (
+    <section>
+      {/* Zone header */}
+      <div className="card-md p-4 mb-2">
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs text-site-500 flex-shrink-0">{zone.id}</span>
+              <h2 className="font-bold text-site-900 truncate">{zone.name}</h2>
+            </div>
+            <p className="text-[11px] text-site-400 mt-0.5">
+              {rollup.leafCount === 0 ? '尚未有進度項目' : `${rollup.leafCount} 個 leaf 項目自動匯總`}
+            </p>
+          </div>
+          <span className={`flex-shrink-0 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium ${STATUS_PILL[rollup.status]}`}>
+            <StatusIcon size={11} />
+            {PROGRESS_STATUS_ZH[rollup.status]}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <ProgressBar
+            value={rollup.actual}
+            planned={rollup.planned}
+            status={rollup.status}
+            className="flex-1"
+          />
+          <span className="text-sm font-bold text-site-900 flex-shrink-0">{rollup.actual}%</span>
+          <span className="text-xs text-site-500 flex-shrink-0">/ 計劃 {rollup.planned}%</span>
+        </div>
+
+        {canEdit && (
+          <button
+            onClick={onAddRoot}
+            className="mt-3 w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-safety-700 bg-safety-50 border border-safety-200 hover:bg-safety-100 py-2 rounded-lg"
+          >
+            <Plus size={16} /> 加入大項
+          </button>
+        )}
+      </div>
+
+      {/* Items in this zone */}
+      {zoneRoots.length === 0 ? (
+        !canEdit && (
+          <div className="text-center text-xs text-site-400 py-3">— 暫無項目 —</div>
+        )
+      ) : (
+        <div>
+          {zoneRoots.map(root => (
+            <ProgressItemCard
+              key={root.id}
+              item={root}
+              expanded={expanded}
+              onToggle={onToggle}
+              onUpdate={onUpdate}
+              onAddChild={onAddChild}
+              onDelete={onDelete}
+            />
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
 
