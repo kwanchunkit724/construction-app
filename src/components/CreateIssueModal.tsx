@@ -1,6 +1,6 @@
 import { ChangeEvent, FormEvent, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, X, Image as ImageIcon } from 'lucide-react'
+import { Camera, X, ImagePlus } from 'lucide-react'
 import { Modal } from './Modal'
 import { Spinner } from './Spinner'
 import { useIssues } from '../contexts/IssuesContext'
@@ -26,7 +26,8 @@ export function CreateIssueModal({
 }) {
   const navigate = useNavigate()
   const { createIssue, uploadPhoto, myRoleInProject } = useIssues()
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [photos, setPhotos] = useState<PhotoSlot[]>([])
@@ -167,22 +168,39 @@ export function CreateIssueModal({
                 </button>
               </div>
             ))}
-            {photos.length < MAX_PHOTOS && (
+          </div>
+
+          {photos.length < MAX_PHOTOS && (
+            <div className="grid grid-cols-2 gap-2 mt-2">
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="aspect-square rounded-xl border-2 border-dashed border-site-300 bg-site-50 hover:bg-site-100 flex flex-col items-center justify-center text-site-500 gap-1 min-h-0"
+                onClick={() => cameraInputRef.current?.click()}
+                className="rounded-xl border-2 border-dashed border-site-300 bg-site-50 hover:bg-site-100 flex items-center justify-center text-site-700 gap-1.5 py-3 font-medium text-sm min-h-0"
               >
-                <Camera size={22} />
-                <span className="text-[11px]">加照片</span>
+                <Camera size={18} /> 拍照
               </button>
-            )}
-          </div>
+              <button
+                type="button"
+                onClick={() => galleryInputRef.current?.click()}
+                className="rounded-xl border-2 border-dashed border-site-300 bg-site-50 hover:bg-site-100 flex items-center justify-center text-site-700 gap-1.5 py-3 font-medium text-sm min-h-0"
+              >
+                <ImagePlus size={18} /> 從相簿選
+              </button>
+            </div>
+          )}
+
           <input
-            ref={fileInputRef}
+            ref={cameraInputRef}
             type="file"
             accept="image/*"
             capture="environment"
+            onChange={onPickFiles}
+            className="hidden"
+          />
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/*"
             multiple
             onChange={onPickFiles}
             className="hidden"
