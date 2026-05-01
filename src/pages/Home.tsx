@@ -1,21 +1,54 @@
 import { useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { Building2, Clock, ChevronRight } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
+import type { Project, ProjectRole } from '../types'
+
+interface MyProject {
+  project: Project
+  roleLabel: string
+}
 
 export default function Home() {
   const { profile } = useAuth()
   const { loading, projects, memberships } = useProjects()
 
-  const myApproved = useMemo(() => {
+  const myProjects = useMemo<MyProject[]>(() => {
     if (!profile) return []
-    return memberships
+
+    if (profile.global_role === 'admin') {
+      return projects.map(p => ({ project: p, roleLabel: '系統管理員' }))
+    }
+
+    const list: MyProject[] = []
+    const seen = new Set<string>()
+
+    // Approved memberships
+    memberships
       .filter(m => m.user_id === profile.id && m.status === 'approved')
-      .map(m => ({ membership: m, project: projects.find(p => p.id === m.project_id) }))
-      .filter(x => x.project)
+      .forEach(m => {
+        const project = projects.find(p => p.id === m.project_id)
+        if (project && !seen.has(project.id)) {
+          seen.add(project.id)
+          list.push({ project, roleLabel: ROLE_ZH[m.role as ProjectRole] })
+        }
+      })
+
+    // PM assignment (in case PM hasn't applied as member)
+    projects
+      .filter(p => p.assigned_pm_ids.includes(profile.id))
+      .forEach(project => {
+        if (!seen.has(project.id)) {
+          seen.add(project.id)
+          list.push({ project, roleLabel: '項目經理 (PM)' })
+        }
+      })
+
+    return list
   }, [memberships, projects, profile])
 
   const myPending = useMemo(() => {
@@ -51,7 +84,7 @@ export default function Home() {
 
         {loading ? (
           <div className="py-8 flex justify-center"><Spinner size={24} /></div>
-        ) : myApproved.length === 0 ? (
+        ) : myProjects.length === 0 ? (
           <div className="card p-6 text-center">
             <Building2 size={32} className="mx-auto text-site-300 mb-2" />
             <p className="text-sm text-site-600">還未加入任何工地</p>
@@ -61,17 +94,21 @@ export default function Home() {
           </div>
         ) : (
           <div className="space-y-2">
-            {myApproved.map(({ project, membership }) => (
-              <div key={membership!.id} className="card p-4 flex items-center gap-3">
+            {myProjects.map(({ project, roleLabel }) => (
+              <Link
+                key={project.id}
+                to={`/project/${project.id}`}
+                className="card p-4 flex items-center gap-3 hover:border-safety-300 transition-colors"
+              >
                 <div className="w-10 h-10 rounded-xl bg-safety-100 text-safety-600 flex items-center justify-center flex-shrink-0">
                   <Building2 size={20} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-site-900 truncate">{project!.name}</p>
-                  <p className="text-xs text-site-500 mt-0.5">{ROLE_ZH[membership!.role]}</p>
+                  <p className="font-semibold text-site-900 truncate">{project.name}</p>
+                  <p className="text-xs text-site-500 mt-0.5">{roleLabel}</p>
                 </div>
                 <ChevronRight size={18} className="text-site-300" />
-              </div>
+              </Link>
             ))}
           </div>
         )}
