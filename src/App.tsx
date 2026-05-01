@@ -1,5 +1,6 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
+import { ProjectsProvider } from './contexts/ProjectsContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
@@ -11,8 +12,9 @@ import AdminProjects from './pages/AdminProjects'
 export default function App() {
   return (
     <AuthProvider>
-      <HashRouter>
-        <Routes>
+      <ProjectsProvider>
+        <HashRouter>
+          <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
@@ -20,8 +22,9 @@ export default function App() {
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminProjects /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/home" replace />} />
-        </Routes>
-      </HashRouter>
+          </Routes>
+        </HashRouter>
+      </ProjectsProvider>
     </AuthProvider>
   )
 }
