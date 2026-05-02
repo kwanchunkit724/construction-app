@@ -53,27 +53,18 @@ function IssueDetailInner({ projectId, issueId }: { projectId: string; issueId: 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  // Load comments + author profiles
+  const reporterId = issue?.reporter_id
+  // Load comments once when issueId or reporter changes (not on every realtime tick)
   useEffect(() => {
     let cancelled = false
-    fetchComments(issueId).then(async (cs) => {
+    fetchComments(issueId).then((cs) => {
       if (cancelled) return
       setComments(cs)
-      const ids = Array.from(new Set([
-        ...cs.map(c => c.author_id),
-        ...(issue ? [issue.reporter_id] : []),
-      ]))
-      if (ids.length === 0) return
-      const { data } = await supabase.from('user_profiles').select('*').in('id', ids)
-      if (cancelled || !data) return
-      const map: Record<string, UserProfile> = {}
-      for (const u of data as UserProfile[]) map[u.id] = u
-      setUsers(map)
     })
     return () => { cancelled = true }
-  }, [issueId, fetchComments, issue])
+  }, [issueId, fetchComments])
 
-  // Subscribe to comments updates
+  // Subscribe to comments for this issue
   useEffect(() => {
     const channel = supabase
       .channel(`issue-${issueId}-comments`)
@@ -86,6 +77,25 @@ function IssueDetailInner({ projectId, issueId }: { projectId: string; issueId: 
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [issueId, fetchComments])
+
+  // Fetch user profiles for everyone referenced (comments + reporter), de-duplicated
+  useEffect(() => {
+    const ids = Array.from(new Set([
+      ...comments.map(c => c.author_id),
+      ...(reporterId ? [reporterId] : []),
+    ].filter(id => !users[id])))
+    if (ids.length === 0) return
+    let cancelled = false
+    supabase.from('user_profiles').select('*').in('id', ids).then(({ data }) => {
+      if (cancelled || !data) return
+      setUsers(prev => {
+        const next = { ...prev }
+        for (const u of data as UserProfile[]) next[u.id] = u
+        return next
+      })
+    })
+    return () => { cancelled = true }
+  }, [comments, reporterId, users])
 
   if (!issue || !project) {
     return (

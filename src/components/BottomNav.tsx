@@ -18,7 +18,7 @@ export function BottomNav() {
       className="fixed bottom-0 left-0 right-0 bg-white border-t border-site-200 z-40"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
-      <div className="max-w-2xl mx-auto grid grid-cols-4">
+      <div className={`max-w-2xl mx-auto grid ${tabs.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
         {tabs.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}

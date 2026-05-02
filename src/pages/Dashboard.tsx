@@ -42,14 +42,21 @@ export default function Dashboard() {
     return projects.filter(p => p.assigned_pm_ids.includes(profile.id))
   }, [profile, projects])
 
+  // Stable key for project IDs — prevents re-running fetch when project array
+  // reference changes but underlying ids didn't.
+  const projectIdsKey = useMemo(
+    () => visibleProjects.map(p => p.id).sort().join(','),
+    [visibleProjects]
+  )
+
   useEffect(() => {
-    if (!profile || visibleProjects.length === 0) {
+    if (!profile || projectIdsKey === '') {
       setLoading(false)
       return
     }
     let cancelled = false
     setLoading(true)
-    const projectIds = visibleProjects.map(p => p.id)
+    const projectIds = projectIdsKey.split(',')
 
     Promise.all([
       supabase.from('progress_items').select('*').in('project_id', projectIds),
@@ -60,66 +67,6 @@ export default function Dashboard() {
       const issues = (issueRes.data ?? []) as Issue[]
       setAllItems(items)
       setAllIssues(issues)
-
-      // Build activity feed (top 15)
-      const events: ActivityEvent[] = []
-      for (const i of issues.slice(0, 8)) {
-        events.push({
-          id: 'i-' + i.id,
-          type: i.status === 'resolved' ? 'issue_resolved' : 'issue_created',
-          at: i.status === 'resolved' && i.resolved_at ? i.resolved_at : i.created_at,
-          title: i.status === 'resolved' ? '問題已解決' : '新問題報告',
-          detail: i.title,
-          link: `/project/${i.project_id}/issue/${i.id}`,
-          user_id: i.status === 'resolved' ? (i.resolved_by ?? undefined) : i.reporter_id,
-        })
-      }
-      // Recent membership approvals
-      memberships
-        .filter(m => m.status === 'approved' && projectIds.includes(m.project_id))
-        .slice(0, 5)
-        .forEach(m => {
-          events.push({
-            id: 'm-' + m.id,
-            type: 'membership_approved',
-            at: m.approved_at ?? m.applied_at,
-            title: '工地申請通過',
-            detail: visibleProjects.find(p => p.id === m.project_id)?.name,
-            user_id: m.user_id,
-          })
-        })
-      // Recent items
-      items
-        .sort((a, b) => b.last_updated_at.localeCompare(a.last_updated_at))
-        .slice(0, 5)
-        .forEach(it => {
-          if (it.last_updated_at !== it.created_at) {
-            events.push({
-              id: 'p-' + it.id,
-              type: 'progress_updated',
-              at: it.last_updated_at,
-              title: '進度更新',
-              detail: `${it.code} ${it.title} → ${it.actual_progress}%`,
-              link: `/project/${it.project_id}`,
-              user_id: it.last_updated_by ?? undefined,
-            })
-          }
-        })
-
-      events.sort((a, b) => b.at.localeCompare(a.at))
-      const top = events.slice(0, 15)
-      setActivity(top)
-
-      // Fetch user profiles for the activity authors
-      const userIds = Array.from(new Set(top.map(e => e.user_id).filter(Boolean) as string[]))
-      if (userIds.length > 0) {
-        const { data } = await supabase.from('user_profiles').select('*').in('id', userIds)
-        if (!cancelled && data) {
-          const map: Record<string, UserProfile> = {}
-          for (const u of data as UserProfile[]) map[u.id] = u
-          setUsers(map)
-        }
-      }
       setLoading(false)
     }).catch(e => {
       console.error('Dashboard fetch error:', e)
@@ -127,7 +74,75 @@ export default function Dashboard() {
     })
 
     return () => { cancelled = true }
-  }, [profile, visibleProjects, memberships])
+  }, [profile?.id, projectIdsKey])
+
+  // Activity feed derived from current data (no separate fetch)
+  useEffect(() => {
+    if (!profile || projectIdsKey === '') return
+    const projectIds = projectIdsKey.split(',')
+    const events: ActivityEvent[] = []
+    for (const i of allIssues.slice(0, 8)) {
+      events.push({
+        id: 'i-' + i.id,
+        type: i.status === 'resolved' ? 'issue_resolved' : 'issue_created',
+        at: i.status === 'resolved' && i.resolved_at ? i.resolved_at : i.created_at,
+        title: i.status === 'resolved' ? '問題已解決' : '新問題報告',
+        detail: i.title,
+        link: `/project/${i.project_id}/issue/${i.id}`,
+        user_id: i.status === 'resolved' ? (i.resolved_by ?? undefined) : i.reporter_id,
+      })
+    }
+    memberships
+      .filter(m => m.status === 'approved' && projectIds.includes(m.project_id))
+      .slice(0, 5)
+      .forEach(m => {
+        events.push({
+          id: 'm-' + m.id,
+          type: 'membership_approved',
+          at: m.approved_at ?? m.applied_at,
+          title: '工地申請通過',
+          detail: visibleProjects.find(p => p.id === m.project_id)?.name,
+          user_id: m.user_id,
+        })
+      })
+    allItems
+      .slice()
+      .sort((a, b) => b.last_updated_at.localeCompare(a.last_updated_at))
+      .slice(0, 5)
+      .forEach(it => {
+        if (it.last_updated_at !== it.created_at) {
+          events.push({
+            id: 'p-' + it.id,
+            type: 'progress_updated',
+            at: it.last_updated_at,
+            title: '進度更新',
+            detail: `${it.code} ${it.title} → ${it.actual_progress}%`,
+            link: `/project/${it.project_id}`,
+            user_id: it.last_updated_by ?? undefined,
+          })
+        }
+      })
+    events.sort((a, b) => b.at.localeCompare(a.at))
+    setActivity(events.slice(0, 15))
+  }, [allItems, allIssues, memberships, profile?.id, projectIdsKey, visibleProjects])
+
+  // Fetch missing user profiles for the activity feed
+  useEffect(() => {
+    const needed = Array.from(new Set(
+      activity.map(e => e.user_id).filter((id): id is string => !!id && !users[id])
+    ))
+    if (needed.length === 0) return
+    let cancelled = false
+    supabase.from('user_profiles').select('*').in('id', needed).then(({ data }) => {
+      if (cancelled || !data) return
+      setUsers(prev => {
+        const next = { ...prev }
+        for (const u of data as UserProfile[]) next[u.id] = u
+        return next
+      })
+    })
+    return () => { cancelled = true }
+  }, [activity, users])
 
   if (authLoading || projectsLoading) {
     return <AppLayout title="儀表板 Dashboard" wide><div className="py-20 flex justify-center"><Spinner size={32} /></div></AppLayout>

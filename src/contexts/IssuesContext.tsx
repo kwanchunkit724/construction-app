@@ -60,13 +60,12 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
     setLoading(true)
     refetch().finally(() => setLoading(false))
 
+    // Subscribe to issue changes for this project only.
+    // Comments don't affect the issue list; IssueDetail subscribes per-issue.
     const channel = supabase
       .channel(`issues-${projectId}`)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'issues', filter: `project_id=eq.${projectId}` },
-        () => refetch())
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'issue_comments' },
         () => refetch())
       .subscribe()
 
@@ -154,7 +153,7 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
     }).eq('id', issueId)
     if (error) return { error: error.message }
 
-    await supabase.from('issue_comments').insert({
+    const { error: cErr } = await supabase.from('issue_comments').insert({
       issue_id: issueId,
       author_id: profile.id,
       action: 'escalated',
@@ -162,6 +161,8 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
       from_role: issue.current_handler_role,
       to_role: next,
     })
+    await refetch()
+    if (cErr) return { error: `已上呈，但記錄失敗：${cErr.message}` }
     return { error: null }
   }
 
@@ -175,12 +176,14 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
     }).eq('id', issueId)
     if (error) return { error: error.message }
 
-    await supabase.from('issue_comments').insert({
+    const { error: cErr } = await supabase.from('issue_comments').insert({
       issue_id: issueId,
       author_id: profile.id,
       action: 'resolved',
       body: comment.trim(),
     })
+    await refetch()
+    if (cErr) return { error: `已標記解決，但記錄失敗：${cErr.message}` }
     return { error: null }
   }
 
@@ -194,12 +197,14 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
     }).eq('id', issueId)
     if (error) return { error: error.message }
 
-    await supabase.from('issue_comments').insert({
+    const { error: cErr } = await supabase.from('issue_comments').insert({
       issue_id: issueId,
       author_id: profile.id,
       action: 'reopened',
       body: comment.trim(),
     })
+    await refetch()
+    if (cErr) return { error: `已重開，但記錄失敗：${cErr.message}` }
     return { error: null }
   }
 
