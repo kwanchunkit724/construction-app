@@ -5,6 +5,7 @@ import {
   Send, RefreshCw, RotateCcw,
 } from 'lucide-react'
 import { Spinner } from '../components/Spinner'
+import { Sidebar } from '../components/Sidebar'
 import { Modal } from '../components/Modal'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
@@ -136,22 +137,24 @@ function IssueDetailInner({ projectId, issueId }: { projectId: string; issueId: 
 
   return (
     <div className="min-h-screen bg-site-50 flex flex-col">
+      <Sidebar />
+      <div className="flex-1 flex flex-col md:pl-60 lg:pl-64">
       <header
         className="sticky top-0 z-30 bg-white border-b border-site-200"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
-        <div className="max-w-2xl mx-auto px-2 py-2 flex items-center gap-1">
+        <div className="max-w-2xl md:max-w-4xl mx-auto px-2 md:px-4 py-2 flex items-center gap-1">
           <button onClick={() => navigate(`/project/${projectId}`)} className="text-site-700 hover:text-site-900 p-2" aria-label="返回">
             <ChevronLeft size={22} />
           </button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-base font-bold text-site-900 truncate">問題詳情</h1>
+            <h1 className="text-base md:text-lg font-bold text-site-900 truncate">問題詳情</h1>
             <p className="text-[11px] text-site-500 truncate">{project.name}</p>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-4 pb-24">
+      <main className="flex-1 max-w-2xl md:max-w-4xl w-full mx-auto px-4 md:px-6 py-4 md:py-6 pb-24 md:pb-10">
         {/* Issue summary */}
         <div className="card p-4">
           <div className="flex items-start gap-3">
@@ -266,6 +269,7 @@ function IssueDetailInner({ projectId, issueId }: { projectId: string; issueId: 
           </button>
         </div>
       </main>
+      </div>
 
       {dialog && (
         <Modal

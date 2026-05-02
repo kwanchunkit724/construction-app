@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { Spinner } from '../components/Spinner'
 import { BottomNav } from '../components/BottomNav'
+import { Sidebar } from '../components/Sidebar'
 import { ProgressBar } from '../components/ProgressBar'
 import { ProgressItemCard } from '../components/ProgressItemCard'
 import { CreateItemModal } from '../components/CreateItemModal'
@@ -126,16 +127,19 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
 
   return (
     <div className="min-h-screen bg-site-50 flex flex-col">
+      <Sidebar />
+
+      <div className="flex-1 flex flex-col md:pl-60 lg:pl-64">
       <header
         className="sticky top-0 z-30 bg-white border-b border-site-200"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
-        <div className="max-w-2xl mx-auto px-2 py-2 flex items-center gap-1">
+        <div className="max-w-2xl md:max-w-7xl mx-auto px-2 md:px-4 py-2 flex items-center gap-1">
           <button onClick={() => navigate('/home')} className="text-site-700 hover:text-site-900 p-2" aria-label="返回">
             <ChevronLeft size={22} />
           </button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-base font-bold text-site-900 truncate">{project.name}</h1>
+            <h1 className="text-base md:text-lg font-bold text-site-900 truncate">{project.name}</h1>
             <p className="text-[11px] text-site-500">{project.zones.length} 個分區 · {items.length} 個進度項目</p>
           </div>
           <button onClick={manualRefresh} disabled={refreshing} className="text-site-500 hover:text-site-800 p-2" aria-label="刷新">
@@ -146,13 +150,13 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
 
       {/* Tabs */}
       <div className="bg-white border-b border-site-200 sticky top-[calc(env(safe-area-inset-top)+44px)] z-20">
-        <div className="max-w-2xl mx-auto flex">
+        <div className="max-w-2xl md:max-w-7xl mx-auto flex">
           <TabButton active={tab === 'progress'} onClick={() => setTab('progress')} icon={ListChecks} label="進度" />
           <TabButton active={tab === 'issues'} onClick={() => setTab('issues')} icon={AlertCircle} label="問題" badge={openIssueCount} />
         </div>
       </div>
 
-      <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-4 pb-24">
+      <main className="flex-1 max-w-2xl md:max-w-7xl w-full mx-auto px-4 md:px-6 py-4 md:py-6 pb-24 md:pb-10">
         {fetchError && (
           <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-3">
             ⚠ 讀取失敗：{fetchError}
@@ -179,7 +183,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
                 <p className="text-xs text-site-400 mt-1">請 Admin 在「管理」頁編輯工地加入分區</p>
               </div>
             ) : (
-              <div className="space-y-5">
+              <div className="space-y-5 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-4">
                 {project.zones.map(zone => (
                   <ZoneSection
                     key={zone.id}
@@ -209,8 +213,9 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
           />
         )}
       </main>
+      </div>
 
-      <BottomNav />
+      <div className="md:hidden"><BottomNav /></div>
 
       {createCtx && (
         <CreateItemModal
