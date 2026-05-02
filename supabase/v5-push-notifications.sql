@@ -25,7 +25,6 @@ create table if not exists app_config (
 insert into app_config (id) values (1) on conflict (id) do nothing;
 
 alter table app_config enable row level security;
--- No policies: nobody can read this directly. Only SECURITY DEFINER fn can.
 
 -- ── 3. Helper: send push to a list of user_ids ───────────────
 create or replace function send_push_to_users(
@@ -37,7 +36,7 @@ create or replace function send_push_to_users(
 language plpgsql
 security definer
 set search_path = public, extensions
-as $$
+as $send_push$
 declare
   v_app_id text;
   v_rest_key text;
@@ -90,18 +89,17 @@ begin
 exception when others then
   raise log 'send_push_to_users error: %', sqlerrm;
 end;
-$$;
+$send_push$;
 
 -- ── 4. Trigger: Issue created ────────────────────────────────
 create or replace function trg_issue_created() returns trigger
 language plpgsql security definer
 set search_path = public
-as $$
+as $issue_created$
 declare
   v_targets uuid[];
   v_project_name text;
 begin
-  -- Users with the target role in this project (excl. reporter)
   select array_agg(user_id) into v_targets
     from project_members
     where project_id = new.project_id
@@ -109,7 +107,6 @@ begin
       and status = 'approved'
       and user_id <> new.reporter_id;
 
-  -- If handler is PM, also include assigned PMs (who may not have membership row)
   if new.current_handler_role = 'pm' then
     select array_agg(distinct uid) into v_targets
       from (
@@ -130,25 +127,24 @@ begin
   );
   return new;
 end;
-$$;
+$issue_created$;
 
 drop trigger if exists on_issue_created on issues;
 create trigger on_issue_created
   after insert on issues
   for each row execute function trg_issue_created();
 
--- ── 5. Trigger: Issue escalated or resolved ──────────────────
+-- ── 5. Trigger: Issue escalated / resolved / reopened ────────
 create or replace function trg_issue_updated() returns trigger
 language plpgsql security definer
 set search_path = public
-as $$
+as $issue_updated$
 declare
   v_targets uuid[];
   v_project_name text;
 begin
   select name into v_project_name from projects where id = new.project_id;
 
-  -- Escalation: handler role changed and still open
   if old.current_handler_role <> new.current_handler_role and new.status = 'open' then
     select array_agg(user_id) into v_targets
       from project_members
@@ -174,7 +170,6 @@ begin
     );
   end if;
 
-  -- Resolved: notify reporter
   if old.status = 'open' and new.status = 'resolved' then
     perform send_push_to_users(
       array[new.reporter_id]::uuid[],
@@ -184,7 +179,6 @@ begin
     );
   end if;
 
-  -- Reopened: notify the resolver if known
   if old.status = 'resolved' and new.status = 'open' and old.resolved_by is not null then
     perform send_push_to_users(
       array[old.resolved_by]::uuid[],
@@ -196,7 +190,7 @@ begin
 
   return new;
 end;
-$$;
+$issue_updated$;
 
 drop trigger if exists on_issue_updated on issues;
 create trigger on_issue_updated
@@ -207,7 +201,7 @@ create trigger on_issue_updated
 create or replace function trg_membership_updated() returns trigger
 language plpgsql security definer
 set search_path = public
-as $$
+as $membership_updated$
 declare
   v_project_name text;
 begin
@@ -234,7 +228,7 @@ begin
   end if;
   return new;
 end;
-$$;
+$membership_updated$;
 
 drop trigger if exists on_membership_updated on project_members;
 create trigger on_membership_updated
@@ -245,11 +239,10 @@ create trigger on_membership_updated
 create or replace function trg_project_pm_changed() returns trigger
 language plpgsql security definer
 set search_path = public
-as $$
+as $pm_changed$
 declare
   v_new_pms uuid[];
 begin
-  -- Find newly added PMs (in NEW but not in OLD)
   select array_agg(pm) into v_new_pms
     from unnest(new.assigned_pm_ids) pm
     where not pm = any(coalesce(old.assigned_pm_ids, '{}'::uuid[]));
@@ -266,7 +259,7 @@ begin
   );
   return new;
 end;
-$$;
+$pm_changed$;
 
 drop trigger if exists on_project_pm_changed on projects;
 create trigger on_project_pm_changed
@@ -278,20 +271,22 @@ create trigger on_project_pm_changed
 create or replace function trg_progress_assignment_changed() returns trigger
 language plpgsql security definer
 set search_path = public
-as $$
+as $progress_assigned$
 declare
   v_new_assignees uuid[];
   v_project_name text;
 begin
-  -- Newly added owners + delegatees
+  with new_owners as (
+    select unnest(new.assigned_to) as uid
+    except
+    select unnest(coalesce(old.assigned_to, '{}'::uuid[]))
+  ), new_delegates as (
+    select unnest(new.delegated_to) as uid
+    except
+    select unnest(coalesce(old.delegated_to, '{}'::uuid[]))
+  )
   select array_agg(distinct uid) into v_new_assignees
-    from (
-      select unnest(new.assigned_to) as uid
-      where not unnest(new.assigned_to) = any(coalesce(old.assigned_to, '{}'::uuid[]))
-      union
-      select unnest(new.delegated_to)
-      where not unnest(new.delegated_to) = any(coalesce(old.delegated_to, '{}'::uuid[]))
-    ) t
+    from (select uid from new_owners union select uid from new_delegates) t
     where uid is not null;
 
   if v_new_assignees is null or array_length(v_new_assignees, 1) is null then
@@ -308,7 +303,7 @@ begin
   );
   return new;
 end;
-$$;
+$progress_assigned$;
 
 drop trigger if exists on_progress_assignment_changed on progress_items;
 create trigger on_progress_assignment_changed
