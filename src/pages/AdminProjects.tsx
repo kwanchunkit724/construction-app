@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Plus, Building2, UserCog, Trash2, RefreshCw } from 'lucide-react'
+import { Plus, Building2, UserCog, Trash2, RefreshCw, Download } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { CreateProjectModal } from '../components/CreateProjectModal'
 import { AssignPMModal } from '../components/AssignPMModal'
 import { useProjects } from '../contexts/ProjectsContext'
-import type { Project } from '../types'
+import { exportProjectsToExcel } from '../lib/export'
+import { supabase } from '../lib/supabase'
+import type { Project, UserProfile } from '../types'
 
 export default function AdminProjects() {
   const { loading, projects, fetchError, refetch, deleteProject } = useProjects()
@@ -23,6 +25,16 @@ export default function AdminProjects() {
     setRefreshing(false)
   }
 
+  async function handleExport() {
+    const ids = Array.from(new Set(projects.flatMap(p => p.assigned_pm_ids)))
+    const users: Record<string, UserProfile> = {}
+    if (ids.length > 0) {
+      const { data } = await supabase.from('user_profiles').select('*').in('id', ids)
+      if (data) for (const u of data as UserProfile[]) users[u.id] = u
+    }
+    exportProjectsToExcel(projects, users)
+  }
+
   return (
     <AppLayout title="管理">
       <div className="flex gap-2 mb-4">
@@ -31,6 +43,14 @@ export default function AdminProjects() {
           className="btn-primary flex-1"
         >
           <Plus size={20} /> 新增工地項目
+        </button>
+        <button
+          onClick={handleExport}
+          className="btn-ghost flex-shrink-0 px-4"
+          aria-label="匯出 Excel"
+          title="匯出 Excel"
+        >
+          <Download size={18} />
         </button>
         <button
           onClick={manualRefresh}

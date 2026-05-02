@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
-import { Home, Building2, User, Shield, HardHat, LogOut } from 'lucide-react'
+import { Home, Building2, User, Shield, HardHat, LogOut, LayoutDashboard, Users } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useProjects } from '../contexts/ProjectsContext'
 import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
 
 /**
@@ -9,12 +10,19 @@ import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
  */
 export function Sidebar() {
   const { profile, signOut } = useAuth()
+  const { projects } = useProjects()
   const isAdmin = profile?.global_role === 'admin'
+  const isPM = !!profile && projects.some(p => p.assigned_pm_ids.includes(profile.id))
+  const showDashboard = isAdmin || isPM
 
   const tabs = [
     { to: '/home', label: '首頁', icon: Home },
+    ...(showDashboard ? [{ to: '/dashboard', label: '儀表板', icon: LayoutDashboard }] : []),
     { to: '/projects', label: '工地', icon: Building2 },
-    ...(isAdmin ? [{ to: '/admin', label: '管理', icon: Shield }] : []),
+    ...(isAdmin ? [
+      { to: '/admin', label: '管理', icon: Shield },
+      { to: '/admin/users', label: '用戶', icon: Users },
+    ] : []),
     { to: '/profile', label: '個人', icon: User },
   ]
 

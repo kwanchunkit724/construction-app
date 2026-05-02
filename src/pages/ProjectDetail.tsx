@@ -3,8 +3,11 @@ import { useParams, useNavigate, Navigate } from 'react-router-dom'
 import {
   ChevronLeft, Plus, Building2, RefreshCw,
   CheckCircle2, AlertTriangle, Clock, Minus,
-  ListChecks, AlertCircle,
+  ListChecks, AlertCircle, Download,
 } from 'lucide-react'
+import { exportProgressToExcel, exportProgressToPDF, exportIssuesToExcel } from '../lib/export'
+import { supabase } from '../lib/supabase'
+import type { UserProfile } from '../types'
 import { Spinner } from '../components/Spinner'
 import { BottomNav } from '../components/BottomNav'
 import { Sidebar } from '../components/Sidebar'
@@ -142,6 +145,21 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
             <h1 className="text-base md:text-lg font-bold text-site-900 truncate">{project.name}</h1>
             <p className="text-[11px] text-site-500">{project.zones.length} 個分區 · {items.length} 個進度項目</p>
           </div>
+          <ExportMenu
+            tab={tab}
+            onExportProgressXlsx={() => project && exportProgressToExcel(project, items)}
+            onExportProgressPdf={() => project && exportProgressToPDF(project, items)}
+            onExportIssuesXlsx={async () => {
+              if (!project) return
+              const ids = Array.from(new Set(issues.flatMap(i => [i.reporter_id, i.resolved_by].filter(Boolean) as string[])))
+              let users: Record<string, UserProfile> = {}
+              if (ids.length > 0) {
+                const { data } = await supabase.from('user_profiles').select('*').in('id', ids)
+                if (data) for (const u of data as UserProfile[]) users[u.id] = u
+              }
+              exportIssuesToExcel(project, issues, users)
+            }}
+          />
           <button onClick={manualRefresh} disabled={refreshing} className="text-site-500 hover:text-site-800 p-2" aria-label="刷新">
             <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
           </button>
@@ -421,5 +439,53 @@ function Stat({ label, count, color }: { label: string; count: number; color: st
       <p className="text-xl font-black leading-none">{count}</p>
       <p className="text-[10px] mt-0.5 font-medium">{label}</p>
     </div>
+  )
+}
+
+function ExportMenu({
+  tab, onExportProgressXlsx, onExportProgressPdf, onExportIssuesXlsx,
+}: {
+  tab: Tab
+  onExportProgressXlsx: () => void
+  onExportProgressPdf: () => void
+  onExportIssuesXlsx: () => void | Promise<void>
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="text-site-500 hover:text-site-800 p-2"
+        aria-label="匯出"
+      >
+        <Download size={18} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 bg-white rounded-xl border border-site-200 shadow-card-md py-1 min-w-[160px] z-40">
+            {tab === 'progress' ? (
+              <>
+                <MenuItem label="匯出 Excel" onClick={() => { onExportProgressXlsx(); setOpen(false) }} />
+                <MenuItem label="匯出 PDF" onClick={() => { onExportProgressPdf(); setOpen(false) }} />
+              </>
+            ) : (
+              <MenuItem label="匯出 Excel" onClick={() => { void onExportIssuesXlsx(); setOpen(false) }} />
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function MenuItem({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left px-4 py-2 text-sm text-site-700 hover:bg-site-50 min-h-0"
+    >
+      {label}
+    </button>
   )
 }
