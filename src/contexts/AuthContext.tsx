@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { phoneToEmail, normalizePhone } from '../lib/phone'
+import { pushLoginUser, pushLogoutUser, requestPushPermission } from '../lib/push'
 import type { UserProfile, GlobalRole, SubRole } from '../types'
 
 interface AuthContextType {
@@ -49,19 +50,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (user) {
         setSession({ user_id: user.id })
         loadProfile(user.id).finally(() => setLoading(false))
+        // Best-effort: associate OneSignal subscription with this user
+        void pushLoginUser(user.id)
       } else {
         setLoading(false)
       }
     })
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
       const user = sess?.user
       if (user) {
         setSession({ user_id: user.id })
         loadProfile(user.id)
+        if (event === 'SIGNED_IN') {
+          // Ask for push permission on first sign-in (no-op on web)
+          void requestPushPermission().then(() => pushLoginUser(user.id))
+        } else {
+          void pushLoginUser(user.id)
+        }
       } else {
         setSession(null)
         setProfile(null)
+        if (event === 'SIGNED_OUT') void pushLogoutUser()
       }
     })
 
