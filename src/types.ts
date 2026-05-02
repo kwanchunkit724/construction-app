@@ -19,6 +19,7 @@ export interface UserProfile {
   global_role: GlobalRole
   sub_role: SubRole
   company: string | null
+  onesignal_id: string | null
   created_at: string
 }
 
