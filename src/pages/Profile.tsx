@@ -4,7 +4,16 @@ import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { useAuth } from '../contexts/AuthContext'
 import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
-import { initPush, requestPushPermission } from '../lib/push'
+import { PushNotifications } from '@capacitor/push-notifications'
+import { supabase } from '../lib/supabase'
+
+const ONESIGNAL_APP_ID = '71f914a3-6dc3-4c4a-80e6-70df8f17d5d1'
+
+function isNative(): boolean {
+  if (typeof window === 'undefined') return false
+  const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor
+  return cap?.isNativePlatform?.() === true
+}
 
 export default function Profile() {
   const { profile, signOut, refreshProfile } = useAuth()
@@ -17,13 +26,86 @@ export default function Profile() {
 
   async function reRegisterPush() {
     setPushBusy(true)
-    setPushMsg('')
+    const log: string[] = []
+    const append = (line: string) => {
+      log.push(line)
+      setPushMsg(log.join('\n'))
+    }
+
     try {
-      await initPush()
-      const granted = await requestPushPermission()
-      setPushMsg(granted ? '已重新觸發推送註冊。等幾秒再 refresh 個人頁睇下狀態。' : '無法獲取推送權限。請去 iOS 設定 → 通知 → CK Construction 開啟。')
+      append(`1. isNative: ${isNative()}`)
+      if (!isNative()) { setPushBusy(false); return }
+
+      // Capture token via a one-shot listener
+      let tokenReceived: string | null = null
+      let regError: string | null = null
+
+      const tokenSub = await PushNotifications.addListener('registration', (t) => {
+        tokenReceived = t.value
+      })
+      const errSub = await PushNotifications.addListener('registrationError', (e) => {
+        regError = JSON.stringify(e)
+      })
+
+      append('2. 請求權限...')
+      const perm = await PushNotifications.requestPermissions()
+      append(`   結果: ${perm.receive}`)
+      if (perm.receive !== 'granted') {
+        append('終止：權限被拒絕')
+        await tokenSub.remove(); await errSub.remove()
+        setPushBusy(false); return
+      }
+
+      append('3. PushNotifications.register()...')
+      await PushNotifications.register()
+
+      append('4. 等 APNs token (最多 8 秒)...')
+      const start = Date.now()
+      while (!tokenReceived && !regError && Date.now() - start < 8000) {
+        await new Promise(r => setTimeout(r, 200))
+      }
+      await tokenSub.remove(); await errSub.remove()
+
+      if (regError) { append(`✗ APNs 錯誤: ${regError}`); setPushBusy(false); return }
+      if (!tokenReceived) { append('✗ 8 秒內收唔到 APNs token'); setPushBusy(false); return }
+
+      append(`5. APNs token 收到 (${(tokenReceived as string).slice(0, 12)}...)`)
+
+      const { data: sessionData } = await supabase.auth.getSession()
+      const userId = sessionData.session?.user.id
+      if (!userId) { append('✗ 冇 session'); setPushBusy(false); return }
+
+      append('6. POST 去 OneSignal /players...')
+      const resp = await fetch('https://onesignal.com/api/v1/players', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          app_id: ONESIGNAL_APP_ID,
+          device_type: 0,
+          identifier: tokenReceived,
+          external_user_id: userId,
+          language: 'zh-Hant',
+        }),
+      })
+      const respText = await resp.text()
+      append(`   HTTP ${resp.status}: ${respText.slice(0, 200)}`)
+      if (!resp.ok) { setPushBusy(false); return }
+
+      let playerId = ''
+      try {
+        const j = JSON.parse(respText) as { id?: string }
+        playerId = j.id ?? ''
+      } catch { /* ignore */ }
+
+      append(`7. 寫入 user_profiles.onesignal_id = ${playerId}`)
+      const { error: upErr } = await supabase
+        .from('user_profiles')
+        .update({ onesignal_id: playerId || `OK no-id` })
+        .eq('id', userId)
+      if (upErr) append(`✗ DB update error: ${upErr.message}`)
+      else append('✓ 完成！按「刷新狀態」見最新值')
     } catch (e) {
-      setPushMsg(`錯誤：${(e as Error)?.message ?? 'unknown'}`)
+      append(`✗ 例外：${(e as Error)?.message ?? String(e)}`)
     } finally {
       setPushBusy(false)
     }
@@ -74,7 +156,7 @@ export default function Profile() {
           </button>
         </div>
         {pushMsg && (
-          <p className="mt-2 text-xs text-site-600 bg-site-100 rounded-lg p-2">{pushMsg}</p>
+          <pre className="mt-2 text-[11px] text-site-700 bg-site-100 rounded-lg p-2 whitespace-pre-wrap break-all font-mono leading-relaxed">{pushMsg}</pre>
         )}
       </div>
 
