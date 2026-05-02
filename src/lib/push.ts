@@ -115,8 +115,23 @@ export async function pushLoginUser(_userId: string) {
   await requestPushPermission()
 }
 
-/** Called on sign-out. (No-op for now.) */
+/**
+ * Called on sign-out. Clears onesignal_id from user_profiles so the
+ * shared device can't receive pushes for this user anymore. The actual
+ * iOS APNs subscription stays — next user's login re-registers a new
+ * OneSignal player and stores its ID under their own profile.
+ */
 export async function pushLogoutUser() {
-  // Native push permission is per-device, not per-user.
-  // Leaving init in place lets re-login pick up tokens.
+  try {
+    const { data } = await supabase.auth.getSession()
+    const userId = data.session?.user.id
+    if (userId) {
+      await supabase
+        .from('user_profiles')
+        .update({ onesignal_id: null })
+        .eq('id', userId)
+    }
+  } catch (e) {
+    console.error('[push] pushLogoutUser error:', e)
+  }
 }
