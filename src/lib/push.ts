@@ -33,7 +33,9 @@ export async function initPush() {
     await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
       const data = action.notification.data as { deep_link?: string } | null | undefined
       const deepLink = data?.deep_link
-      if (deepLink) window.location.hash = deepLink
+      if (!deepLink) return
+      // HashRouter: leading '#' is implicit. Strip if caller included it.
+      window.location.hash = deepLink.startsWith('#') ? deepLink.slice(1) : deepLink
     })
 
     initialized = true
@@ -83,11 +85,6 @@ async function registerDeviceWithOneSignal(deviceToken: string) {
     const text = await response.text()
     if (!response.ok) {
       console.error('[push] OneSignal register failed:', response.status, text)
-      // Mark error in user_profiles for visibility
-      await supabase
-        .from('user_profiles')
-        .update({ onesignal_id: `ERROR ${response.status}: ${text.slice(0, 80)}` })
-        .eq('id', userId)
       return
     }
 
@@ -99,23 +96,15 @@ async function registerDeviceWithOneSignal(deviceToken: string) {
       console.error('[push] OneSignal returned non-JSON:', text)
     }
 
-    // Mark this device's player_id (informational); triggers route by external_user_id
-    await supabase
-      .from('user_profiles')
-      .update({ onesignal_id: playerId ?? `OK no-id: ${text.slice(0, 80)}` })
-      .eq('id', userId)
+    // Only persist a valid OneSignal player ID. Errors stay in console.
+    if (playerId) {
+      await supabase
+        .from('user_profiles')
+        .update({ onesignal_id: playerId })
+        .eq('id', userId)
+    }
   } catch (e) {
     console.error('[push] registerDeviceWithOneSignal error:', e)
-    try {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const userId = sessionData.session?.user.id
-      if (userId) {
-        await supabase
-          .from('user_profiles')
-          .update({ onesignal_id: `EXCEPTION: ${(e as Error)?.message?.slice(0, 100) ?? 'unknown'}` })
-          .eq('id', userId)
-      }
-    } catch { /* ignore */ }
   }
 }
 
