@@ -1,12 +1,14 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Building2, Clock, ChevronRight } from 'lucide-react'
+import { Building2, Clock, ChevronRight, CheckCircle2, XCircle } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
 import type { Project, ProjectRole } from '../types'
+
+const RECENT_MS = 24 * 60 * 60 * 1000  // 24h
 
 interface MyProject {
   project: Project
@@ -56,6 +58,26 @@ export default function Home() {
     return memberships.filter(m => m.user_id === profile.id && m.status === 'pending').length
   }, [memberships, profile])
 
+  // Recently-decided memberships in the last 24h — fall-back signal for
+  // users whose push notifications are off or delayed.
+  const recentDecisions = useMemo(() => {
+    if (!profile) return []
+    const cutoff = Date.now() - RECENT_MS
+    return memberships
+      .filter(m =>
+        m.user_id === profile.id
+        && (m.status === 'approved' || m.status === 'rejected')
+        && m.approved_at
+        && new Date(m.approved_at).getTime() > cutoff
+      )
+      .map(m => ({
+        membership: m,
+        project: projects.find(p => p.id === m.project_id),
+      }))
+      .filter(x => x.project)
+      .sort((a, b) => (b.membership.approved_at ?? '').localeCompare(a.membership.approved_at ?? ''))
+  }, [memberships, projects, profile])
+
   return (
     <AppLayout title="首頁">
       {/* Welcome card */}
@@ -70,6 +92,37 @@ export default function Home() {
           <p className="text-sm text-site-500 mt-0.5">{profile.company}</p>
         )}
       </div>
+
+      {/* Recent membership decisions — visible even if push notification missed */}
+      {recentDecisions.length > 0 && (
+        <div className="mt-3 space-y-2">
+          {recentDecisions.map(({ membership, project }) => {
+            const approved = membership.status === 'approved'
+            const Icon = approved ? CheckCircle2 : XCircle
+            return (
+              <div
+                key={membership.id}
+                className={`rounded-2xl border p-4 flex items-start gap-3 ${
+                  approved
+                    ? 'bg-green-50 border-green-200'
+                    : 'bg-red-50 border-red-200'
+                }`}
+              >
+                <Icon size={20} className={approved ? 'text-green-600 mt-0.5 flex-shrink-0' : 'text-red-600 mt-0.5 flex-shrink-0'} />
+                <div className="flex-1 min-w-0">
+                  <p className={`font-semibold ${approved ? 'text-green-800' : 'text-red-800'}`}>
+                    {approved ? '工地申請已通過 ✓' : '工地申請被拒絕'}
+                  </p>
+                  <p className="text-sm text-site-700 mt-0.5 truncate">{project!.name}</p>
+                  <p className="text-[10px] text-site-500 mt-0.5">
+                    {membership.approved_at ? new Date(membership.approved_at).toLocaleString('zh-HK') : ''}
+                  </p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* My projects */}
       <div className="mt-5">

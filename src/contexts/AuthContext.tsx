@@ -69,7 +69,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setSession(null)
         setProfile(null)
-        if (event === 'SIGNED_OUT') void pushLogoutUser()
+        // pushLogoutUser is called from signOut() before the auth state changes,
+        // so we don't need to call it here again.
       }
     })
 
@@ -79,6 +80,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signUp(input: SignUpInput): Promise<{ error: string | null }> {
     const phone = normalizePhone(input.phone)
     const email = phoneToEmail(phone)
+
+    // Pre-check duplicate phone to avoid creating an orphan auth.users
+    // row that would block re-registration.
+    const { data: existing } = await supabase
+      .from('user_profiles')
+      .select('id')
+      .eq('phone', phone)
+      .maybeSingle()
+    if (existing) {
+      return { error: '此手機號碼已註冊。請改用登入。' }
+    }
 
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -96,8 +108,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       company: input.company || null,
     })
     if (profileError) {
-      console.error(profileError)
-      return { error: `資料儲存失敗：${profileError.message}` }
+      // Rollback: sign out so the orphan auth.users row at least doesn't
+      // leave the user "logged in" without a profile. (We can't delete
+      // the auth.users row from the client; admin needs to clean up.)
+      console.error('signUp profile insert failed:', profileError)
+      await supabase.auth.signOut().catch(() => {})
+      return { error: `資料儲存失敗：${profileError.message}。請聯絡管理員清理舊紀錄。` }
     }
 
     return { error: null }
@@ -111,6 +127,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
+    // Clear OneSignal binding BEFORE auth.signOut so we still have a
+    // valid session to update user_profiles. Errors are logged, not
+    // surfaced — sign-out should always succeed.
+    await pushLogoutUser().catch(() => {})
     await supabase.auth.signOut()
   }
 
