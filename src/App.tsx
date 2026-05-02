@@ -10,6 +10,8 @@ import Profile from './pages/Profile'
 import AdminProjects from './pages/AdminProjects'
 import ProjectDetail from './pages/ProjectDetail'
 import IssueDetail from './pages/IssueDetail'
+import Dashboard from './pages/Dashboard'
+import AdminUsers from './pages/AdminUsers'
 
 export default function App() {
   return (
@@ -20,9 +22,11 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminProjects /></ProtectedRoute>} />
+          <Route path="/admin/users" element={<ProtectedRoute requireAdmin><AdminUsers /></ProtectedRoute>} />
           <Route path="/project/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
           <Route path="/project/:id/issue/:issueId" element={<ProtectedRoute><IssueDetail /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/home" replace />} />
