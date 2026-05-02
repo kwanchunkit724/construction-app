@@ -1,115 +1,129 @@
-// OneSignal push notifications setup
-// Only initializes on Capacitor native (iOS/Android), no-op on web.
+// Push notifications via Capacitor + OneSignal REST API
+// Capacitor handles APNs token capture; we register the token with
+// OneSignal's public /players endpoint (no auth needed) to get a
+// subscription ID that DB triggers use to send pushes.
 
-import OneSignal from 'onesignal-cordova-plugin'
+import { PushNotifications, Token } from '@capacitor/push-notifications'
 import { supabase } from './supabase'
 
 const ONESIGNAL_APP_ID = '71f914a3-6dc3-4c4a-80e6-70df8f17d5d1'
 
 let initialized = false
+let registrationListener: { remove: () => Promise<void> } | null = null
+let errorListener: { remove: () => Promise<void> } | null = null
 
 function isNative(): boolean {
-  // Capacitor native runs in `capacitor://` or `file://` protocol on iOS
   if (typeof window === 'undefined') return false
-  return window.location.protocol === 'capacitor:'
-    || window.location.protocol === 'file:'
-    || (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
-      .Capacitor?.isNativePlatform?.() === true
+  const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor
+  return cap?.isNativePlatform?.() === true
 }
 
-/**
- * Initialize OneSignal SDK. Idempotent. Safe to call multiple times.
- * Should be invoked once after Capacitor is ready.
- */
-export function initPush() {
+/** Initialize push handlers. Idempotent. */
+export async function initPush() {
   if (initialized) return
-  if (!isNative()) {
-    // Web — push not supported on file:// preview, skip silently
-    return
-  }
+  if (!isNative()) return  // Web — skip silently
 
   try {
-    OneSignal.initialize(ONESIGNAL_APP_ID)
-    initialized = true
-
-    // Track subscription changes — write OneSignal subscription ID to user_profiles
-    OneSignal.User.pushSubscription.addEventListener('change', (event) => {
-      const id = event.current?.id ?? null
-      void persistSubscriptionId(id)
+    // When the device gets an APNs token, register it with OneSignal.
+    registrationListener = await PushNotifications.addListener('registration', (token: Token) => {
+      void registerDeviceWithOneSignal(token.value)
     })
 
-    // Set up tap handler — could navigate to deep link in the future
-    OneSignal.Notifications.addEventListener('click', (event) => {
-      const data = event.notification.additionalData as { deep_link?: string } | null | undefined
+    errorListener = await PushNotifications.addListener('registrationError', (err) => {
+      console.error('Push registration error:', err)
+    })
+
+    // (Tap handler — could navigate to deep link)
+    await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+      const data = action.notification.data as { deep_link?: string } | null | undefined
       const deepLink = data?.deep_link
       if (deepLink) {
-        // HashRouter — set hash to navigate
         window.location.hash = deepLink
       }
     })
+
+    initialized = true
   } catch (e) {
-    console.error('OneSignal init error:', e)
+    console.error('initPush error:', e)
   }
 }
 
-/** Ask the user for notification permission (call from a user-interaction context). */
+/** Ask the user for notification permission and register with APNs. */
 export async function requestPushPermission(): Promise<boolean> {
-  if (!isNative() || !initialized) return false
+  if (!isNative()) return false
   try {
-    const granted = await OneSignal.Notifications.requestPermission(true)
-    return granted === true
+    const result = await PushNotifications.requestPermissions()
+    if (result.receive !== 'granted') return false
+    await PushNotifications.register()
+    return true
   } catch (e) {
-    console.error('OneSignal requestPermission error:', e)
+    console.error('requestPushPermission error:', e)
     return false
   }
 }
 
-/** Get current OneSignal subscription ID (the "player ID"), or null. */
-export async function getSubscriptionId(): Promise<string | null> {
-  if (!isNative() || !initialized) return null
+/** Register the iOS device token with OneSignal and persist subscription ID. */
+async function registerDeviceWithOneSignal(deviceToken: string) {
   try {
-    const id = await OneSignal.User.pushSubscription.getIdAsync()
-    return id ?? null
+    const { data: sessionData } = await supabase.auth.getSession()
+    const userId = sessionData.session?.user.id
+
+    const response = await fetch('https://onesignal.com/api/v1/players', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        app_id: ONESIGNAL_APP_ID,
+        device_type: 0,  // iOS
+        identifier: deviceToken,
+        ...(userId ? { external_user_id: userId } : {}),
+        language: 'zh-Hant',
+      }),
+    })
+
+    if (!response.ok) {
+      const text = await response.text()
+      console.error('OneSignal register failed:', response.status, text)
+      return
+    }
+
+    const json = await response.json() as { id?: string; success?: boolean }
+    const playerId = json.id
+    if (!playerId) {
+      console.error('OneSignal register returned no id:', json)
+      return
+    }
+
+    if (userId) {
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ onesignal_id: playerId })
+        .eq('id', userId)
+      if (error) console.error('Save onesignal_id failed:', error)
+    }
   } catch (e) {
-    console.error('OneSignal getSubscriptionId error:', e)
-    return null
+    console.error('registerDeviceWithOneSignal error:', e)
   }
 }
 
-async function persistSubscriptionId(subscriptionId: string | null) {
-  const { data: sessionData } = await supabase.auth.getSession()
-  const userId = sessionData.session?.user.id
-  if (!userId) return
-  if (!subscriptionId) return
-
-  await supabase
-    .from('user_profiles')
-    .update({ onesignal_id: subscriptionId })
-    .eq('id', userId)
+/** Called on sign-in. Triggers permission prompt + APNs registration. */
+export async function pushLoginUser(_userId: string) {
+  if (!isNative()) return
+  await initPush()
+  await requestPushPermission()
 }
 
-/**
- * Login a user to OneSignal (associate their OneSignal subscription
- * with their Supabase user_id) and persist the subscription ID.
- * Call after sign-in.
- */
-export async function pushLoginUser(userId: string) {
-  if (!isNative() || !initialized) return
-  try {
-    OneSignal.login(userId)
-    const id = await getSubscriptionId()
-    if (id) await persistSubscriptionId(id)
-  } catch (e) {
-    console.error('OneSignal login error:', e)
-  }
-}
-
-/** Logout from OneSignal (call after sign-out). */
+/** Called on sign-out. */
 export async function pushLogoutUser() {
-  if (!isNative() || !initialized) return
-  try {
-    OneSignal.logout()
-  } catch (e) {
-    console.error('OneSignal logout error:', e)
+  // Capacitor PushNotifications has no explicit logout — just stop receiving.
+  // We could clear onesignal_id here but leaving it lets pushes still arrive
+  // if the user signs back in.
+  if (registrationListener) {
+    await registrationListener.remove()
+    registrationListener = null
   }
+  if (errorListener) {
+    await errorListener.remove()
+    errorListener = null
+  }
+  initialized = false
 }
