@@ -198,7 +198,9 @@ workflows:
     # adds android_signing + publishing.google_play.
     name: Android Internal Test Build
     max_build_duration: 60
-    instance_type: linux_x2
+    # mac_mini_m2 is on the free tier; linux_x2 requires a paid plan.
+    # Mac instances build Android fine via the bundled Android SDK + JDK.
+    instance_type: mac_mini_m2
 
     environment:
       vars:
