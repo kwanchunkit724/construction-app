@@ -208,7 +208,7 @@ workflows:
         VITE_SUPABASE_URL: "https://syyntodkvexkbpjrskjj.supabase.co"
         VITE_SUPABASE_ANON_KEY: "sb_publishable_BHKTjGCKkot6GVa2M6BCMQ_0qBAl1jP"
       node: latest
-      java: 17
+      java: 21
 
     triggering:
       events:
