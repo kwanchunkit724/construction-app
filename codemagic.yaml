@@ -191,22 +191,22 @@ workflows:
         submit_to_testflight: true
         submit_to_app_store: false
 
-  android-play-store:
-    name: Android Play Store Release
+  android-internal-test:
+    # Build-only workflow producing a debug-signed APK + AAB for sideload testing.
+    # Used until the Google Play developer account identity verification clears.
+    # Once verified, switch to android-play-store workflow (TODO: add) which
+    # adds android_signing + publishing.google_play.
+    name: Android Internal Test Build
     max_build_duration: 60
     instance_type: linux_x2
 
     environment:
-      groups:
-        - google_play_credentials
       vars:
         PACKAGE_NAME: "com.kwanchunkit.constructionapp"
         VITE_SUPABASE_URL: "https://syyntodkvexkbpjrskjj.supabase.co"
         VITE_SUPABASE_ANON_KEY: "sb_publishable_BHKTjGCKkot6GVa2M6BCMQ_0qBAl1jP"
       node: latest
       java: 17
-      android_signing:
-        - construction_app_keystore
 
     triggering:
       events:
@@ -231,19 +231,21 @@ workflows:
           echo "VERSION_CODE=$(($(date +%s) % 2100000000))" >> $CM_ENV
           echo "VERSION_NAME=1.0" >> $CM_ENV
 
-      - name: Build Android App Bundle (AAB)
+      - name: Build debug APK + release AAB (debug-signed for now)
         script: |
           cd android
-          ./gradlew bundleRelease \
+          # Debug APK — directly sideloadable on user's phone
+          ./gradlew assembleDebug \
+            -PversionCode=$VERSION_CODE \
+            -PversionName=$VERSION_NAME
+          # Release AAB — debug-signed; sufficient for Internal App Sharing
+          # in Play Console. Cannot be promoted to internal/production track
+          # until proper release keystore is configured (post identity-check).
+          ./gradlew bundleDebug \
             -PversionCode=$VERSION_CODE \
             -PversionName=$VERSION_NAME
 
     artifacts:
+      - android/app/build/outputs/**/*.apk
       - android/app/build/outputs/**/*.aab
       - android/app/build/outputs/**/mapping.txt
-
-    publishing:
-      google_play:
-        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
-        track: internal
-        submit_as_draft: false

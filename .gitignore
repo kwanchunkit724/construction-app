@@ -44,4 +44,6 @@ ios/.DS_Store
 android/local.properties
 android/.idea/
 android/.gradle/
-android/google-services.json
+# google-services.json contains a public Firebase API key — safe to commit
+# per Google's official guidance (it identifies the project, not authenticates).
+# Real auth happens via FCM Server Key (kept server-side in OneSignal).
