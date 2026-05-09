@@ -236,6 +236,10 @@ workflows:
       - name: Build debug APK + release AAB (debug-signed for now)
         script: |
           cd android
+          # Make gradlew executable — Windows doesn't preserve the +x bit
+          # when committing, so the script lands without exec permission on
+          # Mac/Linux runners.
+          chmod +x ./gradlew
           # Debug APK — directly sideloadable on user's phone
           ./gradlew assembleDebug \
             -PversionCode=$VERSION_CODE \
