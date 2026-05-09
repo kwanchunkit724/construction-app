@@ -190,3 +190,60 @@ workflows:
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
         submit_to_app_store: false
+
+  android-play-store:
+    name: Android Play Store Release
+    max_build_duration: 60
+    instance_type: linux_x2
+
+    environment:
+      groups:
+        - google_play_credentials
+      vars:
+        PACKAGE_NAME: "com.kwanchunkit.constructionapp"
+        VITE_SUPABASE_URL: "https://syyntodkvexkbpjrskjj.supabase.co"
+        VITE_SUPABASE_ANON_KEY: "sb_publishable_BHKTjGCKkot6GVa2M6BCMQ_0qBAl1jP"
+      node: latest
+      java: 17
+      android_signing:
+        - construction_app_keystore
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+
+    scripts:
+      - name: Install Node dependencies
+        script: npm ci
+
+      - name: Build web app
+        script: npm run build
+
+      - name: Sync Capacitor
+        script: npx cap sync android
+
+      - name: Set Android version code from build number
+        script: |
+          cd android
+          echo "VERSION_CODE=$(($(date +%s) % 2100000000))" >> $CM_ENV
+          echo "VERSION_NAME=1.0" >> $CM_ENV
+
+      - name: Build Android App Bundle (AAB)
+        script: |
+          cd android
+          ./gradlew bundleRelease \
+            -PversionCode=$VERSION_CODE \
+            -PversionName=$VERSION_NAME
+
+    artifacts:
+      - android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/**/mapping.txt
+
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
+        submit_as_draft: false
