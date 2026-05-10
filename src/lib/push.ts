@@ -1,6 +1,7 @@
 // Push notifications via Capacitor + OneSignal REST API
-// Capacitor captures the iOS APNs token; we register the token with
-// OneSignal v1 /players keyed by external_user_id = Supabase user_id.
+// Capacitor captures the native push token (APNs on iOS, FCM on Android);
+// we register it with OneSignal v1 /players keyed by external_user_id =
+// Supabase user_id, picking device_type=0 (iOS) or 1 (Android).
 // DB triggers send pushes targeting external_id (no need to track player IDs).
 
 import { PushNotifications, Token } from '@capacitor/push-notifications'
@@ -14,6 +15,15 @@ function isNative(): boolean {
   if (typeof window === 'undefined') return false
   const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor
   return cap?.isNativePlatform?.() === true
+}
+
+/** Returns 'ios' | 'android' | 'web'. Used to pick OneSignal device_type. */
+function getPlatform(): 'ios' | 'android' | 'web' {
+  if (typeof window === 'undefined') return 'web'
+  const cap = (window as unknown as { Capacitor?: { getPlatform?: () => string } }).Capacitor
+  const p = cap?.getPlatform?.()
+  if (p === 'ios' || p === 'android') return p
+  return 'web'
 }
 
 /** Initialize push handlers. Idempotent. */
@@ -68,9 +78,13 @@ async function registerDeviceWithOneSignal(deviceToken: string) {
       return
     }
 
+    // OneSignal device_type: 0 = iOS APNs, 1 = Android FCM
+    const platform = getPlatform()
+    const deviceType = platform === 'android' ? 1 : 0
+
     const body = {
       app_id: ONESIGNAL_APP_ID,
-      device_type: 0, // iOS
+      device_type: deviceType,
       identifier: deviceToken,
       external_user_id: userId,
       language: 'zh-Hant',
