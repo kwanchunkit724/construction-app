@@ -1,3 +1,17 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: planning
+last_updated: "2026-05-11T14:42:33.586Z"
+progress:
+  total_phases: 3
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
+---
+
 # STATE — 工地控制系統 Milestone
 
 **Last updated:** 2026-05-11 (post-roadmap)
@@ -63,6 +77,7 @@ None.
 **Next action:** `/gsd-plan-phase 1` to begin Phase 1 (Drawings) planning.
 
 **Canonical references for downstream agents:**
+
 - `.planning/PROJECT.md` — core value, constraints, key decisions
 - `.planning/REQUIREMENTS.md` — REQ-IDs with phase mapping (Traceability section)
 - `.planning/ROADMAP.md` — phase goals, success criteria, dependencies
