@@ -151,17 +151,90 @@ Deferred to a future milestone.
 
 ## Traceability
 
-Empty initially — populated by roadmapper during ROADMAP.md creation.
+Populated by roadmapper on 2026-05-11.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (Mapped by roadmapper) | — | Pending |
+| DRW-01 | Phase 1 | Pending |
+| DRW-02 | Phase 1 | Pending |
+| DRW-03 | Phase 1 | Pending |
+| DRW-04 | Phase 1 | Pending |
+| DRW-05 | Phase 1 | Pending |
+| DRW-06 | Phase 1 | Pending |
+| DRW-07 | Phase 1 | Pending |
+| DRW-08 | Phase 1 | Pending |
+| DRW-09 | Phase 1 | Pending |
+| DRW-10 | Phase 1 | Pending |
+| DRW-11 | Phase 1 | Pending |
+| DRW-12 | Phase 1 | Pending |
+| DRW-13 | Phase 1 | Pending |
+| DRW-14 | Phase 1 | Pending |
+| DRW-15 | Phase 1 | Pending |
+| SI-01 | Phase 2 | Pending |
+| SI-02 | Phase 2 | Pending |
+| SI-03 | Phase 2 | Pending |
+| SI-04 | Phase 2 | Pending |
+| SI-05 | Phase 2 | Pending |
+| SI-06 | Phase 2 | Pending |
+| SI-07 | Phase 2 | Pending |
+| SI-08 | Phase 2 | Pending |
+| SI-09 | Phase 2 | Pending |
+| SI-10 | Phase 2 | Pending |
+| SI-11 | Phase 2 | Pending |
+| VO-01 | Phase 2 | Pending |
+| VO-02 | Phase 2 | Pending |
+| VO-03 | Phase 2 | Pending |
+| VO-04 | Phase 2 | Pending |
+| VO-05 | Phase 2 | Pending |
+| VO-06 | Phase 2 | Pending |
+| VO-07 | Phase 2 | Pending |
+| VO-08 | Phase 2 | Pending |
+| VO-09 | Phase 2 | Pending |
+| VO-10 | Phase 2 | Pending |
+| CHN-01 | Phase 2 | Pending |
+| CHN-02 | Phase 2 | Pending |
+| CHN-03 | Phase 2 | Pending |
+| CHN-04 | Phase 2 | Pending |
+| CHN-05 | Phase 2 | Pending |
+| CHN-06 | Phase 2 | Pending |
+| CHN-07 | Phase 2 | Pending |
+| CHN-08 | Phase 2 | Pending |
+| CHN-09 | Phase 2 | Pending |
+| CHN-10 | Phase 2 | Pending |
+| CHN-11 | Phase 2 | Pending |
+| PTW-01 | Phase 3 | Pending |
+| PTW-02 | Phase 3 | Pending |
+| PTW-03 | Phase 3 | Pending |
+| PTW-04 | Phase 3 | Pending |
+| PTW-05 | Phase 3 | Pending |
+| PTW-06 | Phase 3 | Pending |
+| PTW-07 | Phase 3 | Pending |
+| PTW-08 | Phase 3 | Pending |
+| PTW-09 | Phase 3 | Pending |
+| PTW-10 | Phase 3 | Pending |
+| PTW-11 | Phase 3 | Pending |
+| PTW-12 | Phase 3 | Pending |
+| PTW-13 | Phase 3 | Pending |
+| PTW-14 | Phase 3 | Pending |
+| PTW-15 | Phase 3 | Pending |
+| PTW-16 | Phase 3 | Pending |
+| PTW-17 | Phase 3 | Pending |
+| INF-01 | Phase 1 | Pending |
+| INF-02 | Phase 1 | Pending |
+| INF-03 | Phase 1 (introduce); extended in Phase 2 & 3 | Pending |
+| INF-04 | Phase 1 (introduce); extended in Phase 2 & 3 | Pending |
+| INF-05 | Phase 1 | Pending |
+| INF-06 | Phase 1 | Pending |
+| INF-07 | Phase 1 | Pending |
+| INF-08 | Cross-phase (one smoke test per phase: P1 DRW, P2 SI, P3 PTW) | Pending |
+| INF-09 | Phase 1 | Pending |
 
 **Coverage:**
-- v1 requirements: 62 total (15 DRW + 11 SI + 10 VO + 11 CHN + 17 PTW + 9 INF − 11 cross-phase items reused = ~62 unique)
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: ⚠️ awaiting roadmapper
+- v1 requirements: 62 unique REQ-IDs
+- Mapped to phases: 62/62 (100%)
+- Unmapped: none
+- Cross-phase items: INF-03, INF-04 (introduce-then-extend), INF-08 (one smoke test per phase)
 
 ---
 *Requirements defined: 2026-05-11*
-*Last updated: 2026-05-11 after initialization*
+*Last updated: 2026-05-11 — Traceability populated by roadmapper.*
