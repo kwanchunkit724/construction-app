@@ -23,7 +23,16 @@
   3. Uploading a new revision shows the new version with a large, high-contrast "現行" badge, and the prior version is visibly marked "已取代" but still openable from the version-history view with effective-from/until dates; nothing was hard-deleted.
   4. Upload of an 8 MB file shows a soft warning and proceeds; upload of a 30 MB file is hard-blocked with a Chinese error message; thumbnails (256×256) appear in lists.
   5. The deployed entry chunk is <800 KB and the CI bundle-size check fails any PR that breaches the budget; the drawing-viewer / pdf libs load only when a user opens a drawing.
-**Plans**: TBD
+**Plans**: 9 plans
+- [ ] 01-01-PLAN.md — Migration v8-drawings.sql + private bucket template + rls-smoke harness (INF-01/02/03/04/05, DRW-12/13)
+- [ ] 01-02-PLAN.md — Vite manualChunks + bundle-size CI guard + export.ts lazy refactor (INF-06/07)
+- [ ] 01-03-PLAN.md — Install @capacitor/camera + @capacitor/filesystem + cap sync (DRW-01 native enablement)
+- [ ] 01-04-PLAN.md — Install react-zoom-pan-pinch + react-pdf + PDF.js worker self-host + DRAWING_STATUS_ZH types (INF-09, DRW-05/06)
+- [ ] 01-05-PLAN.md — DrawingsContext + lib helpers + thumbnail generator (DRW-07/08/13, DRW-03/11)
+- [ ] 01-06-PLAN.md — DrawingThumbnail + DrawingUploadSheet + DrawingViewer + version history + page navigator (DRW-05..11)
+- [ ] 01-07-PLAN.md — Wire DrawingsSection into ProgressItemCard + mount DrawingsProvider in ProjectDetail (DRW-01/02/03/04/09/11/14/15)
+- [ ] 01-08-PLAN.md — Playwright config + drawings.spec.ts smoke test + seed extension (INF-08 Phase 1 share)
+- [ ] 01-09-PLAN.md — End-of-phase verification: full success-criteria walkthrough on web + iOS + Android
 **UI hint**: yes
 **Canonical refs**: `.planning/research/ARCHITECTURE.md`, `.planning/research/PITFALLS.md`, `.planning/research/SUMMARY.md`, `.planning/codebase/CONCERNS.md`
 
