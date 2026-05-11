@@ -1,0 +1,97 @@
+-- =============================================================
+-- v8-private-bucket-template.sql — INF-02 Reusable Template
+-- =============================================================
+-- Reusable PRIVATE bucket + RLS template. Phase 1 (drawings),
+-- Phase 2 (si-vo), Phase 3 (ptw) all instantiate this pattern.
+-- DO NOT execute this file — it is documentation only.
+-- =============================================================
+--
+-- This template captures the canonical shape every new private
+-- bucket in the 工地控制系統 milestone follows. Phase 1 implements
+-- it for `project-drawings` (see supabase/v8-drawings.sql).
+-- Phase 2 will copy this for `project-si-vo`, Phase 3 for
+-- `project-ptw`. The five sections below MUST all be present in
+-- each consumer migration.
+--
+-- ---------------------------------------------------------------
+-- 1. Bucket creation pattern  (PRIVATE bucket — public = false)
+-- ---------------------------------------------------------------
+--
+--   insert into storage.buckets (id, name, public)
+--   values ('<bucket-name>', '<bucket-name>', false)
+--   on conflict (id) do nothing;
+--
+-- Note: PRIVATE bucket means clients can NEVER use
+-- supabase.storage.from(...).getPublicUrl(...) — they MUST mint a
+-- short-lived URL via createSignedUrl(...). This is enforced at
+-- the bucket level; RLS policies below are defence-in-depth.
+--
+-- ---------------------------------------------------------------
+-- 2. Path convention  ({scope_id}/...)
+-- ---------------------------------------------------------------
+--
+-- The first path segment MUST be the scope_id (project_id for the
+-- 工地控制系統 milestone). This lets the storage.objects RLS policy
+-- extract scope via:
+--
+--   (storage.foldername(name))[1]::uuid = scope_id
+--
+-- Example path (drawings):
+--
+--   {project_id}/{drawing_id}/v{version_no}/{filename}
+--
+-- The client always passes a path starting with scope_id —
+-- defence-in-depth alongside the RLS check.
+--
+-- ---------------------------------------------------------------
+-- 3. Two storage.objects policies  (select + insert; NO update/delete)
+-- ---------------------------------------------------------------
+--
+--   drop policy if exists "Members read <feature>" on storage.objects;
+--   drop policy if exists "Editors upload <feature>" on storage.objects;
+--
+--   create policy "Members read <feature>"
+--     on storage.objects for select to authenticated
+--     using (
+--       bucket_id = '<bucket-name>'
+--       and can_view_<scope>(auth.uid(), (storage.foldername(name))[1]::uuid)
+--     );
+--
+--   create policy "Editors upload <feature>"
+--     on storage.objects for insert to authenticated
+--     with check (
+--       bucket_id = '<bucket-name>'
+--       and can_edit_<scope>(auth.uid(), (storage.foldername(name))[1]::uuid)
+--     );
+--
+-- ---------------------------------------------------------------
+-- 4. Rule: NO update / delete policies on storage.objects
+-- ---------------------------------------------------------------
+--
+-- Drawing / SI / VO / PTW blobs are IMMORTAL evidence — once
+-- uploaded they can be superseded (status change in the parent
+-- row) but never modified or hard-deleted via the client. Any
+-- cleanup runs out-of-band via service-role cron (none today).
+--
+-- ---------------------------------------------------------------
+-- 5. Reference: helpers must be SECURITY DEFINER
+-- ---------------------------------------------------------------
+--
+-- All RLS helpers referenced from storage.objects policies MUST
+-- be declared:
+--
+--   language sql security definer stable set search_path = public
+--
+-- (or `language plpgsql security definer set search_path = public`
+-- for trigger / RPC bodies — the security definer set search_path = public
+-- clause is the load-bearing part.)
+--
+-- The `set search_path = public` clause is critical — without it
+-- a malicious caller could shadow `public.<table>` via their own
+-- schema and bypass the policy. See PITFALLS C6 (RLS recursive-
+-- policy meltdown via search_path injection).
+--
+-- ---------------------------------------------------------------
+-- End of template. See supabase/v8-drawings.sql for the first
+-- consumer.  Phase 2 / 3 migrations copy this shape verbatim.
+-- =============================================================
