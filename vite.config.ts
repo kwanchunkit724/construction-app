@@ -7,12 +7,16 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          'viewer-pdf':       ['react-pdf', 'pdfjs-dist'],
-          'viewer-zoom':      ['react-zoom-pan-pinch'],
-          'reports-xlsx':     ['xlsx'],
-          'reports-pdf':      ['jspdf', 'jspdf-autotable'],
-          'charts-recharts':  ['recharts'],
+        // Function form so missing-package entries (react-pdf, react-zoom-pan-pinch
+        // arrive in Plan 04) don't break the build today. Rollup's object form
+        // throws "Could not resolve entry module" for absent packages.
+        manualChunks(id) {
+          if (id.includes('node_modules/react-pdf') || id.includes('node_modules/pdfjs-dist')) return 'viewer-pdf'
+          if (id.includes('node_modules/react-zoom-pan-pinch')) return 'viewer-zoom'
+          if (id.includes('node_modules/xlsx')) return 'reports-xlsx'
+          if (id.includes('node_modules/jspdf-autotable')) return 'reports-pdf-autotable'
+          if (id.includes('node_modules/jspdf')) return 'reports-pdf'
+          if (id.includes('node_modules/recharts')) return 'charts-recharts'
         },
       },
     },

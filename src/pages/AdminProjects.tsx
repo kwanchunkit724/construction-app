@@ -5,7 +5,6 @@ import { Spinner } from '../components/Spinner'
 import { CreateProjectModal } from '../components/CreateProjectModal'
 import { AssignPMModal } from '../components/AssignPMModal'
 import { useProjects } from '../contexts/ProjectsContext'
-import { exportProjectsToExcel } from '../lib/export'
 import { supabase } from '../lib/supabase'
 import type { Project, UserProfile } from '../types'
 
@@ -32,6 +31,7 @@ export default function AdminProjects() {
       const { data } = await supabase.from('user_profiles').select('*').in('id', ids)
       if (data) for (const u of data as UserProfile[]) users[u.id] = u
     }
+    const { exportProjectsToExcel } = await import('../lib/export')
     exportProjectsToExcel(projects, users)
   }
 

@@ -5,7 +5,6 @@ import {
   CheckCircle2, AlertTriangle, Clock, Minus,
   ListChecks, AlertCircle, Download,
 } from 'lucide-react'
-import { exportProgressToExcel, exportProgressToPDF, exportIssuesToExcel } from '../lib/export'
 import { supabase } from '../lib/supabase'
 import type { UserProfile } from '../types'
 import { Spinner } from '../components/Spinner'
@@ -147,8 +146,16 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
           </div>
           <ExportMenu
             tab={tab}
-            onExportProgressXlsx={() => project && exportProgressToExcel(project, items)}
-            onExportProgressPdf={() => project && exportProgressToPDF(project, items)}
+            onExportProgressXlsx={async () => {
+              if (!project) return
+              const { exportProgressToExcel } = await import('../lib/export')
+              exportProgressToExcel(project, items)
+            }}
+            onExportProgressPdf={async () => {
+              if (!project) return
+              const { exportProgressToPDF } = await import('../lib/export')
+              exportProgressToPDF(project, items)
+            }}
             onExportIssuesXlsx={async () => {
               if (!project) return
               const ids = Array.from(new Set(issues.flatMap(i => [i.reporter_id, i.resolved_by].filter(Boolean) as string[])))
@@ -157,6 +164,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
                 const { data } = await supabase.from('user_profiles').select('*').in('id', ids)
                 if (data) for (const u of data as UserProfile[]) users[u.id] = u
               }
+              const { exportIssuesToExcel } = await import('../lib/export')
               exportIssuesToExcel(project, issues, users)
             }}
           />
