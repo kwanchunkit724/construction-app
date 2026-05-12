@@ -1,14 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
 import {
   ChevronRight, ChevronDown, Plus, Trash2, Edit3,
   CheckCircle2, AlertTriangle, Clock, Minus,
-  Layers, Users, UserPlus, History,
+  Layers, Users, UserPlus, History, Image as ImageIcon,
 } from 'lucide-react'
 import { ProgressBar } from './ProgressBar'
 import { useProgress } from '../contexts/ProgressContext'
+import { DrawingsContext } from '../contexts/DrawingsContext'
+import { DrawingsSection } from './drawings/DrawingsSection'
 import { PROGRESS_STATUS_ZH, computeRollup, getDescendantLeaves } from '../types'
 import type { ProgressItem, ProgressStatus, UserProfile } from '../types'
 import { supabase } from '../lib/supabase'
+
+// useDrawingsOptional — returns null when no DrawingsProvider is mounted in the tree.
+// Lets ProgressItemCard render safely outside ProjectDetail (e.g., dashboard previews)
+// where the drawings UI gracefully hides instead of crashing. (Plan 05 guarantees the
+// raw DrawingsContext named export — no fallback path required for the import itself.)
+function useDrawingsOptional() {
+  return useContext(DrawingsContext)
+}
 
 const STATUS_STYLE: Record<ProgressStatus, string> = {
   'not-started': 'bg-site-100 text-site-500',
@@ -77,10 +87,21 @@ export function ProgressItemCard({
 }) {
   const { items, canEdit } = useProgress()
   const [confirmDel, setConfirmDel] = useState(false)
+  const [drawingsOpen, setDrawingsOpen] = useState(false)
 
   const children = items.filter(i => i.parent_id === item.id)
   const isLeaf = children.length === 0
   const isOpen = expanded.has(item.id)
+
+  // Drawings (optional — null when used outside DrawingsProvider, e.g. dashboard preview)
+  const drawingsCtx = useDrawingsOptional()
+  const drawingCount = useMemo(
+    () =>
+      drawingsCtx
+        ? drawingsCtx.drawings.filter(d => d.leaf_item_id === item.id).length
+        : 0,
+    [drawingsCtx, item.id],
+  )
 
   const displayActual = isLeaf
     ? item.actual_progress
@@ -175,9 +196,17 @@ export function ProgressItemCard({
                 </div>
               )}
 
-              {canEdit && (
+              {(canEdit || (isLeaf && drawingsCtx)) && (
                 <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-site-100">
-                  {isLeaf && (
+                  {isLeaf && drawingsCtx && (
+                    <button
+                      onClick={() => setDrawingsOpen(o => !o)}
+                      className="text-[11px] bg-site-100 hover:bg-site-200 text-site-700 px-2.5 py-1 rounded-lg flex items-center gap-1 min-h-0 font-medium"
+                    >
+                      <ImageIcon size={11} /> 🖼 圖則 ({drawingCount})
+                    </button>
+                  )}
+                  {canEdit && isLeaf && (
                     <button
                       onClick={() => onUpdate(item)}
                       className="text-[11px] bg-safety-500 hover:bg-safety-600 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 min-h-0"
@@ -185,7 +214,7 @@ export function ProgressItemCard({
                       <Edit3 size={11} /> 更新
                     </button>
                   )}
-                  {isLeaf && (
+                  {canEdit && isLeaf && (
                     <button
                       onClick={() => onAssign(item)}
                       className="text-[11px] bg-site-700 hover:bg-site-800 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 min-h-0"
@@ -193,7 +222,7 @@ export function ProgressItemCard({
                       <Users size={11} /> 指派
                     </button>
                   )}
-                  {isLeaf && (
+                  {canEdit && isLeaf && (
                     <button
                       onClick={() => onHistory(item)}
                       className="text-[11px] border border-site-200 text-site-600 hover:bg-site-50 px-2.5 py-1 rounded-lg flex items-center gap-1 min-h-0"
@@ -201,13 +230,15 @@ export function ProgressItemCard({
                       <History size={11} /> 歷史
                     </button>
                   )}
-                  <button
-                    onClick={() => onAddChild(item)}
-                    className="text-[11px] bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 min-h-0"
-                  >
-                    <Plus size={11} /> 細項
-                  </button>
-                  {!confirmDel && (
+                  {canEdit && (
+                    <button
+                      onClick={() => onAddChild(item)}
+                      className="text-[11px] bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 min-h-0"
+                    >
+                      <Plus size={11} /> 細項
+                    </button>
+                  )}
+                  {canEdit && !confirmDel && (
                     <button
                       onClick={() => setConfirmDel(true)}
                       className="text-[11px] bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 px-2.5 py-1 rounded-lg flex items-center gap-1 min-h-0"
@@ -215,7 +246,7 @@ export function ProgressItemCard({
                       <Trash2 size={11} /> 刪除
                     </button>
                   )}
-                  {confirmDel && (
+                  {canEdit && confirmDel && (
                     <span className="flex items-center gap-1">
                       <span className="text-[11px] text-red-600 font-semibold">確認?</span>
                       <button
@@ -233,6 +264,10 @@ export function ProgressItemCard({
                     </span>
                   )}
                 </div>
+              )}
+
+              {isLeaf && drawingsOpen && drawingsCtx && (
+                <DrawingsSection leafItemId={item.id} />
               )}
             </div>
           </div>
