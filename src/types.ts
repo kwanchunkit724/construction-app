@@ -241,3 +241,39 @@ export function getNextHandler(current: IssueHandlerRole): IssueHandlerRole | nu
     default: return null
   }
 }
+
+// ── Phase 1 (milestone): Drawings on Progress Items ─────────
+export type DrawingStatus = 'current' | 'superseded' | 'withdrawn'
+
+export interface Drawing {
+  id: string
+  project_id: string
+  leaf_item_id: string
+  title: string
+  current_version_id: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DrawingVersion {
+  id: string
+  drawing_id: string
+  version_no: number
+  file_path: string
+  thumb_path: string | null
+  mime_type: 'application/pdf' | 'image/jpeg' | 'image/png'
+  size_bytes: number
+  revision_label: string | null
+  status: DrawingStatus
+  uploaded_by: string | null
+  uploaded_at: string
+  superseded_at: string | null
+  withdrawn_at: string | null
+}
+
+export const DRAWING_STATUS_ZH: Record<DrawingStatus, string> = {
+  current: '現行',
+  superseded: '已取代',
+  withdrawn: '已撤回',
+}
