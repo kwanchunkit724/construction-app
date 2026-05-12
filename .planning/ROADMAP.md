@@ -31,7 +31,7 @@
 - [x] 01-05-PLAN.md — DrawingsContext + lib helpers + thumbnail generator (DRW-07/08/13, DRW-03/11)
 - [x] 01-06-PLAN.md — DrawingThumbnail + DrawingUploadSheet + DrawingViewer + version history + page navigator (DRW-05..11)
 - [x] 01-07-PLAN.md — Wire DrawingsSection into ProgressItemCard + mount DrawingsProvider in ProjectDetail (DRW-01/02/03/04/09/11/14/15)
-- [ ] 01-08-PLAN.md — Playwright config + drawings.spec.ts smoke test + seed extension (INF-08 Phase 1 share)
+- [x] 01-08-PLAN.md — Playwright config + drawings.spec.ts smoke test + seed extension (INF-08 Phase 1 share)
 - [ ] 01-09-PLAN.md — End-of-phase verification: full success-criteria walkthrough on web + iOS + Android
 **UI hint**: yes
 **Canonical refs**: `.planning/research/ARCHITECTURE.md`, `.planning/research/PITFALLS.md`, `.planning/research/SUMMARY.md`, `.planning/codebase/CONCERNS.md`
