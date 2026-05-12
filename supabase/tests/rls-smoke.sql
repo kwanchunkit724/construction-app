@@ -55,10 +55,10 @@ values
 on conflict (user_id, project_id) do nothing;
 
 -- One leaf progress_item per project (no children → leaf)
-insert into progress_items (id, project_id, name, parent_id)
+insert into progress_items (id, project_id, code, title, parent_id)
 values
-  ('aaaa1111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'smoke-leaf-A', null),
-  ('aaaa2222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222', 'smoke-leaf-B', null)
+  ('aaaa1111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'SMOKE-A', 'smoke-leaf-A', null),
+  ('aaaa2222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222', 'SMOKE-B', 'smoke-leaf-B', null)
 on conflict (id) do nothing;
 
 -- One drawing per project (created as postgres → RLS bypassed)
