@@ -11,17 +11,17 @@ This is a brownfield milestone on a live app. Existing v1 capabilities (auth, pr
 
 - [ ] **DRW-01**: PM / MC / admin can upload one or more drawings (JPEG / PNG / PDF) to any **leaf** progress item
 - [ ] **DRW-02**: Each drawing has a version number, uploaded_by, uploaded_at, and revision label
-- [ ] **DRW-03**: Uploading a new version of an existing drawing supersedes the prior version (does NOT delete it)
+- [x] **DRW-03**: Uploading a new version of an existing drawing supersedes the prior version (does NOT delete it)
 - [ ] **DRW-04**: All members of a project can view drawings on that project; non-members cannot
 - [x] **DRW-05**: Drawings render in a mobile pinch-zoom / pan viewer (lazy-loaded)
 - [x] **DRW-06**: PDF drawings render page-by-page in the viewer with self-hosted worker
-- [ ] **DRW-07**: A thumbnail (256×256) is generated client-side on upload and shown in lists
-- [ ] **DRW-08**: Upload warns at >5 MB, hard-blocks at >25 MB
+- [x] **DRW-07**: A thumbnail (256×256) is generated client-side on upload and shown in lists
+- [x] **DRW-08**: Upload warns at >5 MB, hard-blocks at >25 MB
 - [ ] **DRW-09**: User can view drawing version history with effective-from / effective-until dates
 - [ ] **DRW-10**: "Current" version is visually distinct from "Superseded" / "Withdrawn" — large badge, min 16pt, high-contrast colors
-- [ ] **DRW-11**: A drawing cannot be hard-deleted once a non-uploader has viewed it (withdraw only)
+- [x] **DRW-11**: A drawing cannot be hard-deleted once a non-uploader has viewed it (withdraw only)
 - [ ] **DRW-12**: Drawings storage uses a **private** Supabase bucket with `(storage.foldername(name))[1] = project_id` RLS pattern
-- [ ] **DRW-13**: Drawing URLs are signed (TTL ≤ 1 hour) — never public
+- [x] **DRW-13**: Drawing URLs are signed (TTL ≤ 1 hour) — never public
 - [ ] **DRW-14**: Default list sort = `created_at desc`; search by title substring
 - [ ] **DRW-15**: subcontractor / subcontractor_worker / owner roles see view-only (no upload button)
 
@@ -157,17 +157,17 @@ Populated by roadmapper on 2026-05-11.
 |-------------|-------|--------|
 | DRW-01 | Phase 1 | Pending |
 | DRW-02 | Phase 1 | Pending |
-| DRW-03 | Phase 1 | Pending |
+| DRW-03 | Phase 1 | Complete |
 | DRW-04 | Phase 1 | Pending |
 | DRW-05 | Phase 1 | Complete |
 | DRW-06 | Phase 1 | Complete |
-| DRW-07 | Phase 1 | Pending |
-| DRW-08 | Phase 1 | Pending |
+| DRW-07 | Phase 1 | Complete |
+| DRW-08 | Phase 1 | Complete |
 | DRW-09 | Phase 1 | Pending |
 | DRW-10 | Phase 1 | Pending |
-| DRW-11 | Phase 1 | Pending |
+| DRW-11 | Phase 1 | Complete |
 | DRW-12 | Phase 1 | Pending |
-| DRW-13 | Phase 1 | Pending |
+| DRW-13 | Phase 1 | Complete |
 | DRW-14 | Phase 1 | Pending |
 | DRW-15 | Phase 1 | Pending |
 | SI-01 | Phase 2 | Pending |

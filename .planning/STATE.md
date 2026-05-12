@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-12T05:10:56.547Z"
+last_updated: "2026-05-12T05:16:41.734Z"
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 9
-  completed_plans: 4
-  percent: 44
+  completed_plans: 5
+  percent: 56
 ---
 
 # STATE — 工地控制系統 Milestone
@@ -31,7 +31,7 @@ Plan: 1 of 9
 - **Phase:** 1 — 圖則附加 (Drawings on Progress Items)
 - **Plan:** (none yet — awaiting `/gsd-plan-phase 1`)
 - **Status:** Executing Phase 1
-- **Progress:** [████░░░░░░] 44%
+- **Progress:** [██████░░░░] 56%
 
 ## Performance Metrics
 
@@ -42,6 +42,7 @@ Plan: 1 of 9
 | Plans complete | 0 |
 | v1 requirements mapped | 62/62 |
 | Phase 01-drawings-on-progress-items P04 | 5m | 2 tasks | 3 files |
+| Phase 01-drawings-on-progress-items P05 | 12m | 2 tasks | 3 files |
 
 ## Accumulated Context
 
