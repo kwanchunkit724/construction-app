@@ -16,9 +16,11 @@ const PROJECT_NAME = process.env.TEST_PROJECT_NAME || 'Playwright Test Project'
 
 test('PM uploads drawing on leaf progress item and opens viewer', async ({ page }) => {
   // 1. Login
+  // NOTE: Login.tsx labels are not for=-linked to inputs, so we select by
+  // placeholder ('9123 4567' / '輸入密碼') which are stable.
   await page.goto('/#/login')
-  await page.getByLabel('手機號碼').fill(PHONE)
-  await page.getByLabel('密碼').fill(PASSWORD)
+  await page.getByPlaceholder('9123 4567').fill(PHONE)
+  await page.getByPlaceholder('輸入密碼').fill(PASSWORD)
   await page.getByRole('button', { name: '登入' }).click()
 
   // Wait for post-login navigation (Home renders "我的工地" or similar)
