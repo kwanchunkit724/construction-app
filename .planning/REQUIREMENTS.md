@@ -17,8 +17,8 @@ This is a brownfield milestone on a live app. Existing v1 capabilities (auth, pr
 - [x] **DRW-06**: PDF drawings render page-by-page in the viewer with self-hosted worker
 - [x] **DRW-07**: A thumbnail (256×256) is generated client-side on upload and shown in lists
 - [x] **DRW-08**: Upload warns at >5 MB, hard-blocks at >25 MB
-- [ ] **DRW-09**: User can view drawing version history with effective-from / effective-until dates
-- [ ] **DRW-10**: "Current" version is visually distinct from "Superseded" / "Withdrawn" — large badge, min 16pt, high-contrast colors
+- [x] **DRW-09**: User can view drawing version history with effective-from / effective-until dates
+- [x] **DRW-10**: "Current" version is visually distinct from "Superseded" / "Withdrawn" — large badge, min 16pt, high-contrast colors
 - [x] **DRW-11**: A drawing cannot be hard-deleted once a non-uploader has viewed it (withdraw only)
 - [ ] **DRW-12**: Drawings storage uses a **private** Supabase bucket with `(storage.foldername(name))[1] = project_id` RLS pattern
 - [x] **DRW-13**: Drawing URLs are signed (TTL ≤ 1 hour) — never public
@@ -163,8 +163,8 @@ Populated by roadmapper on 2026-05-11.
 | DRW-06 | Phase 1 | Complete |
 | DRW-07 | Phase 1 | Complete |
 | DRW-08 | Phase 1 | Complete |
-| DRW-09 | Phase 1 | Pending |
-| DRW-10 | Phase 1 | Pending |
+| DRW-09 | Phase 1 | Complete |
+| DRW-10 | Phase 1 | Complete |
 | DRW-11 | Phase 1 | Complete |
 | DRW-12 | Phase 1 | Pending |
 | DRW-13 | Phase 1 | Complete |
