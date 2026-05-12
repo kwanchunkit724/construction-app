@@ -23,6 +23,9 @@ workflows:
       - name: Build web app
         script: npm run build
 
+      - name: Check bundle size
+        script: node scripts/check-bundle-size.cjs
+
       - name: Sync Capacitor
         script: npx cap sync ios
 
@@ -122,6 +125,9 @@ workflows:
 
       - name: Build web app
         script: npm run build
+
+      - name: Check bundle size
+        script: node scripts/check-bundle-size.cjs
 
       - name: Sync Capacitor
         script: npx cap sync ios
@@ -223,6 +229,9 @@ workflows:
 
       - name: Build web app
         script: npm run build
+
+      - name: Check bundle size
+        script: node scripts/check-bundle-size.cjs
 
       - name: Sync Capacitor
         script: npx cap sync android
