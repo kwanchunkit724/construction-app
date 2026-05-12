@@ -5,6 +5,18 @@
  *
  * Get your service role key from:
  *   Supabase Dashboard → Project Settings → API → service_role key
+ *
+ * ── Playwright fixtures (Phase 1 INF-08, D-31) ────────────────────────────────
+ * In addition to the demo scenarios, this script idempotently provisions a
+ * deterministic PM + project + leaf progress item for the Playwright smoke
+ * test in tests/e2e/drawings.spec.ts. Env vars consumed by the spec:
+ *   TEST_PM_PHONE=98765432         (default if unset)
+ *   TEST_PM_PASSWORD=Demo@2026     (default if unset)
+ *   TEST_PROJECT_NAME='Playwright Test Project'
+ *   TEST_LEAF_ITEM_NAME='Test Leaf Item'
+ * The seed targets the live v2/v3 schema (user_profiles + projects +
+ * progress_items), which is distinct from the legacy `profiles` table used by
+ * the demo scenarios above. All ops are idempotent.
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -719,6 +731,97 @@ async function createFeedbackTable() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  PLAYWRIGHT FIXTURES — Phase 1 INF-08 (D-31)
+//  Targets live v2/v3 schema (user_profiles + projects + progress_items).
+//  Idempotent. Safe to re-run.
+// ─────────────────────────────────────────────────────────────────────────────
+async function seedPlaywrightFixtures() {
+  const PHONE = process.env.TEST_PM_PHONE || '98765432'
+  const PW = process.env.TEST_PM_PASSWORD || 'Demo@2026'
+  const PROJECT_NAME = process.env.TEST_PROJECT_NAME || 'Playwright Test Project'
+  const LEAF_NAME = process.env.TEST_LEAF_ITEM_NAME || 'Test Leaf Item'
+  const FAKE_EMAIL = `${PHONE}@phone.local` // matches src/lib/phone.ts phoneToEmail()
+
+  console.log('\n🧪 Playwright Test Project: PM + project + leaf progress item')
+
+  // 1. Ensure PM auth user exists (phone-based email scheme).
+  let pmId = null
+  const { data: created, error: createErr } = await supabase.auth.admin.createUser({
+    email: FAKE_EMAIL,
+    password: PW,
+    email_confirm: true,
+    user_metadata: { name: 'Playwright PM' },
+  })
+  if (createErr) {
+    // Already exists — look up via user_profiles.phone
+    const { data: existing } = await supabase
+      .from('user_profiles').select('id').eq('phone', PHONE).maybeSingle()
+    if (existing) { pmId = existing.id; console.log(`  ↺ PM (${PHONE}) already exists`) }
+    else { console.warn(`  ⚠ PM auth create failed and no profile found: ${createErr.message}`); return }
+  } else {
+    pmId = created.user.id
+    console.log(`  ✓ PM auth user created (${PHONE})`)
+  }
+
+  // 2. Upsert user_profiles row.
+  const { error: profErr } = await supabase.from('user_profiles').upsert({
+    id: pmId,
+    phone: PHONE,
+    name: 'Playwright PM',
+    global_role: 'pm',
+    company: 'Playwright Test Co.',
+  }, { onConflict: 'id' })
+  if (profErr) console.warn(`  ⚠ user_profiles upsert: ${profErr.message}`)
+
+  // 3. Ensure project exists (search by name first since id is auto-uuid).
+  let projectId = null
+  const { data: existingProj } = await supabase
+    .from('projects').select('id, assigned_pm_ids').eq('name', PROJECT_NAME).maybeSingle()
+  if (existingProj) {
+    projectId = existingProj.id
+    const pms = Array.isArray(existingProj.assigned_pm_ids) ? existingProj.assigned_pm_ids : []
+    if (!pms.includes(pmId)) {
+      await supabase.from('projects').update({ assigned_pm_ids: [...pms, pmId] }).eq('id', projectId)
+    }
+    console.log(`  ↺ Project '${PROJECT_NAME}' already exists`)
+  } else {
+    const { data: newProj, error: projErr } = await supabase.from('projects').insert({
+      name: PROJECT_NAME,
+      zones: [{ id: 'ZA', name: '測試區', type: 'podium' }],
+      assigned_pm_ids: [pmId],
+      created_by: pmId,
+    }).select('id').single()
+    if (projErr) { console.warn(`  ⚠ project insert: ${projErr.message}`); return }
+    projectId = newProj.id
+    console.log(`  ✓ Project '${PROJECT_NAME}' created (${projectId})`)
+  }
+
+  // 4. Ensure ONE leaf progress item exists.
+  const { data: existingLeaf } = await supabase
+    .from('progress_items').select('id').eq('project_id', projectId).eq('title', LEAF_NAME).maybeSingle()
+  if (existingLeaf) {
+    console.log(`  ↺ Leaf item '${LEAF_NAME}' already exists`)
+  } else {
+    const { error: leafErr } = await supabase.from('progress_items').insert({
+      project_id: projectId,
+      parent_id: null,
+      code: 'T1',
+      title: LEAF_NAME,
+      zone_id: 'ZA',
+      level: 1,
+      planned_progress: 0,
+      actual_progress: 0,
+      status: 'not-started',
+      last_updated_by: pmId,
+    })
+    if (leafErr) console.warn(`  ⚠ leaf insert: ${leafErr.message}`)
+    else console.log(`  ✓ Leaf item '${LEAF_NAME}' created`)
+  }
+
+  console.log(`  → Login: phone=${PHONE} password=${PW}`)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  MAIN
 // ─────────────────────────────────────────────────────────────────────────────
 async function main() {
@@ -730,6 +833,7 @@ async function main() {
   await seedMid()
   await seedLong()
   await createFeedbackTable()
+  await seedPlaywrightFixtures()
 
   console.log('\n✅ All demo simulations seeded!')
   console.log('\n📋 DEMO ACCOUNTS SUMMARY:')
