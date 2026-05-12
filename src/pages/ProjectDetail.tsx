@@ -20,6 +20,7 @@ import { IssueCard } from '../components/IssueCard'
 import { CreateIssueModal } from '../components/CreateIssueModal'
 import { ProgressProvider, useProgress } from '../contexts/ProgressContext'
 import { IssuesProvider, useIssues } from '../contexts/IssuesContext'
+import { DrawingsProvider } from '../contexts/DrawingsContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH } from '../types'
 import type { ProgressItem, ProgressStatus, Zone } from '../types'
@@ -47,7 +48,9 @@ export default function ProjectDetail() {
   return (
     <ProgressProvider projectId={id}>
       <IssuesProvider projectId={id}>
-        <ProjectDetailInner projectId={id} />
+        <DrawingsProvider projectId={id}>
+          <ProjectDetailInner projectId={id} />
+        </DrawingsProvider>
       </IssuesProvider>
     </ProgressProvider>
   )
