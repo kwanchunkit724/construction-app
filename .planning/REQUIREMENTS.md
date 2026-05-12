@@ -13,8 +13,8 @@ This is a brownfield milestone on a live app. Existing v1 capabilities (auth, pr
 - [ ] **DRW-02**: Each drawing has a version number, uploaded_by, uploaded_at, and revision label
 - [ ] **DRW-03**: Uploading a new version of an existing drawing supersedes the prior version (does NOT delete it)
 - [ ] **DRW-04**: All members of a project can view drawings on that project; non-members cannot
-- [ ] **DRW-05**: Drawings render in a mobile pinch-zoom / pan viewer (lazy-loaded)
-- [ ] **DRW-06**: PDF drawings render page-by-page in the viewer with self-hosted worker
+- [x] **DRW-05**: Drawings render in a mobile pinch-zoom / pan viewer (lazy-loaded)
+- [x] **DRW-06**: PDF drawings render page-by-page in the viewer with self-hosted worker
 - [ ] **DRW-07**: A thumbnail (256×256) is generated client-side on upload and shown in lists
 - [ ] **DRW-08**: Upload warns at >5 MB, hard-blocks at >25 MB
 - [ ] **DRW-09**: User can view drawing version history with effective-from / effective-until dates
@@ -96,7 +96,7 @@ This is a brownfield milestone on a live app. Existing v1 capabilities (auth, pr
 - [x] **INF-06**: Vite `manualChunks` config splits drawing-viewer / pdf / signature / qr libs from main bundle; entry chunk stays <800 KB
 - [x] **INF-07**: Bundle-size CI check fails PR if entry chunk >800 KB or new chunk >400 KB
 - [ ] **INF-08**: At least one Playwright smoke test per phase covering happy-path flow (DRW upload+view; SI submit+approve; PTW submit+sign+activate)
-- [ ] **INF-09**: All new Chinese UI strings follow existing inline convention (no i18n library); enum→Chinese maps in `src/types.ts`
+- [x] **INF-09**: All new Chinese UI strings follow existing inline convention (no i18n library); enum→Chinese maps in `src/types.ts`
 
 ## v2 Requirements
 
@@ -159,8 +159,8 @@ Populated by roadmapper on 2026-05-11.
 | DRW-02 | Phase 1 | Pending |
 | DRW-03 | Phase 1 | Pending |
 | DRW-04 | Phase 1 | Pending |
-| DRW-05 | Phase 1 | Pending |
-| DRW-06 | Phase 1 | Pending |
+| DRW-05 | Phase 1 | Complete |
+| DRW-06 | Phase 1 | Complete |
 | DRW-07 | Phase 1 | Pending |
 | DRW-08 | Phase 1 | Pending |
 | DRW-09 | Phase 1 | Pending |
@@ -227,7 +227,7 @@ Populated by roadmapper on 2026-05-11.
 | INF-06 | Phase 1 | Complete |
 | INF-07 | Phase 1 | Complete |
 | INF-08 | Cross-phase (one smoke test per phase: P1 DRW, P2 SI, P3 PTW) | Pending |
-| INF-09 | Phase 1 | Pending |
+| INF-09 | Phase 1 | Complete |
 
 **Coverage:**
 - v1 requirements: 62 unique REQ-IDs
