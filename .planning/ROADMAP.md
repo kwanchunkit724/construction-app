@@ -24,8 +24,8 @@
   4. Upload of an 8 MB file shows a soft warning and proceeds; upload of a 30 MB file is hard-blocked with a Chinese error message; thumbnails (256×256) appear in lists.
   5. The deployed entry chunk is <800 KB and the CI bundle-size check fails any PR that breaches the budget; the drawing-viewer / pdf libs load only when a user opens a drawing.
 **Plans**: 9 plans
-- [ ] 01-01-PLAN.md — Migration v8-drawings.sql + private bucket template + rls-smoke harness (INF-01/02/03/04/05, DRW-12/13)
-- [ ] 01-02-PLAN.md — Vite manualChunks + bundle-size CI guard + export.ts lazy refactor (INF-06/07)
+- [x] 01-01-PLAN.md — Migration v8-drawings.sql + private bucket template + rls-smoke harness (INF-01/02/03/04/05, DRW-12/13)
+- [x] 01-02-PLAN.md — Vite manualChunks + bundle-size CI guard + export.ts lazy refactor (INF-06/07)
 - [ ] 01-03-PLAN.md — Install @capacitor/camera + @capacitor/filesystem + cap sync (DRW-01 native enablement)
 - [ ] 01-04-PLAN.md — Install react-zoom-pan-pinch + react-pdf + PDF.js worker self-host + DRAWING_STATUS_ZH types (INF-09, DRW-05/06)
 - [ ] 01-05-PLAN.md — DrawingsContext + lib helpers + thumbnail generator (DRW-07/08/13, DRW-03/11)
@@ -68,7 +68,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. 圖則附加 (Drawings on Progress Items) | 0/? | Not started | - |
+| 1. 圖則附加 (Drawings on Progress Items) | 2/9 | In Progress|  |
 | 2. SI / VO (工地指令 + 變更指令) | 0/? | Not started | - |
 | 3. PTW (工作許可證) | 0/? | Not started | - |
 

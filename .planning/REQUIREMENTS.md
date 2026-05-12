@@ -93,8 +93,8 @@ This is a brownfield milestone on a live app. Existing v1 capabilities (auth, pr
 - [ ] **INF-03**: New RLS helpers (`can_view_drawing`, `can_view_si`, `can_view_vo`, `can_view_ptw`) marked `security definer set search_path = public`
 - [ ] **INF-04**: `supabase/tests/rls-smoke.sql` exercises 3 fake-user perspectives (admin, MC of project A, subcon of project B) and asserts each `select count(*)` on new tables
 - [ ] **INF-05**: `demo_feedback` over-permissive RLS fixed (ride-along in Phase 1 migration)
-- [ ] **INF-06**: Vite `manualChunks` config splits drawing-viewer / pdf / signature / qr libs from main bundle; entry chunk stays <800 KB
-- [ ] **INF-07**: Bundle-size CI check fails PR if entry chunk >800 KB or new chunk >400 KB
+- [x] **INF-06**: Vite `manualChunks` config splits drawing-viewer / pdf / signature / qr libs from main bundle; entry chunk stays <800 KB
+- [x] **INF-07**: Bundle-size CI check fails PR if entry chunk >800 KB or new chunk >400 KB
 - [ ] **INF-08**: At least one Playwright smoke test per phase covering happy-path flow (DRW upload+view; SI submit+approve; PTW submit+sign+activate)
 - [ ] **INF-09**: All new Chinese UI strings follow existing inline convention (no i18n library); enum→Chinese maps in `src/types.ts`
 
@@ -224,8 +224,8 @@ Populated by roadmapper on 2026-05-11.
 | INF-03 | Phase 1 (introduce); extended in Phase 2 & 3 | Pending |
 | INF-04 | Phase 1 (introduce); extended in Phase 2 & 3 | Pending |
 | INF-05 | Phase 1 | Pending |
-| INF-06 | Phase 1 | Pending |
-| INF-07 | Phase 1 | Pending |
+| INF-06 | Phase 1 | Complete |
+| INF-07 | Phase 1 | Complete |
 | INF-08 | Cross-phase (one smoke test per phase: P1 DRW, P2 SI, P3 PTW) | Pending |
 | INF-09 | Phase 1 | Pending |
 
