@@ -9,10 +9,10 @@ This is a brownfield milestone on a live app. Existing v1 capabilities (auth, pr
 
 ### Drawings (DRW)
 
-- [ ] **DRW-01**: PM / MC / admin can upload one or more drawings (JPEG / PNG / PDF) to any **leaf** progress item
-- [ ] **DRW-02**: Each drawing has a version number, uploaded_by, uploaded_at, and revision label
+- [x] **DRW-01**: PM / MC / admin can upload one or more drawings (JPEG / PNG / PDF) to any **leaf** progress item
+- [x] **DRW-02**: Each drawing has a version number, uploaded_by, uploaded_at, and revision label
 - [x] **DRW-03**: Uploading a new version of an existing drawing supersedes the prior version (does NOT delete it)
-- [ ] **DRW-04**: All members of a project can view drawings on that project; non-members cannot
+- [x] **DRW-04**: All members of a project can view drawings on that project; non-members cannot
 - [x] **DRW-05**: Drawings render in a mobile pinch-zoom / pan viewer (lazy-loaded)
 - [x] **DRW-06**: PDF drawings render page-by-page in the viewer with self-hosted worker
 - [x] **DRW-07**: A thumbnail (256×256) is generated client-side on upload and shown in lists
@@ -22,8 +22,8 @@ This is a brownfield milestone on a live app. Existing v1 capabilities (auth, pr
 - [x] **DRW-11**: A drawing cannot be hard-deleted once a non-uploader has viewed it (withdraw only)
 - [ ] **DRW-12**: Drawings storage uses a **private** Supabase bucket with `(storage.foldername(name))[1] = project_id` RLS pattern
 - [x] **DRW-13**: Drawing URLs are signed (TTL ≤ 1 hour) — never public
-- [ ] **DRW-14**: Default list sort = `created_at desc`; search by title substring
-- [ ] **DRW-15**: subcontractor / subcontractor_worker / owner roles see view-only (no upload button)
+- [x] **DRW-14**: Default list sort = `created_at desc`; search by title substring
+- [x] **DRW-15**: subcontractor / subcontractor_worker / owner roles see view-only (no upload button)
 
 ### Site Instructions (SI)
 
@@ -155,10 +155,10 @@ Populated by roadmapper on 2026-05-11.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DRW-01 | Phase 1 | Pending |
-| DRW-02 | Phase 1 | Pending |
+| DRW-01 | Phase 1 | Complete |
+| DRW-02 | Phase 1 | Complete |
 | DRW-03 | Phase 1 | Complete |
-| DRW-04 | Phase 1 | Pending |
+| DRW-04 | Phase 1 | Complete |
 | DRW-05 | Phase 1 | Complete |
 | DRW-06 | Phase 1 | Complete |
 | DRW-07 | Phase 1 | Complete |
@@ -168,8 +168,8 @@ Populated by roadmapper on 2026-05-11.
 | DRW-11 | Phase 1 | Complete |
 | DRW-12 | Phase 1 | Pending |
 | DRW-13 | Phase 1 | Complete |
-| DRW-14 | Phase 1 | Pending |
-| DRW-15 | Phase 1 | Pending |
+| DRW-14 | Phase 1 | Complete |
+| DRW-15 | Phase 1 | Complete |
 | SI-01 | Phase 2 | Pending |
 | SI-02 | Phase 2 | Pending |
 | SI-03 | Phase 2 | Pending |
