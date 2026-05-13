@@ -46,7 +46,16 @@
   3. Push-fatigue cap holds: a single user receives no more than 3 SI/VO/PTW pushes per day across all docs on all projects; any 4th notification surfaces in the next 08:00 HKT digest instead.
   4. A user with in-flight approval steps cannot delete their account; an admin can either re-route the in-flight step (logged as `admin_override` with mandatory ≥10-char reason) or activate a configured delegation; chain user resolution always survives the original approver leaving the company.
   5. After full approval, an SI is read-only forever (no edit / no delete affordances anywhere in the UI), and a single VO PDF export contains line items, totals, approval timeline, and referenced drawing thumbnails.
-**Plans**: TBD
+**Plans**: 9 plans
+- [ ] 02-01-PLAN.md — Approval-chain spine + RLS helpers + push dispatcher + 08:00 HKT digest + project-si-vo bucket + delete_my_account extension (CHN-01..11, INF-03/04)
+- [ ] 02-02-PLAN.md — v9-si-schema + submit_si RPC + lock guard + shared dispatch_after_approval trigger (SI-01/04/05/06/09/10/11, CHN-03/04/07)
+- [ ] 02-03-PLAN.md — Capacitor plugins (geolocation + voice-recorder) + zh-HK permission strings + cap sync (SI-02 native enablement)
+- [ ] 02-04-PLAN.md — TS types + currency/diff/osm/si helpers + SiContext + DelegationsContext + submit_approval RPC (SI-01/03/05/07/08/11, VO-04, CHN-04/06/10/11)
+- [ ] 02-05-PLAN.md — SI UI: VoiceRecorder + GeoPicker + SiSubmitForm + SiList + SiDetail + DiffCard + ApproverBar + ProtestBar (SI-01/02/03/07..11)
+- [ ] 02-06-PLAN.md — v9-vo-schema + recompute_vo_totals + submit_vo RPC + exportVOToPDF + Noto Sans HK font (VO-01..06/08/09)
+- [ ] 02-07-PLAN.md — VO UI: VoContext + VoLineItemsEditor + VoSubmitForm + VoConfirmationScreen + VoList + VoDetail + PDF export (VO-01/02/03/06..10)
+- [ ] 02-08-PLAN.md — Admin chain config UI + default-chain backfill for live projects + delegations on Profile + AdminUsers in-flight modal + Apple compliance preserved (CHN-01/02/06/09/10)
+- [ ] 02-09-PLAN.md — ProjectDetail tab + nav links + cold-launch deep-link fix + Playwright @si-vo-smoke + rls-smoke final personas + end-of-phase walkthrough (INF-08 Phase 2 share)
 **UI hint**: yes
 **Canonical refs**: `.planning/research/ARCHITECTURE.md`, `.planning/research/PITFALLS.md`, `.planning/research/SUMMARY.md`, `.planning/codebase/CONCERNS.md`
 
@@ -69,7 +78,7 @@
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. 圖則附加 (Drawings on Progress Items) | 2/9 | In Progress|  |
-| 2. SI / VO (工地指令 + 變更指令) | 0/? | Not started | - |
+| 2. SI / VO (工地指令 + 變更指令) | 0/9 | Not started | - |
 | 3. PTW (工作許可證) | 0/? | Not started | - |
 
 ## Coverage Validation
