@@ -8,13 +8,13 @@ progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 18
-  completed_plans: 10
-  percent: 56
+  completed_plans: 11
+  percent: 61
 ---
 
 # STATE — 工地控制系統 Milestone
 
-**Last updated:** 2026-05-14 (Phase 2 Plan 02-01 complete; spine live on Supabase)
+**Last updated:** 2026-05-14 (Phase 2 Plans 02-01 + 02-02 complete; SI schema live on Supabase)
 
 ## Project Reference
 
@@ -25,13 +25,16 @@ progress:
 
 ## Current Position
 
-Phase: 2 (SI/VO) — EXECUTING (Wave 2 next)
-Plan: 1 of 9
+Phase: 2 (SI/VO) — EXECUTING (Plan 02-03 next, then Wave 3)
+Plan: 2 of 9
 
 - **Phase:** 2 — SI / VO (Site Instructions / Variation Orders)
-- **Plan:** 02-01 ✅ live on Supabase. Wave 2 next: 02-02 (SI schema + triggers) + 02-03 (Capacitor plugins) in parallel.
+- **Plan:** 02-01 + 02-02 ✅ live on Supabase. Next: 02-03 (Capacitor plugins + native permission strings), then Wave 3 = 02-04 (TS types + SiContext + submit_approval RPC).
 - **Status:** EXECUTING
-- **Progress:** Phase 1 [██████████] 100% · Phase 2 [█░░░░░░░░░] 11% (1/9) · Phase 3 not yet planned
+- **Progress:** Phase 1 [██████████] 100% · Phase 2 [██░░░░░░░░] 22% (2/9) · Phase 3 not yet planned
+
+### Critical apply-tooling note (captured 02-02)
+PowerShell `Set-Clipboard` + `Get-Content -Raw` corrupts UTF-8 multi-byte chars (CP950 reinterpretation) on Windows. **Always** apply non-ASCII SQL via base64 → Monaco `setValue` (Chrome MCP `javascript_tool`) instead of clipboard. See 02-02-SUMMARY.md for details. Hot-fix path documented.
 
 ## Performance Metrics
 
@@ -82,8 +85,8 @@ None.
 
 ## Session Continuity
 
-**Last action:** Plan 02-01 complete — shared approval-chain spine, RLS helpers (in_flight_approvals now plpgsql+EXECUTE for forward-ref safety), private project-si-vo bucket, push dispatcher + 08:00 HKT digest cron, and Apple-compliance-preserving delete_my_account extension applied to live Supabase. All 10 post-apply verifications pass.
-**Next action:** Wave 2 — Plans 02-02 (SI schema + triggers) and 02-03 (Capacitor plugins) execute in parallel.
+**Last action:** Plan 02-02 complete — SI domain (site_instructions/si_versions/protest_comments + RLS + lock guard + submit_si RPC) and shared dispatch_after_approval trigger applied to live Supabase. UTF-8 Chinese strings confirmed intact after mid-apply clipboard-encoding hot-fix.
+**Next action:** Plan 02-03 (Capacitor plugins: geolocation + voice-recorder, native permission strings, cap sync). No DB checkpoint — this is npm + native config work.
 
 **Canonical references for downstream agents:**
 
