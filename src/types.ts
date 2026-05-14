@@ -277,3 +277,129 @@ export const DRAWING_STATUS_ZH: Record<DrawingStatus, string> = {
   superseded: '已取代',
   withdrawn: '已撤回',
 }
+
+// ── Phase 2 SI types ────────────────────────────────────────
+// VO-side types land in Plan 02-06.
+
+export type SiStatus =
+  | 'draft'
+  | 'submitted'
+  | 'in_review'
+  | 'approved'
+  | 'locked'
+  | 'revision_requested'
+  | 'rejected'
+
+export type ApprovalActionType =
+  | 'approve'
+  | 'approve_with_edits'
+  | 'request_revision'
+  | 'reject'
+  | 'admin_override'
+  | 'delegate'
+
+export type LineItemCategory = 'labour' | 'material' | 'preliminaries' | 'contingency'
+
+export interface SiPayload {
+  title: string
+  description: string
+  drawing_version_ids: string[]
+  photo_paths: string[]
+  voice_path: string | null
+  lat: number | null
+  lng: number | null
+  accuracy_m: number | null
+}
+
+export interface SI {
+  id: string
+  project_id: string
+  number: string
+  current_version_id: string | null
+  chain_snapshot: ChainStep[] | null
+  current_step: number
+  status: SiStatus
+  created_by: string
+  created_at: string
+  submitted_at: string | null
+  locked_at: string | null
+}
+
+export interface SIVersion {
+  id: string
+  si_id: string
+  version_no: number
+  payload: SiPayload
+  edits_by: string
+  created_at: string
+}
+
+export interface ProtestComment {
+  id: string
+  si_id: string
+  author_id: string
+  body: string
+  created_at: string
+}
+
+export interface ChainStep {
+  step_order: number
+  required_role: GlobalRole
+  optional_user_id: string | null
+}
+
+export interface Approval {
+  id: string
+  doc_type: 'si' | 'vo' | 'ptw'
+  doc_id: string
+  step_order: number
+  action_type: ApprovalActionType
+  actor_id: string
+  delegated_for_user_id: string | null
+  reason: string | null
+  edits_jsonb: any | null
+  created_at: string
+}
+
+export interface Delegation {
+  id: string
+  user_id: string
+  delegate_to: string
+  valid_from: string
+  valid_until: string
+  created_at: string
+}
+
+export interface NotificationDigestItem {
+  doc_type: 'si' | 'vo' | 'ptw'
+  doc_id: string
+  project_id: string
+  headline_zh: string
+  deep_link: string
+}
+
+export const SI_STATUS_ZH: Record<SiStatus, string> = {
+  draft: '草稿',
+  submitted: '待批准',
+  in_review: '審批中',
+  approved: '已批准',
+  locked: '已鎖定',
+  revision_requested: '已退回',
+  rejected: '已拒絕',
+}
+
+export const APPROVAL_ACTION_ZH: Record<ApprovalActionType, string> = {
+  approve: '批准',
+  approve_with_edits: '批准並修改',
+  request_revision: '退回 (要求修訂)',
+  reject: '拒絕',
+  admin_override: '管理員介入',
+  delegate: '已轉授',
+}
+
+export const LINE_ITEM_CATEGORY_ZH: Record<LineItemCategory, string> = {
+  labour: '人工',
+  material: '物料',
+  preliminaries: '前期費用',
+  contingency: '暫定',
+}
