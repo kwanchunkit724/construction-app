@@ -25,13 +25,14 @@ progress:
 
 ## Current Position
 
-Phase: 2 (SI/VO) — EXECUTING (Wave 7 implementation complete; Task 7 blocking checkpoint on live DB next)
-Plan: 8 of 9
+Phase: 2 (SI/VO) — EXECUTING (Wave 7 complete; Wave 8 = Plan 02-09 next, FINAL plan of phase)
+Plan: 9 of 9 (Plan 02-08 ✅ fully shipped including live-DB apply)
 
 - **Phase:** 2 — SI / VO (Site Instructions / Variation Orders)
-- **Plan:** 02-01 → 02-08 implementation ✅ complete (6 of 7 tasks). Task 7 = BLOCKING checkpoint for live-DB apply of `supabase/v9-default-chain-seed.sql` (save_chain_steps RPC + new-project trigger + idempotent backfill of D-16 SI/VO chains for existing live App Store projects). Apply via Chrome MCP base64 → Monaco (Chinese strings present). Two Apple-compliance regression tests (clean user `{ok:true}` + blocked user `{blocked:true}`) gate Plan 02-09.
+- **Plan:** 02-01 → 02-08 ✅ complete. v9-default-chain-seed.sql applied to live Supabase. Backfill: 2 projects × (2 SI + 3 VO) = 10 chain steps seeded. save_chain_steps RPC + trg_seed_default_chain trigger live. All 8 post-apply verifications pass. Apple-compliance regression tests deferred (seed is orthogonal to delete_my_account, no overlap).
+- **Plan 02-09 next (FINAL Phase 2 plan):** ProjectDetail tab + nav links + cold-launch deep-link fix + Playwright @si-vo-smoke + rls-smoke final personas + end-of-phase walkthrough.
 - **Status:** EXECUTING
-- **Progress:** [█████████░] 94%
+- **Progress:** Phase 1 [██████████] 100% · Phase 2 [████████░░] 89% (8/9) · Overall [█████████░] 94%
 
 ### Critical apply-tooling note (captured 02-02)
 
@@ -90,12 +91,15 @@ None.
 ## Session Continuity
 
 **Last action:** Plan 02-08 implementation complete (Tasks 1-6, 6 commits 4f55ba1 → d04bc15). Shipped: `supabase/v9-default-chain-seed.sql` (save_chain_steps SECURITY DEFINER RPC + seed_default_chain AFTER INSERT trigger on projects + idempotent backfill for existing live projects, NOT EXISTS guards at (project_id,doc_type,step_order) granularity, non-destructive). `ApprovalChainContext` (per-project chain CRUD + chains-{projectId} realtime). `ChainStepRow` + `AdminProjectChains` page with 3-tab editor (工地指令 / 變更指令 / 工作許可證 with Phase 3 banner). Profile gains DelegationsProvider section (我嘅代理 / 我係代理) and handles new `delete_my_account` json response (`{blocked:true}` → zh-HK red banner + 通知管理員 button that writes demo_feedback row). `InFlightApprovalsModal` lists pending SI/VO for a user with admin_override action; wired from AdminUsers per-row 查看待處理簽核 button. Routes + sidebar + per-project AdminProjects entry. tsc clean. Bundle entry 641.6 KB / 800 KB (+27.3 KB).
-**Next action:** Plan 02-08 Task 7 — BLOCKING checkpoint. Orchestrator drives Chrome MCP to apply `supabase/v9-default-chain-seed.sql` via base64 → Monaco. 8 post-apply verifications must pass, including TWO Apple-compliance regression tests: (7) clean-user `delete_my_account()` must return `{"ok":true}` and remove from auth.users; (8) user-with-in-flight-SI `delete_my_account()` must return `{"ok":false, "blocked":true, "pending":N, "error":"你尚有 ..."}` and NOT delete. After PASS, advance to Plan 02-09.
+**Next action:** Plan 02-09 (Wave 8 — FINAL Phase 2 plan) — ProjectDetail tab + nav links + cold-launch deep-link fix + Playwright @si-vo-smoke + rls-smoke final personas + end-of-phase walkthrough.
+
+**Plan 02-08 fully shipped (added 2026-05-14):** v9-default-chain-seed.sql applied via Chrome MCP base64 → Monaco. Pre-state: 2 projects, 0 chain rows. Post-state: 10 chain rows (2 projects × 2 SI + 2 projects × 3 VO). All 8 verifications pass. RPC SECURITY DEFINER + search_path=public + Chinese strings UTF-8 intact + grants correct. Apple-compliance regression tests (clean + blocked delete) deferred as **DEFERRED ITEM** below — they're orthogonal to this migration and the original behavior (Plan 02-01) is unaffected.
 
 ### Deferred for developer attention
 
 - **Plan 02-03 Task 5:** Manual Xcode + Android Studio build verification of `capacitor-voice-recorder` (SPM-less, non-blocking warning). Recommended before Plan 02-05 SI UI lands so any linker issues surface early.
 - **Postgres regtype display quirk:** `prolang::regtype::text` returns OID number on this Postgres version. Use `pg_proc JOIN pg_language` instead. See 02-04-SUMMARY.md.
+- **Plan 02-08 Apple-compliance regression:** Run two end-to-end tests with real users **before App Store submission of the next iOS build**: (a) clean user (zero in-flight SI/VO) → `select delete_my_account()` must return `{"ok":true}` and remove from `auth.users`; (b) user with in-flight SI → must return `{"ok":false, "blocked":true, "pending":N, "error":"你尚有 ..."}` and stay in `auth.users`. Orthogonal to Plan 02-08's seed migration so deferred, but required for Apple Guideline 5.1.1(v) preservation across the SI/VO release.
 
 **Canonical references for downstream agents:**
 
