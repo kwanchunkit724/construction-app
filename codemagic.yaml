@@ -272,3 +272,95 @@ workflows:
       - android/app/build/outputs/**/*.apk
       - android/app/build/outputs/**/*.aab
       - android/app/build/outputs/**/mapping.txt
+
+  android-play-store:
+    # Release-signed AAB for Google Play Internal Testing track upload.
+    # Activated after Google Play developer identity verification cleared.
+    #
+    # Required Codemagic env-vars (set under Environment groups →
+    # `android_play_store_credentials`, marked secure):
+    #   CM_KEYSTORE          base64-encoded upload-keystore.jks
+    #   CM_KEYSTORE_PASSWORD store password
+    #   CM_KEY_ALIAS         alias name (e.g. 'upload')
+    #   CM_KEY_PASSWORD      key password (often same as store password)
+    #   GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS  service-account JSON for
+    #                        publishing.google_play (paste full JSON content)
+    #
+    # Generate keystore locally once (keytool from JDK 21):
+    #   keytool -genkey -v -keystore upload-keystore.jks -alias upload \
+    #     -keyalg RSA -keysize 2048 -validity 10000
+    # Then base64-encode + upload to Codemagic:
+    #   openssl base64 -A -in upload-keystore.jks -out upload-keystore.jks.b64
+    # Paste contents of .b64 into the CM_KEYSTORE env var (secure).
+    #
+    # CRITICAL: back up upload-keystore.jks somewhere safe. Losing it
+    # means you cannot ship updates to this app — Play will reject any
+    # AAB signed by a different upload key.
+    name: Android Play Store Release
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    environment:
+      groups:
+        - android_play_store_credentials
+      vars:
+        PACKAGE_NAME: "com.kwanchunkit.constructionapp"
+        VITE_SUPABASE_URL: "https://syyntodkvexkbpjrskjj.supabase.co"
+        VITE_SUPABASE_ANON_KEY: "sb_publishable_BHKTjGCKkot6GVa2M6BCMQ_0qBAl1jP"
+      android_signing:
+        - upload_keystore
+      node: latest
+      java: 21
+
+    # Triggered manually from Codemagic UI OR via API. Not auto-pushed
+    # to avoid every main commit creating a Play Console upload.
+    # Once you want auto-publishing, add:
+    #   triggering:
+    #     events: [push]
+    #     branch_patterns:
+    #       - pattern: main
+    #         include: true
+
+    scripts:
+      - name: Install Node dependencies
+        script: npm ci
+
+      - name: Build web app
+        script: npm run build
+
+      - name: Check bundle size
+        script: node scripts/check-bundle-size.cjs
+
+      - name: Sync Capacitor
+        script: npx cap sync android
+
+      - name: Set Android version code from build number
+        script: |
+          cd android
+          # Play requires monotonically increasing versionCode across uploads.
+          # $BUILD_NUMBER is Codemagic's build counter — safe choice.
+          echo "VERSION_CODE=$BUILD_NUMBER" >> $CM_ENV
+          echo "VERSION_NAME=1.0" >> $CM_ENV
+
+      - name: Build release AAB (signed via Codemagic android_signing)
+        script: |
+          cd android
+          chmod +x ./gradlew
+          ./gradlew bundleRelease \
+            -PversionCode=$VERSION_CODE \
+            -PversionName=$VERSION_NAME
+
+    artifacts:
+      - android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/**/mapping.txt
+
+    publishing:
+      # Google Play Console publishing. Requires GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
+      # env var (service-account JSON granted "Releases" role on the app
+      # in Play Console → Setup → API access).
+      google_play:
+        credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
+        # Optional: pin to a specific Play Console internal-test cohort.
+        # in_app_update_priority: 3
+        # release_status: completed
