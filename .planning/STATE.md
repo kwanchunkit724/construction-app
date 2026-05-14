@@ -3,36 +3,46 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-14T06:15:02.179Z"
+last_updated: "2026-05-14T08:00:00.000Z"
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 18
-  completed_plans: 17
-  percent: 94
+  completed_plans: 18
+  percent: 100
 ---
 
 # STATE — 工地控制系統 Milestone
 
-**Last updated:** 2026-05-14 (Phase 2 Plan 02-08 implementation complete; Task 7 blocking checkpoint awaits live-DB apply)
+**Last updated:** 2026-05-14 (Phase 2 COMPLETE — all 9 plans shipped; Phase 3 PTW next)
 
 ## Project Reference
 
 - **Project:** CK工程 / Construction App (live on iOS App Store; Android in test)
 - **Core value:** 判頭 + 工地主任 always know exactly what's happening on every site, with a shared audit trail that survives disputes.
 - **Current milestone:** 工地控制系統 (Site Control System) — 3 coarse phases
-- **Current focus:** Phase 2 — SI / VO (Site Instructions / Variation Orders)
+- **Current focus:** Phase 3 — PTW (next phase)
 
 ## Current Position
 
-Phase: 2 (SI/VO) — EXECUTING (Wave 7 complete; Wave 8 = Plan 02-09 next, FINAL plan of phase)
-Plan: 9 of 9 (Plan 02-08 ✅ fully shipped including live-DB apply)
+Phase: 2 (SI/VO) — ✅ COMPLETE (all 9 plans shipped, Wave 8 / Plan 02-09 done)
+Phase: 3 (PTW) — NOT STARTED (next)
 
-- **Phase:** 2 — SI / VO (Site Instructions / Variation Orders)
-- **Plan:** 02-01 → 02-08 ✅ complete. v9-default-chain-seed.sql applied to live Supabase. Backfill: 2 projects × (2 SI + 3 VO) = 10 chain steps seeded. save_chain_steps RPC + trg_seed_default_chain trigger live. All 8 post-apply verifications pass. Apple-compliance regression tests deferred (seed is orthogonal to delete_my_account, no overlap).
-- **Plan 02-09 next (FINAL Phase 2 plan):** ProjectDetail tab + nav links + cold-launch deep-link fix + Playwright @si-vo-smoke + rls-smoke final personas + end-of-phase walkthrough.
-- **Status:** EXECUTING
-- **Progress:** Phase 1 [██████████] 100% · Phase 2 [████████░░] 89% (8/9) · Overall [█████████░] 94%
+- **Phase 1:** ✅ COMPLETE (drawings on progress items)
+- **Phase 2:** ✅ COMPLETE — 02-01 → 02-09 all shipped. Plan 02-09 delivered:
+  ProjectDetail 簽核 tab + Sidebar/BottomNav SI/VO links + cold-launch
+  deep-link fix in src/lib/push.ts (Open Q 4 — `_pendingDeepLink` queue +
+  `consumePendingDeepLink` drained by AuthContext) + tests/e2e/si-vo-smoke.spec.ts
+  (`@si-vo-smoke` happy-path: SI submit → MC approve → PM approve → lock →
+  MC raises VO → PM approves → 匯出 PDF) + tests/fixtures/seed-phase2.sql
+  (idempotent seed) + supabase/tests/rls-smoke.sql FINAL extension
+  (foreman + delegated-PM with real SI assertions + CHN-11 against real
+  approvals row). 6 atomic commits 0046058 → a0880c1. Bundle entry 644.3 KB
+  / 800 KB CI limit. tsc clean.
+- **Next:** Plan Phase 3 (PTW) — open with 1–2 day de-risking spike per
+  ROADMAP.
+- **Status:** EXECUTING (Phase 3 planning next)
+- **Progress:** Phase 1 [██████████] 100% · Phase 2 [██████████] 100% · Overall [██████████] 100%
 
 ### Critical apply-tooling note (captured 02-02)
 
@@ -43,8 +53,8 @@ PowerShell `Set-Clipboard` + `Get-Content -Raw` corrupts UTF-8 multi-byte chars 
 | Metric | Value |
 |--------|-------|
 | Phases planned | 3 |
-| Phases complete | 1 |
-| Plans complete | 9 |
+| Phases complete | 2 |
+| Plans complete | 18 |
 | v1 requirements mapped | 62/62 |
 | Phase 01-drawings-on-progress-items P04 | 5m | 2 tasks | 3 files |
 | Phase 01-drawings-on-progress-items P05 | 12m | 2 tasks | 3 files |
@@ -54,6 +64,7 @@ PowerShell `Set-Clipboard` + `Get-Content -Raw` corrupts UTF-8 multi-byte chars 
 | Phase 02-si-vo P03 | 5m | 4 tasks | 7 files |
 | Phase 02-si-vo P05 | ~75m | 6 tasks | 11 files |
 | Phase 02-si-vo P08 | 30m | 6 tasks | 10 files |
+| Phase 02-si-vo P09 | 30m | 6 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -90,7 +101,13 @@ None.
 
 ## Session Continuity
 
-**Last action:** Plan 02-08 implementation complete (Tasks 1-6, 6 commits 4f55ba1 → d04bc15). Shipped: `supabase/v9-default-chain-seed.sql` (save_chain_steps SECURITY DEFINER RPC + seed_default_chain AFTER INSERT trigger on projects + idempotent backfill for existing live projects, NOT EXISTS guards at (project_id,doc_type,step_order) granularity, non-destructive). `ApprovalChainContext` (per-project chain CRUD + chains-{projectId} realtime). `ChainStepRow` + `AdminProjectChains` page with 3-tab editor (工地指令 / 變更指令 / 工作許可證 with Phase 3 banner). Profile gains DelegationsProvider section (我嘅代理 / 我係代理) and handles new `delete_my_account` json response (`{blocked:true}` → zh-HK red banner + 通知管理員 button that writes demo_feedback row). `InFlightApprovalsModal` lists pending SI/VO for a user with admin_override action; wired from AdminUsers per-row 查看待處理簽核 button. Routes + sidebar + per-project AdminProjects entry. tsc clean. Bundle entry 641.6 KB / 800 KB (+27.3 KB).
+**Last action:** Phase 2 COMPLETE. Plan 02-09 shipped (Tasks 1-6, 6 commits 0046058 → a0880c1). ProjectDetail 簽核 tab + SiVoSwitcher; Sidebar + BottomNav in-project SI/VO entries; src/lib/push.ts cold-launch deep-link queue + `consumePendingDeepLink` drained by AuthContext bootstrap (Open Q 4 mitigated); `@si-vo-smoke` Playwright spec + idempotent seed-phase2.sql fixture; rls-smoke FINAL block with foreman + delegated-PM personas asserting can_view_si, in_flight_approvals via delegation, CHN-11 against a real approvals row. Bundle entry 644.3 KB / 800 KB. tsc clean.
+
+**Next action:** Plan Phase 3 (PTW) — open with a 1–2 day de-risking spike (signed-JWT QR, pg_cron expiry, new native plugin, Apple re-review framing) per ROADMAP. Reuses chain infra + push pipeline + rls-smoke pattern from Phase 2.
+
+**Plan 02-08 fully shipped (added 2026-05-14):** historical entry below.
+
+**Prior last action:** Plan 02-08 implementation complete (Tasks 1-6, 6 commits 4f55ba1 → d04bc15). Shipped: `supabase/v9-default-chain-seed.sql` (save_chain_steps SECURITY DEFINER RPC + seed_default_chain AFTER INSERT trigger on projects + idempotent backfill for existing live projects, NOT EXISTS guards at (project_id,doc_type,step_order) granularity, non-destructive). `ApprovalChainContext` (per-project chain CRUD + chains-{projectId} realtime). `ChainStepRow` + `AdminProjectChains` page with 3-tab editor (工地指令 / 變更指令 / 工作許可證 with Phase 3 banner). Profile gains DelegationsProvider section (我嘅代理 / 我係代理) and handles new `delete_my_account` json response (`{blocked:true}` → zh-HK red banner + 通知管理員 button that writes demo_feedback row). `InFlightApprovalsModal` lists pending SI/VO for a user with admin_override action; wired from AdminUsers per-row 查看待處理簽核 button. Routes + sidebar + per-project AdminProjects entry. tsc clean. Bundle entry 641.6 KB / 800 KB (+27.3 KB).
 **Next action:** Plan 02-09 (Wave 8 — FINAL Phase 2 plan) — ProjectDetail tab + nav links + cold-launch deep-link fix + Playwright @si-vo-smoke + rls-smoke final personas + end-of-phase walkthrough.
 
 **Plan 02-08 fully shipped (added 2026-05-14):** v9-default-chain-seed.sql applied via Chrome MCP base64 → Monaco. Pre-state: 2 projects, 0 chain rows. Post-state: 10 chain rows (2 projects × 2 SI + 2 projects × 3 VO). All 8 verifications pass. RPC SECURITY DEFINER + search_path=public + Chinese strings UTF-8 intact + grants correct. Apple-compliance regression tests (clean + blocked delete) deferred as **DEFERRED ITEM** below — they're orthogonal to this migration and the original behavior (Plan 02-01) is unaffected.
