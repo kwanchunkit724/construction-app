@@ -27,7 +27,14 @@
 -- =============================================================
 
 -- ── 1. Defensive drops (functions + triggers + sub-objects only) ──
-drop trigger if exists trg_si_locked_guard on si_versions;
+-- Note: `drop trigger if exists ... on table` requires the table to exist.
+-- Guard the trigger drop with a DO block so first-run (no table yet) works.
+do $$
+begin
+  if to_regclass('public.si_versions') is not null then
+    execute 'drop trigger if exists trg_si_locked_guard on si_versions';
+  end if;
+end $$;
 drop function if exists si_lock_guard() cascade;
 drop function if exists submit_si(uuid) cascade;
 drop function if exists next_si_number(uuid) cascade;
