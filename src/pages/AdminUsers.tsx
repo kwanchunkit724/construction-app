@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, RefreshCw, Phone } from 'lucide-react'
+import { Search, RefreshCw, Phone, ClipboardList } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { Modal } from '../components/Modal'
+import { InFlightApprovalsModal } from '../components/admin/InFlightApprovalsModal'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
@@ -35,6 +36,7 @@ export default function AdminUsers() {
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<GlobalRole | 'all'>('all')
   const [editing, setEditing] = useState<UserProfile | null>(null)
+  const [viewingInFlight, setViewingInFlight] = useState<UserProfile | null>(null)
 
   async function fetchUsers() {
     const { data, error } = await supabase
@@ -152,13 +154,22 @@ export default function AdminUsers() {
                   {u.company && <span className="truncate">{u.company}</span>}
                 </div>
               </div>
-              <button
-                onClick={() => setEditing(u)}
-                disabled={u.id === profile.id}
-                className="text-xs font-semibold text-safety-700 bg-safety-50 hover:bg-safety-100 border border-safety-200 px-3 py-2 rounded-lg flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                編輯角色
-              </button>
+              <div className="flex flex-col gap-1.5 flex-shrink-0">
+                <button
+                  onClick={() => setEditing(u)}
+                  disabled={u.id === profile.id}
+                  className="text-xs font-semibold text-safety-700 bg-safety-50 hover:bg-safety-100 border border-safety-200 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed min-h-0"
+                >
+                  編輯角色
+                </button>
+                <button
+                  onClick={() => setViewingInFlight(u)}
+                  className="text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-3 py-2 rounded-lg flex items-center justify-center gap-1 min-h-0"
+                  title="查看用戶嘅待處理簽核工作"
+                >
+                  <ClipboardList size={12} /> 查看待處理簽核
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -169,6 +180,15 @@ export default function AdminUsers() {
           user={editing}
           onClose={() => setEditing(null)}
           onUpdated={async () => { setEditing(null); await fetchUsers() }}
+        />
+      )}
+
+      {viewingInFlight && (
+        <InFlightApprovalsModal
+          open
+          userId={viewingInFlight.id}
+          userName={viewingInFlight.name}
+          onClose={() => setViewingInFlight(null)}
         />
       )}
     </AppLayout>
