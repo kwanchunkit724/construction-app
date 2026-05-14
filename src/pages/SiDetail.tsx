@@ -4,7 +4,12 @@ import { ChevronLeft, MapPin } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { FullPageSpinner } from '../components/Spinner'
 import { SiProvider, useSi } from '../contexts/SiContext'
+import { VoProvider, useVo } from '../contexts/VoContext'
+import { ProgressProvider, useProgress } from '../contexts/ProgressContext'
 import { DrawingsProvider } from '../contexts/DrawingsContext'
+import { useAuth } from '../contexts/AuthContext'
+import { VoSubmitForm } from '../components/vo/VoSubmitForm'
+import { VoConfirmationScreen } from '../components/vo/VoConfirmationScreen'
 import { signedUrlFor } from '../lib/si'
 import { latLngToTile, tileUrl, OSM_ATTRIBUTION } from '../lib/osm-tile'
 import { supabase } from '../lib/supabase'
@@ -32,6 +37,13 @@ function statusStyle(status: SiStatus): string {
 function SiDetailInner({ projectId, siId }: { projectId: string; siId: string }) {
   const navigate = useNavigate()
   const { sis, versionsBySi, approvalsBySi, commentsBySi, loading } = useSi()
+  const { vos } = useVo()
+  const { items: progressItems } = useProgress()
+  const { profile } = useAuth()
+  const canSubmitVO = !!profile && ['admin', 'pm', 'main_contractor'].includes(profile.global_role)
+  const existingVo = vos.find(v => v.si_id === siId)
+  const [voFormOpen, setVoFormOpen] = useState(false)
+  const [voConfirmation, setVoConfirmation] = useState<{ voId: string; serverTotal: number; voNumber: string } | null>(null)
 
   const si: SI | undefined = sis.find(s => s.id === siId)
   const versions = (versionsBySi[siId] || [])
@@ -159,7 +171,62 @@ function SiDetailInner({ projectId, siId }: { projectId: string; siId: string })
             <span className="text-xs text-site-500">由 {creatorName} 建立</span>
           )}
         </div>
+
+        {/* VO entry point — only when SI is locked */}
+        {si.status === 'locked' && (
+          <div className="mt-3">
+            {existingVo ? (
+              <button
+                type="button"
+                onClick={() => navigate(`/project/${projectId}/vo/${existingVo.id}`)}
+                className="btn-ghost inline-flex items-center gap-1 text-sm"
+              >
+                已有變更指令 <span className="font-mono">{existingVo.number}</span> →
+              </button>
+            ) : canSubmitVO ? (
+              <button
+                type="button"
+                onClick={() => setVoFormOpen(true)}
+                className="btn-primary inline-flex items-center gap-1"
+              >
+                提出變更指令
+              </button>
+            ) : null}
+          </div>
+        )}
       </div>
+
+      {voFormOpen && (
+        <VoSubmitForm
+          projectId={projectId}
+          parentSi={si}
+          progressItems={progressItems}
+          onSubmitted={(voId, serverTotal) => {
+            setVoFormOpen(false)
+            // Use the just-created VO from realtime if available, else look it up post-confirmation
+            const fresh = (vos.find(v => v.id === voId))
+            setVoConfirmation({
+              voId,
+              serverTotal,
+              voNumber: fresh?.number ?? '',
+            })
+          }}
+          onCancel={() => setVoFormOpen(false)}
+        />
+      )}
+
+      {voConfirmation && (
+        <VoConfirmationScreen
+          voId={voConfirmation.voId}
+          serverTotal={voConfirmation.serverTotal}
+          voNumber={voConfirmation.voNumber}
+          onClose={() => setVoConfirmation(null)}
+          onViewDetail={voId => {
+            setVoConfirmation(null)
+            navigate(`/project/${projectId}/vo/${voId}`)
+          }}
+        />
+      )}
 
       {/* Tab strip */}
       <div className="flex gap-1 border-b border-site-200 mb-3 overflow-x-auto">
@@ -419,7 +486,11 @@ export default function SiDetailPage() {
     <AppLayout title="工地指令">
       <DrawingsProvider projectId={id}>
         <SiProvider projectId={id}>
-          <SiDetailInner projectId={id} siId={siId} />
+          <ProgressProvider projectId={id}>
+            <VoProvider projectId={id}>
+              <SiDetailInner projectId={id} siId={siId} />
+            </VoProvider>
+          </ProgressProvider>
         </SiProvider>
       </DrawingsProvider>
     </AppLayout>
