@@ -1,5 +1,5 @@
-import { NavLink } from 'react-router-dom'
-import { Home, Building2, User, Shield, HardHat, LogOut, LayoutDashboard, Users, GitBranch } from 'lucide-react'
+import { NavLink, useLocation } from 'react-router-dom'
+import { Home, Building2, User, Shield, HardHat, LogOut, LayoutDashboard, Users, GitBranch, FileText, Receipt } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
@@ -11,14 +11,26 @@ import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
 export function Sidebar() {
   const { profile, signOut } = useAuth()
   const { projects } = useProjects()
+  const location = useLocation()
   const isAdmin = profile?.global_role === 'admin'
   const isPM = !!profile && projects.some(p => p.assigned_pm_ids.includes(profile.id))
   const showDashboard = isAdmin || isPM
+
+  // Detect /project/:id scope (hash router path) so we can surface SI/VO links
+  // when the user is inside a project. Match hash too because HashRouter
+  // routes are encoded in window.location.hash but `useLocation` returns
+  // the pathname of the in-router path.
+  const projectMatch = location.pathname.match(/^\/project\/([^/]+)/)
+  const projectId = projectMatch?.[1] ?? null
 
   const tabs = [
     { to: '/home', label: '首頁', icon: Home },
     ...(showDashboard ? [{ to: '/dashboard', label: '儀表板', icon: LayoutDashboard }] : []),
     { to: '/projects', label: '工地', icon: Building2 },
+    ...(projectId ? [
+      { to: `/project/${projectId}/si`, label: '工地指令', icon: FileText },
+      { to: `/project/${projectId}/vo`, label: '變更指令', icon: Receipt },
+    ] : []),
     ...(isAdmin ? [
       { to: '/admin', label: '管理', icon: Shield },
       { to: '/admin/users', label: '用戶', icon: Users },

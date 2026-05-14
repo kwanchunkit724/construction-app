@@ -3,7 +3,8 @@ import { useParams, useNavigate, Navigate } from 'react-router-dom'
 import {
   ChevronLeft, Plus, Building2, RefreshCw,
   CheckCircle2, AlertTriangle, Clock, Minus,
-  ListChecks, AlertCircle, Download,
+  ListChecks, AlertCircle, Download, FileCheck2,
+  FileText, Receipt,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { UserProfile } from '../types'
@@ -25,7 +26,7 @@ import { useProjects } from '../contexts/ProjectsContext'
 import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH } from '../types'
 import type { ProgressItem, ProgressStatus, Zone } from '../types'
 
-type Tab = 'progress' | 'issues'
+type Tab = 'progress' | 'issues' | 'si-vo'
 
 const STATUS_ICON: Record<ProgressStatus, typeof Minus> = {
   'not-started': Minus,
@@ -182,6 +183,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
         <div className="max-w-2xl md:max-w-7xl mx-auto flex">
           <TabButton active={tab === 'progress'} onClick={() => setTab('progress')} icon={ListChecks} label="進度" />
           <TabButton active={tab === 'issues'} onClick={() => setTab('issues')} icon={AlertCircle} label="問題" badge={openIssueCount} />
+          <TabButton active={tab === 'si-vo'} onClick={() => setTab('si-vo')} icon={FileCheck2} label="簽核" />
         </div>
       </div>
 
@@ -240,6 +242,10 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
             canReport={!!myRoleInProject}
             onCreate={() => setCreateIssueOpen(true)}
           />
+        )}
+
+        {tab === 'si-vo' && (
+          <SiVoSwitcher projectId={projectId} />
         )}
       </main>
       </div>
@@ -441,6 +447,43 @@ function ZoneSection({
         </div>
       )}
     </section>
+  )
+}
+
+function SiVoSwitcher({ projectId }: { projectId: string }) {
+  const navigate = useNavigate()
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-site-600 px-1">
+        簽核流程：選擇要查看的文件類型
+      </p>
+      <button
+        onClick={() => navigate(`/project/${projectId}/si`)}
+        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left"
+      >
+        <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center flex-shrink-0">
+          <FileText size={22} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-site-900">工地指令</p>
+          <p className="text-xs text-site-500 mt-0.5">SI · 主判 / 分判工程指示與審批</p>
+        </div>
+        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
+      </button>
+      <button
+        onClick={() => navigate(`/project/${projectId}/vo`)}
+        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left"
+      >
+        <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0">
+          <Receipt size={22} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-site-900">變更指令</p>
+          <p className="text-xs text-site-500 mt-0.5">VO · 費用變更與經系統核算總額 (HKD)</p>
+        </div>
+        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
+      </button>
+    </div>
   )
 }
 
