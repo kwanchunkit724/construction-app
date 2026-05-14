@@ -12,6 +12,8 @@ import ProjectDetail from './pages/ProjectDetail'
 import IssueDetail from './pages/IssueDetail'
 import Dashboard from './pages/Dashboard'
 import AdminUsers from './pages/AdminUsers'
+import SiListPage from './pages/SiList'
+import SiDetailPage from './pages/SiDetail'
 
 export default function App() {
   return (
@@ -29,6 +31,8 @@ export default function App() {
           <Route path="/admin/users" element={<ProtectedRoute requireAdmin><AdminUsers /></ProtectedRoute>} />
           <Route path="/project/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
           <Route path="/project/:id/issue/:issueId" element={<ProtectedRoute><IssueDetail /></ProtectedRoute>} />
+          <Route path="/project/:id/si" element={<ProtectedRoute><SiListPage /></ProtectedRoute>} />
+          <Route path="/project/:id/si/:siId" element={<ProtectedRoute><SiDetailPage /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </HashRouter>
