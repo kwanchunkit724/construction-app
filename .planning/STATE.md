@@ -3,43 +3,43 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-13T00:31:21.445Z"
+last_updated: "2026-05-14T00:00:00.000Z"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 18
-  completed_plans: 9
-  percent: 50
+  completed_plans: 10
+  percent: 56
 ---
 
 # STATE — 工地控制系統 Milestone
 
-**Last updated:** 2026-05-11 (post-roadmap)
+**Last updated:** 2026-05-14 (Phase 2 Plan 02-01 complete; spine live on Supabase)
 
 ## Project Reference
 
 - **Project:** CK工程 / Construction App (live on iOS App Store; Android in test)
 - **Core value:** 判頭 + 工地主任 always know exactly what's happening on every site, with a shared audit trail that survives disputes.
 - **Current milestone:** 工地控制系統 (Site Control System) — 3 coarse phases
-- **Current focus:** Phase 1 — 圖則附加 (Drawings on Progress Items)
+- **Current focus:** Phase 2 — SI / VO (Site Instructions / Variation Orders)
 
 ## Current Position
 
-Phase: 1 (圖則附加 (Drawings on Progress Items)) — EXECUTING
+Phase: 2 (SI/VO) — EXECUTING (Wave 2 next)
 Plan: 1 of 9
 
-- **Phase:** 1 — 圖則附加 (Drawings on Progress Items)
-- **Plan:** (none yet — awaiting `/gsd-plan-phase 1`)
-- **Status:** Ready to execute
-- **Progress:** [█████████░] 89%
+- **Phase:** 2 — SI / VO (Site Instructions / Variation Orders)
+- **Plan:** 02-01 ✅ live on Supabase. Wave 2 next: 02-02 (SI schema + triggers) + 02-03 (Capacitor plugins) in parallel.
+- **Status:** EXECUTING
+- **Progress:** Phase 1 [██████████] 100% · Phase 2 [█░░░░░░░░░] 11% (1/9) · Phase 3 not yet planned
 
 ## Performance Metrics
 
 | Metric | Value |
 |--------|-------|
 | Phases planned | 3 |
-| Phases complete | 0 |
-| Plans complete | 0 |
+| Phases complete | 1 |
+| Plans complete | 9 |
 | v1 requirements mapped | 62/62 |
 | Phase 01-drawings-on-progress-items P04 | 5m | 2 tasks | 3 files |
 | Phase 01-drawings-on-progress-items P05 | 12m | 2 tasks | 3 files |
@@ -61,9 +61,10 @@ Plan: 1 of 9
 
 ### Open Todos
 
-- [ ] `/gsd-plan-phase 1` to decompose Phase 1 into plans
-- [ ] Resolve Phase 1 open question: drawing-upload push policy (whole project / PMs only / off in MVP)
-- [ ] Confirm production admin password `admin1234` rotation status before Drawings ships
+- [ ] `/gsd-execute-phase 2` to ship SI/VO (9 plans, 8 waves)
+- [ ] Plan Phase 3 (PTW) — open with 1–2 day de-risking spike
+- [ ] Confirm production admin password `admin1234` rotation status
+- [ ] Clean up untracked screenshots + `test-results/` at repo root before Phase 2 execution muddies the diff
 
 ### Blockers
 
@@ -81,8 +82,8 @@ None.
 
 ## Session Continuity
 
-**Last action:** Created ROADMAP.md and STATE.md; updated REQUIREMENTS.md traceability with phase mappings.
-**Next action:** `/gsd-plan-phase 1` to begin Phase 1 (Drawings) planning.
+**Last action:** Plan 02-01 complete — shared approval-chain spine, RLS helpers (in_flight_approvals now plpgsql+EXECUTE for forward-ref safety), private project-si-vo bucket, push dispatcher + 08:00 HKT digest cron, and Apple-compliance-preserving delete_my_account extension applied to live Supabase. All 10 post-apply verifications pass.
+**Next action:** Wave 2 — Plans 02-02 (SI schema + triggers) and 02-03 (Capacitor plugins) execute in parallel.
 
 **Canonical references for downstream agents:**
 

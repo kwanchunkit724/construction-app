@@ -47,7 +47,7 @@
   4. A user with in-flight approval steps cannot delete their account; an admin can either re-route the in-flight step (logged as `admin_override` with mandatory ≥10-char reason) or activate a configured delegation; chain user resolution always survives the original approver leaving the company.
   5. After full approval, an SI is read-only forever (no edit / no delete affordances anywhere in the UI), and a single VO PDF export contains line items, totals, approval timeline, and referenced drawing thumbnails.
 **Plans**: 9 plans
-- [ ] 02-01-PLAN.md — Approval-chain spine + RLS helpers + push dispatcher + 08:00 HKT digest + project-si-vo bucket + delete_my_account extension (CHN-01..11, INF-03/04)
+- [x] 02-01-PLAN.md — Approval-chain spine + RLS helpers + push dispatcher + 08:00 HKT digest + project-si-vo bucket + delete_my_account extension (CHN-01..11, INF-03/04)
 - [ ] 02-02-PLAN.md — v9-si-schema + submit_si RPC + lock guard + shared dispatch_after_approval trigger (SI-01/04/05/06/09/10/11, CHN-03/04/07)
 - [ ] 02-03-PLAN.md — Capacitor plugins (geolocation + voice-recorder) + zh-HK permission strings + cap sync (SI-02 native enablement)
 - [ ] 02-04-PLAN.md — TS types + currency/diff/osm/si helpers + SiContext + DelegationsContext + submit_approval RPC (SI-01/03/05/07/08/11, VO-04, CHN-04/06/10/11)
