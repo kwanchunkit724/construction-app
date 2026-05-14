@@ -403,3 +403,68 @@ export const LINE_ITEM_CATEGORY_ZH: Record<LineItemCategory, string> = {
   preliminaries: '前期費用',
   contingency: '暫定',
 }
+
+// ── Phase 2 VO types ────────────────────────────────────────
+// VO status enum mirrors SI status (same Chinese labels, same lifecycle).
+// total_amount_cents is bigint in Postgres; in TS we type it as number
+// (JS Number is safe up to 9e15 cents — well beyond any real HKD VO).
+
+export type VoStatus =
+  | 'draft'
+  | 'submitted'
+  | 'in_review'
+  | 'approved'
+  | 'locked'
+  | 'revision_requested'
+  | 'rejected'
+
+export interface VoLineItem {
+  category: LineItemCategory
+  description: string
+  quantity: number
+  unit: string
+  unit_price_cents: number
+  subtotal_cents: number
+  progress_leaf_item_id: string | null
+}
+
+export interface VoPayload {
+  description: string
+  line_items: VoLineItem[]
+  total_amount_cents: number
+}
+
+export interface VO {
+  id: string
+  si_id: string
+  project_id: string
+  number: string
+  current_version_id: string | null
+  total_amount_cents: number
+  chain_snapshot: ChainStep[] | null
+  current_step: number
+  status: VoStatus
+  created_by: string
+  created_at: string
+  submitted_at: string | null
+  locked_at: string | null
+}
+
+export interface VOVersion {
+  id: string
+  vo_id: string
+  version_no: number
+  payload: VoPayload
+  edits_by: string
+  created_at: string
+}
+
+export const VO_STATUS_ZH: Record<VoStatus, string> = {
+  draft: '草稿',
+  submitted: '待批准',
+  in_review: '審批中',
+  approved: '已批准',
+  locked: '已鎖定',
+  revision_requested: '已退回',
+  rejected: '已拒絕',
+}
