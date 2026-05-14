@@ -16,6 +16,7 @@ import SiListPage from './pages/SiList'
 import SiDetailPage from './pages/SiDetail'
 import VoListPage from './pages/VoList'
 import VoDetailPage from './pages/VoDetail'
+import AdminProjectChainsPage from './pages/AdminProjectChains'
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminProjects /></ProtectedRoute>} />
           <Route path="/admin/users" element={<ProtectedRoute requireAdmin><AdminUsers /></ProtectedRoute>} />
+          <Route path="/admin/projects/:id/chains" element={<ProtectedRoute requireAdmin><AdminProjectChainsPage /></ProtectedRoute>} />
           <Route path="/project/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
           <Route path="/project/:id/issue/:issueId" element={<ProtectedRoute><IssueDetail /></ProtectedRoute>} />
           <Route path="/project/:id/si" element={<ProtectedRoute><SiListPage /></ProtectedRoute>} />

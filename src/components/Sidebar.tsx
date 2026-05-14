@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Home, Building2, User, Shield, HardHat, LogOut, LayoutDashboard, Users } from 'lucide-react'
+import { Home, Building2, User, Shield, HardHat, LogOut, LayoutDashboard, Users, GitBranch } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
@@ -22,6 +22,7 @@ export function Sidebar() {
     ...(isAdmin ? [
       { to: '/admin', label: '管理', icon: Shield },
       { to: '/admin/users', label: '用戶', icon: Users },
+      { to: '/admin', label: '簽核流程設定', icon: GitBranch },
     ] : []),
     { to: '/profile', label: '個人', icon: User },
   ]

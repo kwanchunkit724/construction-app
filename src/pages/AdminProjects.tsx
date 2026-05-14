@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Plus, Building2, UserCog, Trash2, RefreshCw, Download } from 'lucide-react'
+import { Plus, Building2, UserCog, Trash2, RefreshCw, Download, GitBranch } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { CreateProjectModal } from '../components/CreateProjectModal'
@@ -115,6 +116,13 @@ export default function AdminProjects() {
                 >
                   <UserCog size={16} /> 指派 PM
                 </button>
+                <Link
+                  to={`/admin/projects/${p.id}/chains`}
+                  className="flex-1 flex items-center justify-center gap-1.5 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 py-2 rounded-lg"
+                  title="設定簽核流程"
+                >
+                  <GitBranch size={16} /> 簽核流程
+                </Link>
                 {confirmDelId === p.id ? (
                   <>
                     <button
