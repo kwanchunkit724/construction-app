@@ -8,7 +8,7 @@
 ## Phases
 
 - [ ] **Phase 1: 圖則附加 (Drawings on Progress Items)** — Attach versioned drawings to leaf progress items with private storage; establish RLS/bundle/migration patterns for the milestone.
-- [ ] **Phase 2: SI / VO (工地指令 + 變更指令)** — Subcon→MC approval flow with admin-configurable chain infrastructure (reused by PTW); structured VO line items with server-computed totals.
+- [x] **Phase 2: SI / VO (工地指令 + 變更指令)** — Subcon→MC approval flow with admin-configurable chain infrastructure (reused by PTW); structured VO line items with server-computed totals.
 - [ ] **Phase 3: PTW (工作許可證)** — Permit-to-work for top-3 high-risk activities with new safety_officer role, signed-JWT QR codes, server-side HKT expiry, and read-only audit archive.
 
 ## Phase Details
@@ -32,7 +32,7 @@
 - [x] 01-06-PLAN.md — DrawingThumbnail + DrawingUploadSheet + DrawingViewer + version history + page navigator (DRW-05..11)
 - [x] 01-07-PLAN.md — Wire DrawingsSection into ProgressItemCard + mount DrawingsProvider in ProjectDetail (DRW-01/02/03/04/09/11/14/15)
 - [x] 01-08-PLAN.md — Playwright config + drawings.spec.ts smoke test + seed extension (INF-08 Phase 1 share)
-- [ ] 01-09-PLAN.md — End-of-phase verification: full success-criteria walkthrough on web + iOS + Android
+- [x] 01-09-PLAN.md — End-of-phase verification: full success-criteria walkthrough on web + iOS + Android
 **UI hint**: yes
 **Canonical refs**: `.planning/research/ARCHITECTURE.md`, `.planning/research/PITFALLS.md`, `.planning/research/SUMMARY.md`, `.planning/codebase/CONCERNS.md`
 
@@ -55,7 +55,7 @@
 - [x] 02-06-PLAN.md — v9-vo-schema + recompute_vo_totals + submit_vo RPC + exportVOToPDF + Noto Sans HK font (VO-01..06/08/09)
 - [x] 02-07-PLAN.md — VO UI: VoContext + VoLineItemsEditor + VoSubmitForm + VoConfirmationScreen + VoList + VoDetail + PDF export (VO-01/02/03/06..10)
 - [x] 02-08-PLAN.md — Admin chain config UI + default-chain backfill for live projects + delegations on Profile + AdminUsers in-flight modal + Apple compliance preserved (CHN-01/02/06/09/10)
-- [ ] 02-09-PLAN.md — ProjectDetail tab + nav links + cold-launch deep-link fix + Playwright @si-vo-smoke + rls-smoke final personas + end-of-phase walkthrough (INF-08 Phase 2 share)
+- [x] 02-09-PLAN.md — ProjectDetail tab + nav links + cold-launch deep-link fix + Playwright @si-vo-smoke + rls-smoke final personas + end-of-phase walkthrough (INF-08 Phase 2 share)
 **UI hint**: yes
 **Canonical refs**: `.planning/research/ARCHITECTURE.md`, `.planning/research/PITFALLS.md`, `.planning/research/SUMMARY.md`, `.planning/codebase/CONCERNS.md`
 
@@ -77,8 +77,8 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. 圖則附加 (Drawings on Progress Items) | 2/9 | In Progress|  |
-| 2. SI / VO (工地指令 + 變更指令) | 0/9 | Not started | - |
+| 1. 圖則附加 (Drawings on Progress Items) | 9/9 | Complete | 2026-05-12 |
+| 2. SI / VO (工地指令 + 變更指令) | 9/9 | Complete | 2026-05-14 |
 | 3. PTW (工作許可證) | 0/? | Not started | - |
 
 ## Coverage Validation
