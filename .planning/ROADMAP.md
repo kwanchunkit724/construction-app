@@ -50,7 +50,7 @@
 - [x] 02-01-PLAN.md — Approval-chain spine + RLS helpers + push dispatcher + 08:00 HKT digest + project-si-vo bucket + delete_my_account extension (CHN-01..11, INF-03/04)
 - [x] 02-02-PLAN.md — v9-si-schema + submit_si RPC + lock guard + shared dispatch_after_approval trigger (SI-01/04/05/06/09/10/11, CHN-03/04/07)
 - [x] 02-03-PLAN.md — Capacitor plugins (geolocation + voice-recorder) + zh-HK permission strings + cap sync (SI-02 native enablement)
-- [ ] 02-04-PLAN.md — TS types + currency/diff/osm/si helpers + SiContext + DelegationsContext + submit_approval RPC (SI-01/03/05/07/08/11, VO-04, CHN-04/06/10/11)
+- [x] 02-04-PLAN.md — TS types + currency/diff/osm/si helpers + SiContext + DelegationsContext + submit_approval RPC (SI-01/03/05/07/08/11, VO-04, CHN-04/06/10/11)
 - [ ] 02-05-PLAN.md — SI UI: VoiceRecorder + GeoPicker + SiSubmitForm + SiList + SiDetail + DiffCard + ApproverBar + ProtestBar (SI-01/02/03/07..11)
 - [ ] 02-06-PLAN.md — v9-vo-schema + recompute_vo_totals + submit_vo RPC + exportVOToPDF + Noto Sans HK font (VO-01..06/08/09)
 - [ ] 02-07-PLAN.md — VO UI: VoContext + VoLineItemsEditor + VoSubmitForm + VoConfirmationScreen + VoList + VoDetail + PDF export (VO-01/02/03/06..10)

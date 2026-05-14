@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-14T04:50:36.687Z"
+last_updated: "2026-05-14T06:00:00.000Z"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 18
-  completed_plans: 12
-  percent: 67
+  completed_plans: 13
+  percent: 72
 ---
 
 # STATE — 工地控制系統 Milestone
 
-**Last updated:** 2026-05-14 (Phase 2 Plan 02-03 complete; native plugins + zh-HK permissions + cap sync clean)
+**Last updated:** 2026-05-14 (Phase 2 Plan 02-04 complete; submit_approval RPC live)
 
 ## Project Reference
 
@@ -25,13 +25,13 @@ progress:
 
 ## Current Position
 
-Phase: 2 (SI/VO) — EXECUTING (Wave 2 complete; Wave 3 = Plan 02-04 next)
-Plan: 3 of 9
+Phase: 2 (SI/VO) — EXECUTING (Wave 3 complete; Wave 4 = Plan 02-05 next)
+Plan: 4 of 9
 
 - **Phase:** 2 — SI / VO (Site Instructions / Variation Orders)
-- **Plan:** 02-01 + 02-02 + 02-03 ✅ complete. Wave 3 next = 02-04 (TS types + SiContext + submit_approval RPC), depends on 02-02 (SI schema live).
+- **Plan:** 02-01 → 02-04 ✅ complete. Wave 4 next = 02-05 (SI UI — VoiceRecorder + GeoPicker + SubmitForm + List + Detail + DiffCard + ApproverBar + ProtestBar). Pure React, no DB checkpoint.
 - **Status:** EXECUTING
-- **Progress:** Phase 1 [██████████] 100% · Phase 2 [███░░░░░░░] 33% (3/9) · Phase 3 not yet planned · Overall [███████░░░] 67%
+- **Progress:** Phase 1 [██████████] 100% · Phase 2 [████░░░░░░] 44% (4/9) · Phase 3 not yet planned · Overall [████████░░] 72%
 
 ### Critical apply-tooling note (captured 02-02)
 
@@ -87,8 +87,12 @@ None.
 
 ## Session Continuity
 
-**Last action:** Plan 02-03 complete — installed @capacitor/geolocation@8.2.0 + capacitor-voice-recorder@7.0.6 + diff-match-patch@1.0.5; added zh-HK NSLocationWhenInUseUsageDescription + NSMicrophoneUsageDescription (replaced video-capture copy) + ACCESS_COARSE_LOCATION + RECORD_AUDIO; npx cap sync clean for both platforms; tsc + bundle CI guard green (entry 507.6 KB). Manual Xcode/Android Studio build checkpoint (Task 5) deferred — autonomous run.
-**Next action:** Plan 02-04 (Wave 3) — TS types + SiContext + submit_approval RPC. Depends only on 02-02 SI schema (live) — diff-match-patch is now ready for diff utilities.
+**Last action:** Plan 02-04 complete — TS types + ZH maps + currency/diff/osm-tile lib helpers + SI storage helpers + SiContext + DelegationsContext + submit_approval RPC. RPC applied live on Supabase (plpgsql + EXECUTE for VO forward-ref). All 7 verifications pass; Chinese strings UTF-8 intact; tsc clean; entry chunk 507.6 KB.
+**Next action:** Plan 02-05 (Wave 4) — SI UI: VoiceRecorder + GeoPicker + SiSubmitForm + SiList + SiDetail + DiffCard + ApproverBar + ProtestBar. Pure React on top of SiContext. **No DB checkpoint** — autonomous run.
+
+### Deferred for developer attention
+- **Plan 02-03 Task 5:** Manual Xcode + Android Studio build verification of `capacitor-voice-recorder` (SPM-less, non-blocking warning). Recommended before Plan 02-05 SI UI lands so any linker issues surface early.
+- **Postgres regtype display quirk:** `prolang::regtype::text` returns OID number on this Postgres version. Use `pg_proc JOIN pg_language` instead. See 02-04-SUMMARY.md.
 
 **Canonical references for downstream agents:**
 
