@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-14T08:00:00.000Z"
+last_updated: "2026-05-14T06:15:02.179Z"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 18
-  completed_plans: 16
-  percent: 89
+  completed_plans: 17
+  percent: 94
 ---
 
 # STATE — 工地控制系統 Milestone
 
-**Last updated:** 2026-05-14 (Phase 2 Plan 02-07 complete; VO UI shipped end-to-end)
+**Last updated:** 2026-05-14 (Phase 2 Plan 02-08 implementation complete; Task 7 blocking checkpoint awaits live-DB apply)
 
 ## Project Reference
 
@@ -25,13 +25,13 @@ progress:
 
 ## Current Position
 
-Phase: 2 (SI/VO) — EXECUTING (Wave 6 complete; Wave 7 = Plan 02-08 next)
-Plan: 7 of 9
+Phase: 2 (SI/VO) — EXECUTING (Wave 7 implementation complete; Task 7 blocking checkpoint on live DB next)
+Plan: 8 of 9
 
 - **Phase:** 2 — SI / VO (Site Instructions / Variation Orders)
-- **Plan:** 02-01 → 02-07 ✅ complete. Wave 7 next = 02-08 (Admin chain config UI + default-chain backfill + delegations on Profile + AdminUsers in-flight modal). Will have a live-DB checkpoint for the default-chain seed migration.
+- **Plan:** 02-01 → 02-08 implementation ✅ complete (6 of 7 tasks). Task 7 = BLOCKING checkpoint for live-DB apply of `supabase/v9-default-chain-seed.sql` (save_chain_steps RPC + new-project trigger + idempotent backfill of D-16 SI/VO chains for existing live App Store projects). Apply via Chrome MCP base64 → Monaco (Chinese strings present). Two Apple-compliance regression tests (clean user `{ok:true}` + blocked user `{blocked:true}`) gate Plan 02-09.
 - **Status:** EXECUTING
-- **Progress:** Phase 1 [██████████] 100% · Phase 2 [███████░░░] 78% (7/9) · Phase 3 not yet planned · Overall [█████████░] 89%
+- **Progress:** [█████████░] 94%
 
 ### Critical apply-tooling note (captured 02-02)
 
@@ -52,6 +52,7 @@ PowerShell `Set-Clipboard` + `Get-Content -Raw` corrupts UTF-8 multi-byte chars 
 | Phase 01-drawings-on-progress-items P08 | 12m | 3 tasks | 5 files |
 | Phase 02-si-vo P03 | 5m | 4 tasks | 7 files |
 | Phase 02-si-vo P05 | ~75m | 6 tasks | 11 files |
+| Phase 02-si-vo P08 | 30m | 6 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -88,8 +89,8 @@ None.
 
 ## Session Continuity
 
-**Last action:** Plan 02-07 complete — VO UI shipped (10 new files + SiDetail "提出變更指令" entry point). VoContext (per-project realtime), VoLineItemsEditor (integer-cent math), VoSubmitForm + VoConfirmationScreen (server-total authoritative via post-submit refetch with "經系統核算總額 HK$X" prominent display), VoCard/VoList (date-range filter VO-10), VoApproverBar (4 actions; approve_with_edits embeds full LineItemsEditor since VO payload is structured), VoList + VoDetail pages with lazy PDF export. tsc clean. 2 routes wired in App.tsx.
-**Next action:** Plan 02-08 (Wave 7) — Admin chain config UI + delegations on Profile + AdminUsers in-flight modal + default-chain backfill migration for live App Store projects. Expect a live-DB checkpoint for the v9-default-chain-seed migration.
+**Last action:** Plan 02-08 implementation complete (Tasks 1-6, 6 commits 4f55ba1 → d04bc15). Shipped: `supabase/v9-default-chain-seed.sql` (save_chain_steps SECURITY DEFINER RPC + seed_default_chain AFTER INSERT trigger on projects + idempotent backfill for existing live projects, NOT EXISTS guards at (project_id,doc_type,step_order) granularity, non-destructive). `ApprovalChainContext` (per-project chain CRUD + chains-{projectId} realtime). `ChainStepRow` + `AdminProjectChains` page with 3-tab editor (工地指令 / 變更指令 / 工作許可證 with Phase 3 banner). Profile gains DelegationsProvider section (我嘅代理 / 我係代理) and handles new `delete_my_account` json response (`{blocked:true}` → zh-HK red banner + 通知管理員 button that writes demo_feedback row). `InFlightApprovalsModal` lists pending SI/VO for a user with admin_override action; wired from AdminUsers per-row 查看待處理簽核 button. Routes + sidebar + per-project AdminProjects entry. tsc clean. Bundle entry 641.6 KB / 800 KB (+27.3 KB).
+**Next action:** Plan 02-08 Task 7 — BLOCKING checkpoint. Orchestrator drives Chrome MCP to apply `supabase/v9-default-chain-seed.sql` via base64 → Monaco. 8 post-apply verifications must pass, including TWO Apple-compliance regression tests: (7) clean-user `delete_my_account()` must return `{"ok":true}` and remove from auth.users; (8) user-with-in-flight-SI `delete_my_account()` must return `{"ok":false, "blocked":true, "pending":N, "error":"你尚有 ..."}` and NOT delete. After PASS, advance to Plan 02-09.
 
 ### Deferred for developer attention
 

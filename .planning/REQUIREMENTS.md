@@ -54,16 +54,16 @@ This is a brownfield milestone on a live app. Existing v1 capabilities (auth, pr
 
 ### Approval Chains (CHN — shared SI / VO / PTW infrastructure)
 
-- [ ] **CHN-01**: Admin can configure a per-project approval chain for each doc_type (SI / VO / PTW)
-- [ ] **CHN-02**: Each chain step is stored as `(project_id, doc_type, step_order, required_role, optional_user_id)` — NOT JSONB on projects
+- [x] **CHN-01**: Admin can configure a per-project approval chain for each doc_type (SI / VO / PTW)
+- [x] **CHN-02**: Each chain step is stored as `(project_id, doc_type, step_order, required_role, optional_user_id)` — NOT JSONB on projects
 - [ ] **CHN-03**: At submission time, the chain is snapshotted into the doc's `chain_snapshot jsonb` — mid-flight chain edits do not affect in-flight docs
 - [ ] **CHN-04**: Approval action by step N unlocks step N+1; sequential only (no parallel approvers in v1)
 - [ ] **CHN-05**: At step N, the next approver is resolved at action time via `active_role_holders(project_id, required_role)` — survives user departure
-- [ ] **CHN-06**: An admin can `override` any pending step with mandatory reason text (≥10 chars); override is logged as `action_type='admin_override'` in audit (NOT as a regular approval)
+- [x] **CHN-06**: An admin can `override` any pending step with mandatory reason text (≥10 chars); override is logged as `action_type='admin_override'` in audit (NOT as a regular approval)
 - [ ] **CHN-07**: Push notification fires on each transition, addressed ONLY to the next required actor (not the whole chain)
 - [ ] **CHN-08**: Hard cap: 3 push notifications per user per day across SI/VO/PTW combined; overflow → daily 08:00 digest
-- [ ] **CHN-09**: Account deletion blocks if the user has in-flight approvals; admin can override via re-routing
-- [ ] **CHN-10**: A `delegations(user_id, delegate_to, valid_from, valid_until)` table lets a user delegate signoffs while on leave
+- [x] **CHN-09**: Account deletion blocks if the user has in-flight approvals; admin can override via re-routing
+- [x] **CHN-10**: A `delegations(user_id, delegate_to, valid_from, valid_until)` table lets a user delegate signoffs while on leave
 - [ ] **CHN-11**: All approvals are **append-only** rows in an `approvals` table; status is computed from rows, never stored; rejection is a new row, not mutation
 
 ### Permit-to-Work (PTW)
@@ -191,16 +191,16 @@ Populated by roadmapper on 2026-05-11.
 | VO-08 | Phase 2 | Pending |
 | VO-09 | Phase 2 | Pending |
 | VO-10 | Phase 2 | Pending |
-| CHN-01 | Phase 2 | Pending |
-| CHN-02 | Phase 2 | Pending |
+| CHN-01 | Phase 2 | Complete |
+| CHN-02 | Phase 2 | Complete |
 | CHN-03 | Phase 2 | Pending |
 | CHN-04 | Phase 2 | Pending |
 | CHN-05 | Phase 2 | Pending |
-| CHN-06 | Phase 2 | Pending |
+| CHN-06 | Phase 2 | Complete |
 | CHN-07 | Phase 2 | Pending |
 | CHN-08 | Phase 2 | Pending |
-| CHN-09 | Phase 2 | Pending |
-| CHN-10 | Phase 2 | Pending |
+| CHN-09 | Phase 2 | Complete |
+| CHN-10 | Phase 2 | Complete |
 | CHN-11 | Phase 2 | Pending |
 | PTW-01 | Phase 3 | Pending |
 | PTW-02 | Phase 3 | Pending |

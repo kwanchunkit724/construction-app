@@ -21,7 +21,7 @@
     "node_repair": true,
     "node_repair_budget": 2,
     "ui_phase": true,
-    "ui_safety_gate": true,
+    "ui_safety_gate": false,
     "ai_integration_phase": true,
     "tdd_mode": false,
     "text_mode": false,
@@ -36,7 +36,8 @@
     "plan_bounce_script": null,
     "plan_bounce_passes": 2,
     "auto_prune_state": false,
-    "_auto_chain_active": true
+    "_auto_chain_active": false,
+    "use_worktrees": false
   },
   "hooks": {
     "context_warnings": true
