@@ -29,6 +29,13 @@ sim-config.json
 lifecycle-results/
 lifecycle-config.json
 
+# Debug / simulate skill screenshots (root only — leave public/ and asset dirs alone)
+/bluestacks-screen.png
+/bs-screens/
+/dbg-*.png
+/screen-*.png
+/test-results/
+
 # Claude Code internal tools
 .claude/
 
