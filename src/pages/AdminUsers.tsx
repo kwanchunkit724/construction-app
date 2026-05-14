@@ -17,6 +17,7 @@ const ROLE_FILTERS: ({ value: GlobalRole | 'all'; label: string })[] = [
   { value: 'subcontractor', label: ROLE_ZH.subcontractor },
   { value: 'subcontractor_worker', label: ROLE_ZH.subcontractor_worker },
   { value: 'owner', label: ROLE_ZH.owner },
+  { value: 'safety_officer', label: ROLE_ZH.safety_officer },
 ]
 
 const ROLE_PILL: Record<GlobalRole, string> = {
@@ -26,6 +27,7 @@ const ROLE_PILL: Record<GlobalRole, string> = {
   subcontractor: 'bg-amber-100 text-amber-700',
   subcontractor_worker: 'bg-site-100 text-site-700',
   owner: 'bg-green-100 text-green-700',
+  safety_officer: 'bg-red-100 text-red-700',
 }
 
 export default function AdminUsers() {
@@ -88,6 +90,7 @@ export default function AdminUsers() {
     subcontractor: users.filter(u => u.global_role === 'subcontractor').length,
     subcontractor_worker: users.filter(u => u.global_role === 'subcontractor_worker').length,
     owner: users.filter(u => u.global_role === 'owner').length,
+    safety_officer: users.filter(u => u.global_role === 'safety_officer').length,
   }
 
   return (
