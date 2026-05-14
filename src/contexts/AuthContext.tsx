@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { phoneToEmail, normalizePhone } from '../lib/phone'
-import { pushLoginUser, pushLogoutUser } from '../lib/push'
+import { pushLoginUser, pushLogoutUser, consumePendingDeepLink } from '../lib/push'
 import type { UserProfile, GlobalRole, SubRole } from '../types'
 
 interface AuthContextType {
@@ -44,16 +44,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(data as UserProfile)
   }
 
+  // Drain any cold-launch deep link queued by src/lib/push.ts BEFORE the
+  // HashRouter mounted. Safe to call multiple times — consumePendingDeepLink
+  // returns null after the first drain. Plan 02-09 / Open Q 4.
+  function drainPendingDeepLink() {
+    const pending = consumePendingDeepLink()
+    if (!pending) return
+    const link = pending.startsWith('#/')
+      ? pending
+      : (pending.startsWith('/') ? '#' + pending : '#/' + pending)
+    try { window.location.hash = link } catch { /* noop */ }
+  }
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       const user = data.session?.user
       if (user) {
         setSession({ user_id: user.id })
-        loadProfile(user.id).finally(() => setLoading(false))
+        loadProfile(user.id).finally(() => {
+          setLoading(false)
+          drainPendingDeepLink()
+        })
         // Best-effort: associate OneSignal subscription with this user
         void pushLoginUser(user.id)
       } else {
         setLoading(false)
+        drainPendingDeepLink()
       }
     })
 
