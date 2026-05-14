@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-14T07:00:00.000Z"
+last_updated: "2026-05-14T08:00:00.000Z"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 18
-  completed_plans: 15
-  percent: 83
+  completed_plans: 16
+  percent: 89
 ---
 
 # STATE — 工地控制系統 Milestone
 
-**Last updated:** 2026-05-14 (Phase 2 Plan 02-06 complete; VO schema live, triple-layer server-total invariant in place)
+**Last updated:** 2026-05-14 (Phase 2 Plan 02-07 complete; VO UI shipped end-to-end)
 
 ## Project Reference
 
@@ -25,13 +25,13 @@ progress:
 
 ## Current Position
 
-Phase: 2 (SI/VO) — EXECUTING (Wave 5 complete; Wave 6 = Plan 02-07 next)
-Plan: 6 of 9
+Phase: 2 (SI/VO) — EXECUTING (Wave 6 complete; Wave 7 = Plan 02-08 next)
+Plan: 7 of 9
 
 - **Phase:** 2 — SI / VO (Site Instructions / Variation Orders)
-- **Plan:** 02-01 → 02-06 ✅ complete. Wave 6 next = 02-07 (VO UI: VoContext + LineItemsEditor + SubmitForm + ConfirmationScreen + List + Detail + PDF). Pure React, no DB checkpoint.
+- **Plan:** 02-01 → 02-07 ✅ complete. Wave 7 next = 02-08 (Admin chain config UI + default-chain backfill + delegations on Profile + AdminUsers in-flight modal). Will have a live-DB checkpoint for the default-chain seed migration.
 - **Status:** EXECUTING
-- **Progress:** Phase 1 [██████████] 100% · Phase 2 [██████░░░░] 67% (6/9) · Phase 3 not yet planned · Overall [████████░░] 83%
+- **Progress:** Phase 1 [██████████] 100% · Phase 2 [███████░░░] 78% (7/9) · Phase 3 not yet planned · Overall [█████████░] 89%
 
 ### Critical apply-tooling note (captured 02-02)
 
@@ -88,8 +88,8 @@ None.
 
 ## Session Continuity
 
-**Last action:** Plan 02-06 complete — VO schema applied to live Supabase after partial-install recovery (orphan empty variation_orders table dropped + full script re-applied via base64→Monaco). Triple-layer server-authoritative total invariant in place: RLS column-write denial + recompute_vo_totals BEFORE-INSERT trigger + sync_vo_total BEFORE-INSERT/UPDATE trigger. submit_vo RPC live (zh-HK strings UTF-8 intact). submit_approval's VO branch (Plan 02-04) now auto-activates. Noto Sans HK font (~186 KB) vendored + lazy-loaded by exportVOToPDF. All 8 verifications pass.
-**Next action:** Plan 02-07 (Wave 6) — VO UI: VoContext + VoLineItemsEditor + VoSubmitForm + VoConfirmationScreen + VoList + VoDetail + PDF export. Pure React, no DB checkpoint — autonomous run.
+**Last action:** Plan 02-07 complete — VO UI shipped (10 new files + SiDetail "提出變更指令" entry point). VoContext (per-project realtime), VoLineItemsEditor (integer-cent math), VoSubmitForm + VoConfirmationScreen (server-total authoritative via post-submit refetch with "經系統核算總額 HK$X" prominent display), VoCard/VoList (date-range filter VO-10), VoApproverBar (4 actions; approve_with_edits embeds full LineItemsEditor since VO payload is structured), VoList + VoDetail pages with lazy PDF export. tsc clean. 2 routes wired in App.tsx.
+**Next action:** Plan 02-08 (Wave 7) — Admin chain config UI + delegations on Profile + AdminUsers in-flight modal + default-chain backfill migration for live App Store projects. Expect a live-DB checkpoint for the v9-default-chain-seed migration.
 
 ### Deferred for developer attention
 

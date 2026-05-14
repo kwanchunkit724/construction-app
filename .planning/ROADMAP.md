@@ -53,7 +53,7 @@
 - [x] 02-04-PLAN.md — TS types + currency/diff/osm/si helpers + SiContext + DelegationsContext + submit_approval RPC (SI-01/03/05/07/08/11, VO-04, CHN-04/06/10/11)
 - [x] 02-05-PLAN.md — SI UI: VoiceRecorder + GeoPicker + SiSubmitForm + SiList + SiDetail + DiffCard + ApproverBar + ProtestBar (SI-01/02/03/07..11)
 - [x] 02-06-PLAN.md — v9-vo-schema + recompute_vo_totals + submit_vo RPC + exportVOToPDF + Noto Sans HK font (VO-01..06/08/09)
-- [ ] 02-07-PLAN.md — VO UI: VoContext + VoLineItemsEditor + VoSubmitForm + VoConfirmationScreen + VoList + VoDetail + PDF export (VO-01/02/03/06..10)
+- [x] 02-07-PLAN.md — VO UI: VoContext + VoLineItemsEditor + VoSubmitForm + VoConfirmationScreen + VoList + VoDetail + PDF export (VO-01/02/03/06..10)
 - [ ] 02-08-PLAN.md — Admin chain config UI + default-chain backfill for live projects + delegations on Profile + AdminUsers in-flight modal + Apple compliance preserved (CHN-01/02/06/09/10)
 - [ ] 02-09-PLAN.md — ProjectDetail tab + nav links + cold-launch deep-link fix + Playwright @si-vo-smoke + rls-smoke final personas + end-of-phase walkthrough (INF-08 Phase 2 share)
 **UI hint**: yes
