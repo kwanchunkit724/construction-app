@@ -61,43 +61,67 @@ $$;
 -- ── in_flight_approvals ───────────────────────────────────────
 -- FORWARD-REFERENCE NOTE:
 --   This function references site_instructions and variation_orders
---   tables that DO NOT exist when this migration runs. Postgres
---   resolves `language sql` function bodies on first call, not at
---   create time — so the CREATE succeeds. The function will error
---   if invoked before Plans 02-02 / 02-06 land. The only legitimate
---   caller (delete_my_account, Task 4) is also guarded — but only
---   downstream plans will actually exercise it after SI/VO tables
---   exist.
+--   tables that DO NOT exist when this migration runs. To allow CREATE
+--   to succeed before those tables land (Plans 02-02 / 02-06), we use
+--   language plpgsql with EXECUTE — the body is a string literal and
+--   table references are resolved only at call time. If invoked before
+--   the SI/VO tables exist, the function returns 0 (the to_regclass
+--   guards short-circuit each branch).
 create or replace function in_flight_approvals(p_user_id uuid)
 returns int
-language sql
+language plpgsql
 stable
 security definer
 set search_path = public
 as $$
-  with active_si as (
-    select s.id, s.project_id, s.current_step,
-           (s.chain_snapshot -> s.current_step ->> 'required_role') as req_role
-      from site_instructions s
-     where s.status in ('submitted','in_review','revision_requested')
-  ),
-  active_vo as (
-    select v.id, v.project_id, v.current_step,
-           (v.chain_snapshot -> v.current_step ->> 'required_role') as req_role
-      from variation_orders v
-     where v.status in ('submitted','in_review','revision_requested')
-  )
-  select count(*)::int from (
-    select 1 from active_si s
-      where p_user_id = any(array(select active_role_holders(s.project_id, s.req_role)))
-    union all
-    select 1 from active_vo v
-      where p_user_id = any(array(select active_role_holders(v.project_id, v.req_role)))
-    union all
-    select 1 from site_instructions where created_by = p_user_id and status = 'revision_requested'
-    union all
-    select 1 from variation_orders where created_by = p_user_id and status = 'revision_requested'
-  ) x;
+declare
+  v_count int := 0;
+  v_si_exists boolean := to_regclass('public.site_instructions') is not null;
+  v_vo_exists boolean := to_regclass('public.variation_orders') is not null;
+  v_partial int;
+begin
+  if v_si_exists then
+    execute $sql$
+      select count(*)::int from (
+        select 1
+          from site_instructions s
+         where s.status in ('submitted','in_review','revision_requested')
+           and $1 = any(array(
+             select active_role_holders(
+               s.project_id,
+               (s.chain_snapshot -> s.current_step ->> 'required_role')
+             )
+           ))
+        union all
+        select 1 from site_instructions
+         where created_by = $1 and status = 'revision_requested'
+      ) x
+    $sql$ into v_partial using p_user_id;
+    v_count := v_count + coalesce(v_partial, 0);
+  end if;
+
+  if v_vo_exists then
+    execute $sql$
+      select count(*)::int from (
+        select 1
+          from variation_orders v
+         where v.status in ('submitted','in_review','revision_requested')
+           and $1 = any(array(
+             select active_role_holders(
+               v.project_id,
+               (v.chain_snapshot -> v.current_step ->> 'required_role')
+             )
+           ))
+        union all
+        select 1 from variation_orders
+         where created_by = $1 and status = 'revision_requested'
+      ) x
+    $sql$ into v_partial using p_user_id;
+    v_count := v_count + coalesce(v_partial, 0);
+  end if;
+
+  return v_count;
+end;
 $$;
 
 -- ── Grants ────────────────────────────────────────────────────
