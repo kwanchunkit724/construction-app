@@ -14,6 +14,8 @@ import Dashboard from './pages/Dashboard'
 import AdminUsers from './pages/AdminUsers'
 import SiListPage from './pages/SiList'
 import SiDetailPage from './pages/SiDetail'
+import VoListPage from './pages/VoList'
+import VoDetailPage from './pages/VoDetail'
 
 export default function App() {
   return (
@@ -33,6 +35,8 @@ export default function App() {
           <Route path="/project/:id/issue/:issueId" element={<ProtectedRoute><IssueDetail /></ProtectedRoute>} />
           <Route path="/project/:id/si" element={<ProtectedRoute><SiListPage /></ProtectedRoute>} />
           <Route path="/project/:id/si/:siId" element={<ProtectedRoute><SiDetailPage /></ProtectedRoute>} />
+          <Route path="/project/:id/vo" element={<ProtectedRoute><VoListPage /></ProtectedRoute>} />
+          <Route path="/project/:id/vo/:voId" element={<ProtectedRoute><VoDetailPage /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </HashRouter>
