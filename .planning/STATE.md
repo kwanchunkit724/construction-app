@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-14T00:00:00.000Z"
+last_updated: "2026-05-14T04:50:36.687Z"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 18
-  completed_plans: 11
-  percent: 61
+  completed_plans: 12
+  percent: 67
 ---
 
 # STATE — 工地控制系統 Milestone
 
-**Last updated:** 2026-05-14 (Phase 2 Plans 02-01 + 02-02 complete; SI schema live on Supabase)
+**Last updated:** 2026-05-14 (Phase 2 Plan 02-03 complete; native plugins + zh-HK permissions + cap sync clean)
 
 ## Project Reference
 
@@ -25,15 +25,16 @@ progress:
 
 ## Current Position
 
-Phase: 2 (SI/VO) — EXECUTING (Plan 02-03 next, then Wave 3)
-Plan: 2 of 9
+Phase: 2 (SI/VO) — EXECUTING (Wave 2 complete; Wave 3 = Plan 02-04 next)
+Plan: 3 of 9
 
 - **Phase:** 2 — SI / VO (Site Instructions / Variation Orders)
-- **Plan:** 02-01 + 02-02 ✅ live on Supabase. Next: 02-03 (Capacitor plugins + native permission strings), then Wave 3 = 02-04 (TS types + SiContext + submit_approval RPC).
+- **Plan:** 02-01 + 02-02 + 02-03 ✅ complete. Wave 3 next = 02-04 (TS types + SiContext + submit_approval RPC), depends on 02-02 (SI schema live).
 - **Status:** EXECUTING
-- **Progress:** Phase 1 [██████████] 100% · Phase 2 [██░░░░░░░░] 22% (2/9) · Phase 3 not yet planned
+- **Progress:** Phase 1 [██████████] 100% · Phase 2 [███░░░░░░░] 33% (3/9) · Phase 3 not yet planned · Overall [███████░░░] 67%
 
 ### Critical apply-tooling note (captured 02-02)
+
 PowerShell `Set-Clipboard` + `Get-Content -Raw` corrupts UTF-8 multi-byte chars (CP950 reinterpretation) on Windows. **Always** apply non-ASCII SQL via base64 → Monaco `setValue` (Chrome MCP `javascript_tool`) instead of clipboard. See 02-02-SUMMARY.md for details. Hot-fix path documented.
 
 ## Performance Metrics
@@ -49,6 +50,7 @@ PowerShell `Set-Clipboard` + `Get-Content -Raw` corrupts UTF-8 multi-byte chars 
 | Phase 01-drawings-on-progress-items P06 | 22m | 3 tasks | 5 files |
 | Phase 01-drawings-on-progress-items P07 | 12m | 3 tasks | 4 files |
 | Phase 01-drawings-on-progress-items P08 | 12m | 3 tasks | 5 files |
+| Phase 02-si-vo P03 | 5m | 4 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -85,8 +87,8 @@ None.
 
 ## Session Continuity
 
-**Last action:** Plan 02-02 complete — SI domain (site_instructions/si_versions/protest_comments + RLS + lock guard + submit_si RPC) and shared dispatch_after_approval trigger applied to live Supabase. UTF-8 Chinese strings confirmed intact after mid-apply clipboard-encoding hot-fix.
-**Next action:** Plan 02-03 (Capacitor plugins: geolocation + voice-recorder, native permission strings, cap sync). No DB checkpoint — this is npm + native config work.
+**Last action:** Plan 02-03 complete — installed @capacitor/geolocation@8.2.0 + capacitor-voice-recorder@7.0.6 + diff-match-patch@1.0.5; added zh-HK NSLocationWhenInUseUsageDescription + NSMicrophoneUsageDescription (replaced video-capture copy) + ACCESS_COARSE_LOCATION + RECORD_AUDIO; npx cap sync clean for both platforms; tsc + bundle CI guard green (entry 507.6 KB). Manual Xcode/Android Studio build checkpoint (Task 5) deferred — autonomous run.
+**Next action:** Plan 02-04 (Wave 3) — TS types + SiContext + submit_approval RPC. Depends only on 02-02 SI schema (live) — diff-match-patch is now ready for diff utilities.
 
 **Canonical references for downstream agents:**
 

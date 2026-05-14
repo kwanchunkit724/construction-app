@@ -28,7 +28,7 @@ This is a brownfield milestone on a live app. Existing v1 capabilities (auth, pr
 ### Site Instructions (SI)
 
 - [ ] **SI-01**: Subcon foreman (any subcon or subcontractor_worker role on the project) can submit a Site Instruction request
-- [ ] **SI-02**: SI has: title, description (free text), optional photo attachments, optional voice memo, optional location (Capacitor Geolocation)
+- [x] **SI-02**: SI has: title, description (free text), optional photo attachments, optional voice memo, optional location (Capacitor Geolocation)
 - [ ] **SI-03**: SI can reference one or more drawings; reference is **version-pinned** (`drawing_version_id`, not `drawing_id`)
 - [ ] **SI-04**: Each SI is auto-numbered per-project (`SI-001`, `SI-002`…)
 - [ ] **SI-05**: After submission, the SI row is immutable — any change creates a new `si_versions` row, never mutates the original
@@ -171,7 +171,7 @@ Populated by roadmapper on 2026-05-11.
 | DRW-14 | Phase 1 | Complete |
 | DRW-15 | Phase 1 | Complete |
 | SI-01 | Phase 2 | Pending |
-| SI-02 | Phase 2 | Pending |
+| SI-02 | Phase 2 | Complete |
 | SI-03 | Phase 2 | Pending |
 | SI-04 | Phase 2 | Pending |
 | SI-05 | Phase 2 | Pending |
