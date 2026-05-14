@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-14T06:00:00.000Z"
+last_updated: "2026-05-14T05:22:08.196Z"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 18
-  completed_plans: 13
-  percent: 72
+  completed_plans: 14
+  percent: 78
 ---
 
 # STATE — 工地控制系統 Milestone
 
-**Last updated:** 2026-05-14 (Phase 2 Plan 02-04 complete; submit_approval RPC live)
+**Last updated:** 2026-05-14 (Phase 2 Plan 02-05 complete; SI UI 11 React files; entry chunk 576.5 KB)
 
 ## Project Reference
 
@@ -25,13 +25,13 @@ progress:
 
 ## Current Position
 
-Phase: 2 (SI/VO) — EXECUTING (Wave 3 complete; Wave 4 = Plan 02-05 next)
-Plan: 4 of 9
+Phase: 2 (SI/VO) — EXECUTING (Wave 4 complete; Wave 5 = Plan 02-06 next)
+Plan: 5 of 9
 
 - **Phase:** 2 — SI / VO (Site Instructions / Variation Orders)
-- **Plan:** 02-01 → 02-04 ✅ complete. Wave 4 next = 02-05 (SI UI — VoiceRecorder + GeoPicker + SubmitForm + List + Detail + DiffCard + ApproverBar + ProtestBar). Pure React, no DB checkpoint.
+- **Plan:** 02-01 → 02-05 ✅ complete. Wave 5 next = 02-06 (v9-vo-schema + recompute_vo_totals + submit_vo RPC + exportVOToPDF + Noto Sans HK font).
 - **Status:** EXECUTING
-- **Progress:** Phase 1 [██████████] 100% · Phase 2 [████░░░░░░] 44% (4/9) · Phase 3 not yet planned · Overall [████████░░] 72%
+- **Progress:** Phase 1 [██████████] 100% · Phase 2 [█████░░░░░] 56% (5/9) · Phase 3 not yet planned · Overall [████████░░] 78%
 
 ### Critical apply-tooling note (captured 02-02)
 
@@ -51,6 +51,7 @@ PowerShell `Set-Clipboard` + `Get-Content -Raw` corrupts UTF-8 multi-byte chars 
 | Phase 01-drawings-on-progress-items P07 | 12m | 3 tasks | 4 files |
 | Phase 01-drawings-on-progress-items P08 | 12m | 3 tasks | 5 files |
 | Phase 02-si-vo P03 | 5m | 4 tasks | 7 files |
+| Phase 02-si-vo P05 | ~75m | 6 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -87,10 +88,11 @@ None.
 
 ## Session Continuity
 
-**Last action:** Plan 02-04 complete — TS types + ZH maps + currency/diff/osm-tile lib helpers + SI storage helpers + SiContext + DelegationsContext + submit_approval RPC. RPC applied live on Supabase (plpgsql + EXECUTE for VO forward-ref). All 7 verifications pass; Chinese strings UTF-8 intact; tsc clean; entry chunk 507.6 KB.
-**Next action:** Plan 02-05 (Wave 4) — SI UI: VoiceRecorder + GeoPicker + SiSubmitForm + SiList + SiDetail + DiffCard + ApproverBar + ProtestBar. Pure React on top of SiContext. **No DB checkpoint** — autonomous run.
+**Last action:** Plan 02-05 complete — 11 React files for SI UI (VoiceRecorder + GeoPicker + SiSubmitForm + SiCard + SiList + SiDiffCard + SiTimeline + SiApproverBar + ProtestCommentBar + 2 pages) + 2 routes wired in src/App.tsx. tsc green at every task; build:check PASS; entry chunk 576.5 KB (+69 KB vs Plan 02-04, well under 800 KB CI guard). Task 7 visual-smoke checkpoint auto-approved per workflow.auto_advance=true; downstream manual visual smoke deferred to Plan 02-09's @si-vo-smoke Playwright + ProjectDetail tab wiring.
+**Next action:** Plan 02-06 (Wave 5) — v9-vo-schema + recompute_vo_totals + submit_vo RPC + exportVOToPDF + Noto Sans HK font (VO-01..06/08/09). DB checkpoint expected.
 
 ### Deferred for developer attention
+
 - **Plan 02-03 Task 5:** Manual Xcode + Android Studio build verification of `capacitor-voice-recorder` (SPM-less, non-blocking warning). Recommended before Plan 02-05 SI UI lands so any linker issues surface early.
 - **Postgres regtype display quirk:** `prolang::regtype::text` returns OID number on this Postgres version. Use `pg_proc JOIN pg_language` instead. See 02-04-SUMMARY.md.
 

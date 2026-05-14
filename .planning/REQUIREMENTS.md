@@ -27,17 +27,17 @@ This is a brownfield milestone on a live app. Existing v1 capabilities (auth, pr
 
 ### Site Instructions (SI)
 
-- [ ] **SI-01**: Subcon foreman (any subcon or subcontractor_worker role on the project) can submit a Site Instruction request
+- [x] **SI-01**: Subcon foreman (any subcon or subcontractor_worker role on the project) can submit a Site Instruction request
 - [x] **SI-02**: SI has: title, description (free text), optional photo attachments, optional voice memo, optional location (Capacitor Geolocation)
-- [ ] **SI-03**: SI can reference one or more drawings; reference is **version-pinned** (`drawing_version_id`, not `drawing_id`)
+- [x] **SI-03**: SI can reference one or more drawings; reference is **version-pinned** (`drawing_version_id`, not `drawing_id`)
 - [ ] **SI-04**: Each SI is auto-numbered per-project (`SI-001`, `SI-002`…)
 - [ ] **SI-05**: After submission, the SI row is immutable — any change creates a new `si_versions` row, never mutates the original
 - [ ] **SI-06**: SI follows the project's configured approval chain (see CHN-*)
-- [ ] **SI-07**: At each chain step, the assigned approver can: approve / approve-with-edits (creates new version) / request-revision (sends back to subcon) / reject (with reason)
-- [ ] **SI-08**: Approver edits are versioned and visible to subcon as a diff before next action
-- [ ] **SI-09**: Subcon can add a "protest comment" to any approved SI without blocking workflow (audit-only)
-- [ ] **SI-10**: Once fully approved, SI is locked — read-only forever, no edits, no deletion
-- [ ] **SI-11**: SI status displayed as Chinese label: 草稿 / 待批准 / 已批准 / 已退回 / 已拒絕 / 已鎖定
+- [x] **SI-07**: At each chain step, the assigned approver can: approve / approve-with-edits (creates new version) / request-revision (sends back to subcon) / reject (with reason)
+- [x] **SI-08**: Approver edits are versioned and visible to subcon as a diff before next action
+- [x] **SI-09**: Subcon can add a "protest comment" to any approved SI without blocking workflow (audit-only)
+- [x] **SI-10**: Once fully approved, SI is locked — read-only forever, no edits, no deletion
+- [x] **SI-11**: SI status displayed as Chinese label: 草稿 / 待批准 / 已批准 / 已退回 / 已拒絕 / 已鎖定
 
 ### Variation Orders (VO)
 
@@ -170,17 +170,17 @@ Populated by roadmapper on 2026-05-11.
 | DRW-13 | Phase 1 | Complete |
 | DRW-14 | Phase 1 | Complete |
 | DRW-15 | Phase 1 | Complete |
-| SI-01 | Phase 2 | Pending |
+| SI-01 | Phase 2 | Complete |
 | SI-02 | Phase 2 | Complete |
-| SI-03 | Phase 2 | Pending |
+| SI-03 | Phase 2 | Complete |
 | SI-04 | Phase 2 | Pending |
 | SI-05 | Phase 2 | Pending |
 | SI-06 | Phase 2 | Pending |
-| SI-07 | Phase 2 | Pending |
-| SI-08 | Phase 2 | Pending |
-| SI-09 | Phase 2 | Pending |
-| SI-10 | Phase 2 | Pending |
-| SI-11 | Phase 2 | Pending |
+| SI-07 | Phase 2 | Complete |
+| SI-08 | Phase 2 | Complete |
+| SI-09 | Phase 2 | Complete |
+| SI-10 | Phase 2 | Complete |
+| SI-11 | Phase 2 | Complete |
 | VO-01 | Phase 2 | Pending |
 | VO-02 | Phase 2 | Pending |
 | VO-03 | Phase 2 | Pending |
