@@ -498,7 +498,7 @@ begin
     select id, p_ptw_id, p_signature_b64
       from approvals
      where doc_id = p_ptw_id and actor_id = v_uid
-     order by acted_at desc limit 1;
+     order by created_at desc limit 1;
   update permits_to_work set status='closed_out', closed_out_at=now() where id=p_ptw_id;
 end;
 $$;
