@@ -3,18 +3,19 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-14T08:00:00.000Z"
+last_updated: "2026-05-15T05:00:00.000Z"
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 18
   completed_plans: 18
   percent: 100
+phase_3_status: spike_complete
 ---
 
 # STATE — 工地控制系統 Milestone
 
-**Last updated:** 2026-05-14 (Phase 2 COMPLETE — all 9 plans shipped; Phase 3 PTW next)
+**Last updated:** 2026-05-15 (Phase 3 spike Plan 03-01 complete; all 4 sub-tasks live on Supabase + main; release-signing scaffolding committed)
 
 ## Project Reference
 
@@ -25,24 +26,27 @@ progress:
 
 ## Current Position
 
-Phase: 2 (SI/VO) — ✅ COMPLETE (all 9 plans shipped, Wave 8 / Plan 02-09 done)
-Phase: 3 (PTW) — NOT STARTED (next)
+Phase: 2 (SI/VO) — ✅ COMPLETE
+Phase: 3 (PTW) — Plan 03-01 spike ✅ DONE; Plan 03-02 (PTW schema) NEXT
 
-- **Phase 1:** ✅ COMPLETE (drawings on progress items)
-- **Phase 2:** ✅ COMPLETE — 02-01 → 02-09 all shipped. Plan 02-09 delivered:
-  ProjectDetail 簽核 tab + Sidebar/BottomNav SI/VO links + cold-launch
-  deep-link fix in src/lib/push.ts (Open Q 4 — `_pendingDeepLink` queue +
-  `consumePendingDeepLink` drained by AuthContext) + tests/e2e/si-vo-smoke.spec.ts
-  (`@si-vo-smoke` happy-path: SI submit → MC approve → PM approve → lock →
-  MC raises VO → PM approves → 匯出 PDF) + tests/fixtures/seed-phase2.sql
-  (idempotent seed) + supabase/tests/rls-smoke.sql FINAL extension
-  (foreman + delegated-PM with real SI assertions + CHN-11 against real
-  approvals row). 6 atomic commits 0046058 → a0880c1. Bundle entry 644.3 KB
-  / 800 KB CI limit. tsc clean.
-- **Next:** Plan Phase 3 (PTW) — open with 1–2 day de-risking spike per
-  ROADMAP.
-- **Status:** EXECUTING (Phase 3 planning next)
-- **Progress:** Phase 1 [██████████] 100% · Phase 2 [██████████] 100% · Overall [██████████] 100%
+- **Phase 1:** ✅ COMPLETE
+- **Phase 2:** ✅ COMPLETE — pushed to `main` `7a9f3e4` 2026-05-15. Vercel + Codemagic Android + TestFlight builds finished.
+- **Phase 3 — Plan 03-01 (de-risking spike):** ✅ ALL 4 TASKS DONE
+  - safety_officer role: `supabase/v10-safety-officer-role.sql` applied live (CHECK constraint extended). TS GlobalRole + ROLE_ZH + AdminUsers picker updated. Apple compliance preserved (delete_my_account role-orthogonal).
+  - pgjwt PoC: `supabase/v10-split/1-pgjwt-poc.sql`. pgjwt 0.2.0 installed live. Sign/verify HS256 round-trip preserved payload. **Caveat captured:** Supabase requires explicit DROP+CREATE; `if not exists` silently no-ops. pgjwt 0.2.0 `sign(payload json, secret text)` — no algorithm param, hardcoded HS256.
+  - pg_cron rehearsal: `supabase/v10-split/2-pg-cron-rehearsal.sql`. Job `ptw-expiry-rehearsal` registered live at `0 16 * * *` UTC (= 23:59 HKT cutoff). active=true. Scratch `_cron_rehearsal_log` table to drop before Plan 03-02 lands real PTW expiry job.
+  - @capacitor/network@8.0.1 installed + cap sync clean. 8 plugins registered. Bundle 644.8 KB / 800 KB.
+- **Release scaffolding (added in spike session):**
+  - `android/app/build.gradle` signingConfigs.release driven by `CM_KEYSTORE_PATH` env vars.
+  - `codemagic.yaml` new `android-play-store` workflow with android_signing + publishing.google_play (track=internal). No auto-trigger; manual.
+  - `docs/android-play-store-release.md` step-by-step: keytool genkey + Codemagic env vars + Google Cloud SA + Play Console initial setup.
+- **Live deploy state (commit `654a0d3` on main):**
+  - Vercel: `construction-app-lime-six.vercel.app` ✅ live
+  - Codemagic Android Internal Test #12: ✅ debug-signed AAB (not Play-uploadable; release-signing setup pending operator)
+  - Codemagic iOS TestFlight #59: ✅ done; internal testers receive via TestFlight app
+  - Apple App Store: NOT submitted (workflow has no auto-trigger; `submit_to_app_store: false`)
+- **Status:** EXECUTING (Plan 03-02 NEXT)
+- **Progress:** Phase 1 [██████████] 100% · Phase 2 [██████████] 100% · Phase 3 [█░░░░░░░░░] 11% (spike done) · Overall [██████████░] 95%
 
 ### Critical apply-tooling note (captured 02-02)
 
@@ -101,11 +105,19 @@ None.
 
 ## Session Continuity
 
-**Last action:** Phase 2 COMPLETE. Plan 02-09 shipped (Tasks 1-6, 6 commits 0046058 → a0880c1). ProjectDetail 簽核 tab + SiVoSwitcher; Sidebar + BottomNav in-project SI/VO entries; src/lib/push.ts cold-launch deep-link queue + `consumePendingDeepLink` drained by AuthContext bootstrap (Open Q 4 mitigated); `@si-vo-smoke` Playwright spec + idempotent seed-phase2.sql fixture; rls-smoke FINAL block with foreman + delegated-PM personas asserting can_view_si, in_flight_approvals via delegation, CHN-11 against a real approvals row. Bundle entry 644.3 KB / 800 KB. tsc clean.
+**Last action (2026-05-15):** Plan 03-01 spike done end-to-end + main pushed + release-signing scaffolding committed. 4 commits added on top of Phase 2:
+  - `61cad7a` Phase 3 context (`.planning/phases/03-ptw/03-CONTEXT.md`)
+  - `6f5e437` safety_officer role (SQL + TS + AdminUsers picker)
+  - `7a9f3e4` pgjwt + pg_cron + @capacitor/network
+  - `654a0d3` android-play-store workflow + signing scaffolding + docs
 
-**Next action:** Plan Phase 3 (PTW) — open with a 1–2 day de-risking spike (signed-JWT QR, pg_cron expiry, new native plugin, Apple re-review framing) per ROADMAP. Reuses chain infra + push pipeline + rls-smoke pattern from Phase 2.
+Live verifications: bundle 644.8 KB / 800 KB · tsc clean · Playwright lists 3 smoke tests (`@si-vo-smoke` + 2× `@delete-account-smoke`) · GitNexus index up-to-date at `654a0d3`.
 
-**Plan 02-08 fully shipped (added 2026-05-14):** historical entry below.
+**Next action:** Plan 03-02 — PTW schema (`supabase/v10-ptw-schema.sql`). Tables: `permits_to_work`, `permit_versions`, `permit_signoffs`, `permit_scans`, `permit_workers`. Triggers: lock-guard, fire-watch-elapsed, real pg_cron expiry (replaces `ptw-expiry-rehearsal`). RPC: `submit_ptw`. Real pgjwt signed-token mint helper. Add `app_config.ptw_qr_secret` + `app_config.ptw_enabled`. Reuse SI/VO schema patterns (lock-guard, sequence-per-project numbering).
+
+Plan outline in `.planning/phases/03-ptw/03-CONTEXT.md` §"Plan Outline (TBD — to draft after spike)". 7 more plans after spike (03-02 → 03-08).
+
+**Resume entry point:** `/gsd-plan-phase 3` to decompose Plan 03-02 onwards, OR continue inline.
 
 **Prior last action:** Plan 02-08 implementation complete (Tasks 1-6, 6 commits 4f55ba1 → d04bc15). Shipped: `supabase/v9-default-chain-seed.sql` (save_chain_steps SECURITY DEFINER RPC + seed_default_chain AFTER INSERT trigger on projects + idempotent backfill for existing live projects, NOT EXISTS guards at (project_id,doc_type,step_order) granularity, non-destructive). `ApprovalChainContext` (per-project chain CRUD + chains-{projectId} realtime). `ChainStepRow` + `AdminProjectChains` page with 3-tab editor (工地指令 / 變更指令 / 工作許可證 with Phase 3 banner). Profile gains DelegationsProvider section (我嘅代理 / 我係代理) and handles new `delete_my_account` json response (`{blocked:true}` → zh-HK red banner + 通知管理員 button that writes demo_feedback row). `InFlightApprovalsModal` lists pending SI/VO for a user with admin_override action; wired from AdminUsers per-row 查看待處理簽核 button. Routes + sidebar + per-project AdminProjects entry. tsc clean. Bundle entry 641.6 KB / 800 KB (+27.3 KB).
 **Next action:** Plan 02-09 (Wave 8 — FINAL Phase 2 plan) — ProjectDetail tab + nav links + cold-launch deep-link fix + Playwright @si-vo-smoke + rls-smoke final personas + end-of-phase walkthrough.
@@ -116,7 +128,23 @@ None.
 
 - **Plan 02-03 Task 5:** Manual Xcode + Android Studio build verification of `capacitor-voice-recorder` (SPM-less, non-blocking warning). Recommended before Plan 02-05 SI UI lands so any linker issues surface early.
 - **Postgres regtype display quirk:** `prolang::regtype::text` returns OID number on this Postgres version. Use `pg_proc JOIN pg_language` instead. See 02-04-SUMMARY.md.
-- **Plan 02-08 Apple-compliance regression:** Run two end-to-end tests with real users **before App Store submission of the next iOS build**: (a) clean user (zero in-flight SI/VO) → `select delete_my_account()` must return `{"ok":true}` and remove from `auth.users`; (b) user with in-flight SI → must return `{"ok":false, "blocked":true, "pending":N, "error":"你尚有 ..."}` and stay in `auth.users`. Orthogonal to Plan 02-08's seed migration so deferred, but required for Apple Guideline 5.1.1(v) preservation across the SI/VO release.
+- **Plan 02-08 Apple-compliance regression:** Run two end-to-end tests with real users **before App Store submission of the next iOS build**: (a) clean user (zero in-flight SI/VO) → `select delete_my_account()` must return `{"ok":true}` and remove from `auth.users`; (b) user with in-flight SI → must return `{"ok":false, "blocked":true, "pending":N, "error":"你尚有 ..."}` and stay in `auth.users`. Orthogonal to Plan 02-08's seed migration so deferred, but required for Apple Guideline 5.1.1(v) preservation across the SI/VO release. Spec at `tests/e2e/delete-my-account.spec.ts` — needs 4 test phone accounts created via Supabase Studio first.
+
+- **Plan 03-01 Google Play release-signing (OPERATOR REQUIRED):** Codemagic `android-internal-test` builds debug-signed AAB; Play Console rejects. New `android-play-store` workflow committed but needs keystore + env vars setup. See `docs/android-play-store-release.md` for steps. Estimated 30 min one-time setup.
+
+- **Plan 03-01 pgjwt 0.2.0 API quirks (capture before Plan 03-02):**
+  - `create extension if not exists pgjwt` silently no-ops on Supabase if not already explicitly created. Use `drop extension if exists pgjwt; create extension pgjwt with schema extensions;` in real PTW migration.
+  - `sign(payload, secret)` takes 2 args (json + text). Algorithm hard-coded HS256. No 3-arg overload.
+  - `verify(token, secret)` returns table `(header json, payload json, valid boolean)`. Check `valid = true` before trusting payload.
+
+- **Plan 03-01 pg_cron teardown before Plan 03-02:** Rehearsal job `ptw-expiry-rehearsal` + scratch table `_cron_rehearsal_log` still live. Plan 03-02 SQL must include:
+  ```sql
+  select cron.unschedule('ptw-expiry-rehearsal');
+  drop table if exists _cron_rehearsal_log;
+  ```
+  Then schedule the real `ptw-expiry` job at same `0 16 * * *` UTC schedule.
+
+- **Phase 3 Apple re-review staging (P3-D6 / C3 mitigation):** Once PTW UI lands (Plan 03-05+), add `app_config.ptw_enabled` toggle that hides the entire PTW surface (BottomNav icon, ProjectDetail tab, AdminProjectChains PTW tab beyond the "敬請期待" stub it already shows). Frame PTW as "internal site coordination" — NOT "regulatory submission".
 
 **Canonical references for downstream agents:**
 
