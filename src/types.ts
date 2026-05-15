@@ -470,3 +470,121 @@ export const VO_STATUS_ZH: Record<VoStatus, string> = {
   revision_requested: '已退回',
   rejected: '已拒絕',
 }
+
+// ── Phase 3: PTW (Permit to Work) ───────────────────────────
+
+export type PtwType =
+  | 'hot_work'
+  | 'work_at_height'
+  | 'lifting'
+  | 'confined_space'
+  | 'excavation'
+  | 'electrical'
+  | 'scaffold'
+
+export type PtwStatus =
+  | 'draft'
+  | 'submitted'
+  | 'in_review'
+  | 'approved'
+  | 'active'
+  | 'closed_out'
+  | 'expired'
+  | 'rejected'
+  | 'revision_requested'
+
+export interface PTW {
+  id: string
+  project_id: string
+  number: string
+  ptw_type: PtwType
+  current_version_id: string | null
+  chain_snapshot: unknown
+  current_step: number
+  status: PtwStatus
+  created_by: string
+  created_at: string
+  submitted_at: string | null
+  activated_at: string | null
+  expires_at: string | null
+  fire_watch_started_at: string | null
+  closed_out_at: string | null
+  locked_at: string | null
+}
+
+export interface PtwChecklistItem {
+  key: string
+  label_zh: string
+  required: boolean
+  value: boolean | null
+}
+
+export interface PtwPayload {
+  description: string
+  checklist: PtwChecklistItem[]
+  ppe_photo_paths: string[]
+  scene_photo_paths: string[]
+  drawing_version_ids: string[]
+  lat?: number
+  lng?: number
+  accuracy_m?: number
+}
+
+export interface PtwVersion {
+  id: string
+  ptw_id: string
+  version_no: number
+  payload: PtwPayload
+  edits_by: string
+  created_at: string
+}
+
+export interface PermitWorker {
+  id: string
+  ptw_id: string
+  worker_name: string
+  worker_phone: string | null
+  worker_photo_path: string | null
+  created_at: string
+}
+
+export interface PermitSignoff {
+  id: string
+  approval_id: string
+  ptw_id: string
+  signature_b64: string
+  created_at: string
+}
+
+export interface PermitScan {
+  id: string
+  ptw_id: string
+  scanned_by: string
+  scanned_at: string
+  jwt_payload_snapshot: Record<string, unknown>
+}
+
+export const PTW_TYPE_ZH: Record<PtwType, string> = {
+  hot_work: '動火',
+  work_at_height: '高空',
+  lifting: '吊運',
+  confined_space: '密閉空間',
+  excavation: '掘地',
+  electrical: '電力',
+  scaffold: '棚架',
+}
+
+// PTW types shipping in v1; rest stub "敬請期待"
+export const PTW_TYPE_V1: PtwType[] = ['hot_work', 'work_at_height', 'lifting']
+
+export const PTW_STATUS_ZH: Record<PtwStatus, string> = {
+  draft: '草稿',
+  submitted: '待簽核',
+  in_review: '簽核中',
+  approved: '已批准',
+  active: '生效中',
+  closed_out: '已完工',
+  expired: '已過期',
+  rejected: '已拒絕',
+  revision_requested: '已退回',
+}
