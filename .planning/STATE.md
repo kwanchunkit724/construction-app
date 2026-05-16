@@ -3,19 +3,20 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-15T05:00:00.000Z"
+last_updated: "2026-05-16T00:00:00.000Z"
 progress:
   total_phases: 3
-  completed_phases: 2
-  total_plans: 18
-  completed_plans: 18
+  completed_phases: 3
+  total_plans: 26
+  completed_plans: 26
   percent: 100
-phase_3_status: spike_complete
+phase_3_status: complete
+milestone_status: complete
 ---
 
-# STATE — 工地控制系統 Milestone
+# STATE — 工地控制系統 Milestone ✅ COMPLETE
 
-**Last updated:** 2026-05-15 (Phase 3 spike Plan 03-01 complete; all 4 sub-tasks live on Supabase + main; release-signing scaffolding committed)
+**Last updated:** 2026-05-16 (all 3 phases shipped end-to-end — milestone v1.0 done)
 
 ## Project Reference
 
@@ -26,27 +27,18 @@ phase_3_status: spike_complete
 
 ## Current Position
 
-Phase: 2 (SI/VO) — ✅ COMPLETE
-Phase: 3 (PTW) — Plan 03-01 spike ✅ DONE; Plan 03-02 (PTW schema) NEXT
+Phase 1 (Drawings) ✅ · Phase 2 (SI/VO) ✅ · Phase 3 (PTW) ✅ — ALL DONE
 
-- **Phase 1:** ✅ COMPLETE
-- **Phase 2:** ✅ COMPLETE — pushed to `main` `7a9f3e4` 2026-05-15. Vercel + Codemagic Android + TestFlight builds finished.
-- **Phase 3 — Plan 03-01 (de-risking spike):** ✅ ALL 4 TASKS DONE
-  - safety_officer role: `supabase/v10-safety-officer-role.sql` applied live (CHECK constraint extended). TS GlobalRole + ROLE_ZH + AdminUsers picker updated. Apple compliance preserved (delete_my_account role-orthogonal).
-  - pgjwt PoC: `supabase/v10-split/1-pgjwt-poc.sql`. pgjwt 0.2.0 installed live. Sign/verify HS256 round-trip preserved payload. **Caveat captured:** Supabase requires explicit DROP+CREATE; `if not exists` silently no-ops. pgjwt 0.2.0 `sign(payload json, secret text)` — no algorithm param, hardcoded HS256.
-  - pg_cron rehearsal: `supabase/v10-split/2-pg-cron-rehearsal.sql`. Job `ptw-expiry-rehearsal` registered live at `0 16 * * *` UTC (= 23:59 HKT cutoff). active=true. Scratch `_cron_rehearsal_log` table to drop before Plan 03-02 lands real PTW expiry job.
-  - @capacitor/network@8.0.1 installed + cap sync clean. 8 plugins registered. Bundle 644.8 KB / 800 KB.
-- **Release scaffolding (added in spike session):**
-  - `android/app/build.gradle` signingConfigs.release driven by `CM_KEYSTORE_PATH` env vars.
-  - `codemagic.yaml` new `android-play-store` workflow with android_signing + publishing.google_play (track=internal). No auto-trigger; manual.
-  - `docs/android-play-store-release.md` step-by-step: keytool genkey + Codemagic env vars + Google Cloud SA + Play Console initial setup.
-- **Live deploy state (commit `654a0d3` on main):**
-  - Vercel: `construction-app-lime-six.vercel.app` ✅ live
-  - Codemagic Android Internal Test #12: ✅ debug-signed AAB (not Play-uploadable; release-signing setup pending operator)
-  - Codemagic iOS TestFlight #59: ✅ done; internal testers receive via TestFlight app
-  - Apple App Store: NOT submitted (workflow has no auto-trigger; `submit_to_app_store: false`)
-- **Status:** EXECUTING (Plan 03-02 NEXT)
-- **Progress:** Phase 1 [██████████] 100% · Phase 2 [██████████] 100% · Phase 3 [█░░░░░░░░░] 11% (spike done) · Overall [██████████░] 95%
+- **Phase 1:** ✅ COMPLETE (drawings on progress items)
+- **Phase 2:** ✅ COMPLETE (SI/VO + admin chain + delegations)
+- **Phase 3 (PTW):** ✅ COMPLETE — all 8 plans shipped 03-01 → 03-08.
+  Detailed walkthrough + success-criteria check in `.planning/phases/03-ptw/03-08-SUMMARY.md`.
+- **Live deploy:** Vercel + Codemagic Android Internal Test (debug-signed) +
+  Codemagic iOS TestFlight all current at HEAD on main. Apple App Store
+  NOT auto-submitted (workflow disabled). Google Play upload pending
+  operator release-signing setup per `docs/android-play-store-release.md`.
+- **Status:** ✅ MILESTONE COMPLETE
+- **Progress:** Phase 1 [██████████] 100% · Phase 2 [██████████] 100% · Phase 3 [██████████] 100% · Overall [██████████] 100%
 
 ### Critical apply-tooling note (captured 02-02)
 

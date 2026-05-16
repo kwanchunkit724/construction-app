@@ -7,9 +7,9 @@
 
 ## Phases
 
-- [ ] **Phase 1: 圖則附加 (Drawings on Progress Items)** — Attach versioned drawings to leaf progress items with private storage; establish RLS/bundle/migration patterns for the milestone.
+- [x] **Phase 1: 圖則附加 (Drawings on Progress Items)** — Attach versioned drawings to leaf progress items with private storage; establish RLS/bundle/migration patterns for the milestone.
 - [x] **Phase 2: SI / VO (工地指令 + 變更指令)** — Subcon→MC approval flow with admin-configurable chain infrastructure (reused by PTW); structured VO line items with server-computed totals.
-- [ ] **Phase 3: PTW (工作許可證)** — Permit-to-work for top-3 high-risk activities with new safety_officer role, signed-JWT QR codes, server-side HKT expiry, and read-only audit archive.
+- [x] **Phase 3: PTW (工作許可證)** — Permit-to-work for top-3 high-risk activities with new safety_officer role, signed-JWT QR codes, server-side HKT expiry, and read-only audit archive.
 
 ## Phase Details
 
