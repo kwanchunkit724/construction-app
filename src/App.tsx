@@ -1,7 +1,9 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
 import { AuthProvider } from './contexts/AuthContext'
 import { ProjectsProvider } from './contexts/ProjectsContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { FullPageSpinner } from './components/Spinner'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Home from './pages/Home'
@@ -17,6 +19,15 @@ import SiDetailPage from './pages/SiDetail'
 import VoListPage from './pages/VoList'
 import VoDetailPage from './pages/VoDetail'
 import AdminProjectChainsPage from './pages/AdminProjectChains'
+// Phase 3 PTW pages lazy-loaded — feature is admin-gated until app_config.ptw_enabled=true.
+// Keep entry chunk lean for users who never touch PTW.
+const PtwListPage = lazy(() => import('./pages/PtwList'))
+const PtwDetailPage = lazy(() => import('./pages/PtwDetail'))
+const PtwVerifyPage = lazy(() => import('./pages/PtwVerify'))
+
+function lazyRoute(node: React.ReactNode) {
+  return <Suspense fallback={<FullPageSpinner label="載入中..." />}>{node}</Suspense>
+}
 
 export default function App() {
   return (
@@ -39,6 +50,9 @@ export default function App() {
           <Route path="/project/:id/si/:siId" element={<ProtectedRoute><SiDetailPage /></ProtectedRoute>} />
           <Route path="/project/:id/vo" element={<ProtectedRoute><VoListPage /></ProtectedRoute>} />
           <Route path="/project/:id/vo/:voId" element={<ProtectedRoute><VoDetailPage /></ProtectedRoute>} />
+          <Route path="/project/:id/ptw" element={<ProtectedRoute>{lazyRoute(<PtwListPage />)}</ProtectedRoute>} />
+          <Route path="/project/:id/ptw/:ptwId" element={<ProtectedRoute>{lazyRoute(<PtwDetailPage />)}</ProtectedRoute>} />
+          <Route path="/verify/:token" element={<ProtectedRoute>{lazyRoute(<PtwVerifyPage />)}</ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </HashRouter>

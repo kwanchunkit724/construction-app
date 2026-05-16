@@ -5,6 +5,7 @@ import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { PtwApproverBar } from '../components/ptw/PtwApproverBar'
 import { PtwSignaturePad } from '../components/ptw/PtwSignaturePad'
+import { QrCard } from '../components/ptw/PtwQrCard'
 import { Modal } from '../components/Modal'
 import { PtwProvider, usePtw } from '../contexts/PtwContext'
 import { ProjectsProvider } from '../contexts/ProjectsContext'
@@ -157,24 +158,7 @@ function PtwDetailInner() {
 
         {/* QR card (active only) */}
         {ptw.status === 'active' && (
-          <div className="card p-4 space-y-2">
-            <h3 className="text-base font-semibold text-site-900">驗證 QR</h3>
-            {qrError ? (
-              <p className="text-sm text-red-600">{qrError}</p>
-            ) : qrToken ? (
-              <div>
-                <div className="bg-white p-3 rounded-xl inline-block">
-                  {/* qrcode.react lazy-loaded by tree-shake; placeholder UI */}
-                  <code className="text-[10px] break-all">{qrToken.slice(0, 60)}...</code>
-                </div>
-                <p className="mt-2 text-xs text-site-500">
-                  巡查員掃描以驗證。每次掃描會寫入 permit_scans 審計紀錄。
-                </p>
-              </div>
-            ) : (
-              <Spinner size={16} />
-            )}
-          </div>
+          <QrCard token={qrToken} error={qrError} />
         )}
 
         {/* Fire-watch (hot_work + active only) */}
