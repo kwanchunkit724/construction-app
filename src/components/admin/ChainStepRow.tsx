@@ -3,15 +3,12 @@ import { ArrowUp, ArrowDown, Trash2 } from 'lucide-react'
 import type { ChainStep, UserProfile, GlobalRole } from '../../types'
 import { ROLE_ZH } from '../../types'
 
-// Chain config supports safety_officer (Phase 3 role) as a valid option even
-// though no user_profiles row carries it yet. Local widening — does NOT touch
-// the GlobalRole enum (that lands in Phase 3 with the user_profiles CHECK change).
-type ChainRole = GlobalRole | 'safety_officer'
+// safety_officer is now a real GlobalRole (added Phase 3 Plan 03-01).
+// Keep the local widening alias since other phases may have their own
+// chain-only pseudo-roles in the future.
+type ChainRole = GlobalRole
 
-const CHAIN_ROLE_ZH: Record<ChainRole, string> = {
-  ...ROLE_ZH,
-  safety_officer: '安全主任 (Phase 3)',
-}
+const CHAIN_ROLE_ZH: Record<ChainRole, string> = ROLE_ZH
 
 const CHAIN_ROLE_OPTIONS: ChainRole[] = [
   'pm',

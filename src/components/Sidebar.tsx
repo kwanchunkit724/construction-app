@@ -30,6 +30,7 @@ export function Sidebar() {
     ...(projectId ? [
       { to: `/project/${projectId}/si`, label: '工地指令', icon: FileText },
       { to: `/project/${projectId}/vo`, label: '變更指令', icon: Receipt },
+      { to: `/project/${projectId}/ptw`, label: '工作許可證', icon: HardHat },
     ] : []),
     ...(isAdmin ? [
       { to: '/admin', label: '管理', icon: Shield },

@@ -167,16 +167,9 @@ function AdminProjectChainsInner({ projectId }: { projectId: string }) {
             }`}
           >
             {DOC_TYPE_LABEL[t]}
-            {t === 'ptw' && <span className="ml-1 opacity-70 text-[10px]">(Phase 3)</span>}
           </button>
         ))}
       </div>
-
-      {isPtw && (
-        <div className="bg-blue-50 text-blue-700 border border-blue-200 rounded-xl p-3 text-sm mb-3">
-          ⏳ 工作許可證 (PTW) 流程：敬請期待 (Phase 3)。可預先配置流程，但保存功能需待安全主任角色上線後啟用。
-        </div>
-      )}
 
       {!canEdit && (
         <div className="bg-amber-50 text-amber-700 border border-amber-200 rounded-xl p-3 text-sm mb-3">
@@ -232,9 +225,8 @@ function AdminProjectChainsInner({ projectId }: { projectId: string }) {
               </button>
               <button
                 onClick={handleSave}
-                disabled={saving || !dirty || isPtw}
+                disabled={saving || !dirty}
                 className="btn-primary flex items-center gap-1.5 flex-1 min-w-[140px] justify-center"
-                title={isPtw ? 'PTW 流程儲存敬請期待 (Phase 3)' : undefined}
               >
                 {saving ? <Spinner size={16} className="text-white" /> : <Save size={16} />}
                 儲存
