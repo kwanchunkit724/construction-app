@@ -1,16 +1,19 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
 import { Modal } from '../Modal'
 import { usePtw } from '../../contexts/PtwContext'
 import { PTW_TYPE_ZH, PTW_TYPE_V1 } from '../../types'
 import type { PtwType, PtwChecklistItem, PtwPayload } from '../../types'
-import { checklistTemplate } from '../../lib/ptw'
+import { checklistTemplate, uploadPpePhotos, uploadScenePhotos, uploadWorkerPhoto } from '../../lib/ptw'
 import { useIsOnline } from '../../hooks/useIsOnline'
 import { OfflineBanner } from '../OfflineBanner'
+import { PtwPhotoPicker } from './PtwPhotoPicker'
+import { supabase } from '../../lib/supabase'
 
 interface WorkerDraft {
   name: string
   phone: string
+  photo: File | null
 }
 
 interface PtwSubmitFormProps {
@@ -20,13 +23,16 @@ interface PtwSubmitFormProps {
 }
 
 export function PtwSubmitForm({ open, onClose, onSubmitted }: PtwSubmitFormProps) {
-  const { createDraft, saveVersion, submit, addWorker } = usePtw()
+  const { createDraft, saveVersion, submit, addWorker, projectId } = usePtw()
   const online = useIsOnline()
   const [ptwType, setPtwType] = useState<PtwType>('hot_work')
   const [description, setDescription] = useState('')
   const [checklist, setChecklist] = useState<PtwChecklistItem[]>(() => checklistTemplate('hot_work'))
-  const [workers, setWorkers] = useState<WorkerDraft[]>([{ name: '', phone: '' }])
+  const [workers, setWorkers] = useState<WorkerDraft[]>([{ name: '', phone: '', photo: null }])
+  const [ppePhotos, setPpePhotos] = useState<File[]>([])
+  const [scenePhotos, setScenePhotos] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
+  const [progressMsg, setProgressMsg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const allRequiredChecked = useMemo(
@@ -50,12 +56,16 @@ export function PtwSubmitForm({ open, onClose, onSubmitted }: PtwSubmitFormProps
     setChecklist(prev => prev.map(c => c.key === key ? { ...c, value: c.value === true ? false : true } : c))
   }
 
-  function updateWorker(idx: number, field: keyof WorkerDraft, value: string) {
+  function updateWorker(idx: number, field: 'name' | 'phone', value: string) {
     setWorkers(prev => prev.map((w, i) => i === idx ? { ...w, [field]: value } : w))
   }
 
+  function setWorkerPhoto(idx: number, file: File | null) {
+    setWorkers(prev => prev.map((w, i) => i === idx ? { ...w, photo: file } : w))
+  }
+
   function addWorkerRow() {
-    setWorkers(prev => [...prev, { name: '', phone: '' }])
+    setWorkers(prev => [...prev, { name: '', phone: '', photo: null }])
   }
 
   function removeWorker(idx: number) {
@@ -66,24 +76,60 @@ export function PtwSubmitForm({ open, onClose, onSubmitted }: PtwSubmitFormProps
     if (!canSubmit) return
     setSubmitting(true)
     setError(null)
+    setProgressMsg(null)
     try {
+      setProgressMsg('建立草稿...')
       const { id, error: createErr } = await createDraft(ptwType)
       if (createErr || !id) {
         setError(createErr || '建立失敗')
         return
       }
+
+      // Photos must land before saveVersion so the payload references real
+      // storage paths. Use versionNo=1 — fresh draft, no prior versions.
+      let ppePaths: string[] = []
+      let scenePaths: string[] = []
+      if (ppePhotos.length > 0) {
+        setProgressMsg(`上載 PPE 相片 (${ppePhotos.length}) ...`)
+        const r = await uploadPpePhotos(projectId, id, 1, ppePhotos)
+        if (r.error) { setError(r.error); return }
+        ppePaths = r.paths
+      }
+      if (scenePhotos.length > 0) {
+        setProgressMsg(`上載現場相片 (${scenePhotos.length}) ...`)
+        const r = await uploadScenePhotos(projectId, id, 1, scenePhotos)
+        if (r.error) { setError(r.error); return }
+        scenePaths = r.paths
+      }
+
+      setProgressMsg('儲存版本...')
       const payload: PtwPayload = {
         description: description.trim(),
         checklist,
-        ppe_photo_paths: [],
-        scene_photo_paths: [],
+        ppe_photo_paths: ppePaths,
+        scene_photo_paths: scenePaths,
         drawing_version_ids: [],
       }
       const { error: vErr } = await saveVersion(id, payload)
       if (vErr) { setError(vErr); return }
-      for (const w of validWorkers) {
-        await addWorker(id, w.name.trim(), w.phone.trim() || null, null)
+
+      // Workers: insert without photo, get id, upload photo, update row.
+      for (const [i, w] of validWorkers.entries()) {
+        setProgressMsg(`新增工人 ${i + 1}/${validWorkers.length} ...`)
+        const { id: workerId, error: wErr } = await addWorker(id, w.name.trim(), w.phone.trim() || null, null)
+        if (wErr || !workerId) { setError(wErr || '工人新增失敗'); return }
+        if (w.photo) {
+          const up = await uploadWorkerPhoto(projectId, id, workerId, w.photo)
+          if (up.error || !up.path) { setError(up.error || '工人相片上載失敗'); return }
+          const { error: updErr } = await supabase
+            .from('permit_workers')
+            .update({ worker_photo_path: up.path })
+            .eq('id', workerId)
+          if (updErr) { setError(updErr.message); return }
+        }
       }
+
+      setProgressMsg('提交簽核...')
       const { error: subErr } = await submit(id)
       if (subErr) { setError(subErr); return }
       onSubmitted(id)
@@ -92,6 +138,7 @@ export function PtwSubmitForm({ open, onClose, onSubmitted }: PtwSubmitFormProps
       setError(e instanceof Error ? e.message : '提交失敗')
     } finally {
       setSubmitting(false)
+      setProgressMsg(null)
     }
   }
 
@@ -186,6 +233,22 @@ export function PtwSubmitForm({ open, onClose, onSubmitted }: PtwSubmitFormProps
           </div>
         )}
 
+        {/* PPE photos */}
+        <PtwPhotoPicker
+          label="PPE 相片"
+          files={ppePhotos}
+          onChange={setPpePhotos}
+          hint="工人配戴安全帶/安全帽/反光衣等實況"
+        />
+
+        {/* Scene photos */}
+        <PtwPhotoPicker
+          label="現場相片"
+          files={scenePhotos}
+          onChange={setScenePhotos}
+          hint="工作範圍 + 周圍環境 + 滅火器/標示等"
+        />
+
         {/* Workers */}
         <div>
           <div className="flex items-center justify-between">
@@ -197,30 +260,15 @@ export function PtwSubmitForm({ open, onClose, onSubmitted }: PtwSubmitFormProps
           </div>
           <div className="space-y-2 mt-1">
             {workers.map((w, idx) => (
-              <div key={idx} className="flex gap-2">
-                <input
-                  className="input flex-1"
-                  placeholder="工人姓名"
-                  value={w.name}
-                  onChange={e => updateWorker(idx, 'name', e.target.value)}
-                />
-                <input
-                  className="input w-32"
-                  placeholder="電話 (選填)"
-                  value={w.phone}
-                  onChange={e => updateWorker(idx, 'phone', e.target.value)}
-                />
-                {workers.length > 1 && (
-                  <button
-                    type="button"
-                    className="btn-ghost text-red-600"
-                    onClick={() => removeWorker(idx)}
-                    aria-label="刪除"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                )}
-              </div>
+              <WorkerRow
+                key={idx}
+                worker={w}
+                canDelete={workers.length > 1}
+                onName={(v) => updateWorker(idx, 'name', v)}
+                onPhone={(v) => updateWorker(idx, 'phone', v)}
+                onPhoto={(f) => setWorkerPhoto(idx, f)}
+                onDelete={() => removeWorker(idx)}
+              />
             ))}
           </div>
           {validWorkers.length === 0 && (
@@ -244,10 +292,97 @@ export function PtwSubmitForm({ open, onClose, onSubmitted }: PtwSubmitFormProps
             onClick={handleSubmit}
             disabled={!canSubmit || submitting}
           >
-            {submitting ? '提交中...' : '提交'}
+            {submitting ? (progressMsg ?? '提交中...') : '提交'}
           </button>
         </div>
       </div>
     </Modal>
+  )
+}
+
+interface WorkerRowProps {
+  worker: WorkerDraft
+  canDelete: boolean
+  onName: (v: string) => void
+  onPhone: (v: string) => void
+  onPhoto: (f: File | null) => void
+  onDelete: () => void
+}
+
+function WorkerRow({ worker, canDelete, onName, onPhone, onPhoto, onDelete }: WorkerRowProps) {
+  const fileRef = useRef<HTMLInputElement | null>(null)
+  const [preview, setPreview] = useState<string | null>(null)
+
+  async function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] || null
+    e.target.value = ''
+    if (!f) return
+    const { compressImage } = await import('../../lib/image-compress')
+    const small = await compressImage(f, { maxEdge: 1280, quality: 0.78 })
+    onPhoto(small)
+    if (preview) URL.revokeObjectURL(preview)
+    setPreview(URL.createObjectURL(small))
+  }
+
+  function clearPhoto() {
+    onPhoto(null)
+    if (preview) URL.revokeObjectURL(preview)
+    setPreview(null)
+  }
+
+  return (
+    <div className="flex gap-2 items-start">
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        className="flex-shrink-0 w-12 h-12 rounded-xl bg-site-100 hover:bg-site-200 flex items-center justify-center overflow-hidden"
+        aria-label="工人相片"
+      >
+        {preview ? (
+          <img src={preview} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <Plus size={18} className="text-site-500" />
+        )}
+      </button>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        capture="user"
+        className="hidden"
+        onChange={handlePick}
+      />
+      <div className="flex-1 flex flex-col gap-1">
+        <input
+          className="input"
+          placeholder="工人姓名"
+          value={worker.name}
+          onChange={e => onName(e.target.value)}
+        />
+        <div className="flex gap-1">
+          <input
+            className="input flex-1"
+            placeholder="電話 (選填)"
+            value={worker.phone}
+            onChange={e => onPhone(e.target.value)}
+          />
+          {worker.photo && (
+            <button type="button" className="btn-ghost text-xs text-site-500 px-2" onClick={clearPhoto}>
+              移除相片
+            </button>
+          )}
+        </div>
+      </div>
+      {canDelete && (
+        <button
+          type="button"
+          className="btn-ghost text-red-600 flex-shrink-0"
+          onClick={onDelete}
+          aria-label="刪除工人"
+        >
+          <Trash2 size={16} />
+        </button>
+      )}
+    </div>
   )
 }

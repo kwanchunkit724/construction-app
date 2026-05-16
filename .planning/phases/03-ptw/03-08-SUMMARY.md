@@ -92,8 +92,8 @@ These were NOT shipped in Phase 3 and need follow-on work:
 2. **Google Play release-signing**: follow `docs/android-play-store-release.md` (keystore + Codemagic env vars + Play Console service account + manual trigger of `Android Play Store Release` workflow).
 3. ~~**`app_config.ptw_enabled` UI gating**~~: ✅ CLOSED (v1.1) — `get_ptw_enabled` / `set_ptw_enabled` SECURITY DEFINER RPCs + `PtwFlagContext` + `PtwGate` route guard + Sidebar/SiVoSwitcher conditional render + admin toggle in AdminProjects. Admins bypass the gate.
 4. ~~**Offline banner**~~: ✅ CLOSED (v1.1) — `useIsOnline` hook (@capacitor/network on native, navigator.onLine + window events on web) + `OfflineBanner` 「需要網絡連接才能完成此操作」 wired into PtwSubmitForm, PtwApproverBar, and PtwDetail close-out + fire-watch start.
-5. **PPE / scene photos**: PtwSubmitForm currently passes empty `ppe_photo_paths` + `scene_photo_paths` arrays. Photo capture flow (camera + bucket upload) to land in a follow-on plan.
-6. **Worker photo capture**: PermitWorker.worker_photo_path supported in schema but not yet captured in submit form.
+5. ~~**PPE / scene photos**~~: ✅ CLOSED (v1.1) — `PtwPhotoPicker` (native `<input capture="environment">` + browser-side downscale to 1920px / JPEG 0.82 via `lib/image-compress.ts`). Wired in `PtwSubmitForm`: createDraft → uploadPpePhotos(v=1) → uploadScenePhotos(v=1) → saveVersion with real paths. Progress messages render in the submit button.
+6. ~~**Worker photo capture**~~: ✅ CLOSED (v1.1) — per-worker `WorkerRow` includes selfie picker (`<input capture="user">`, 1280px / JPEG 0.78). Flow: addWorker (null path) → uploadWorkerPhoto → update `permit_workers.worker_photo_path` row.
 7. **30-min fire-watch close-out E2E test**: `@ptw-smoke` spec stops at chain-complete (active state). Fire-watch close-out exceeds Playwright timeout, needs manual verification or a server-side clock injection.
 
 ## Phase 3 STATUS: ✅ COMPLETE

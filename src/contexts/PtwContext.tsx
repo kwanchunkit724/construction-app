@@ -12,6 +12,7 @@ interface PtwContextValue {
   approvalsByPtw: Record<string, Approval[]>
   signoffsByPtw: Record<string, PermitSignoff[]>
   scansByPtw: Record<string, PermitScan[]>
+  projectId: string
   loading: boolean
   fetchError: string | null
   canSubmit: boolean
@@ -218,6 +219,7 @@ export function PtwProvider({ projectId, children }: { projectId: string; childr
     loading,
     fetchError,
     canSubmit,
+    projectId,
     createDraft,
     saveVersion,
     submit,
