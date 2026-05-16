@@ -23,6 +23,8 @@ import { ProgressProvider, useProgress } from '../contexts/ProgressContext'
 import { IssuesProvider, useIssues } from '../contexts/IssuesContext'
 import { DrawingsProvider } from '../contexts/DrawingsContext'
 import { useProjects } from '../contexts/ProjectsContext'
+import { useAuth } from '../contexts/AuthContext'
+import { usePtwFlag } from '../contexts/PtwFlagContext'
 import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH } from '../types'
 import type { ProgressItem, ProgressStatus, Zone } from '../types'
 
@@ -452,6 +454,9 @@ function ZoneSection({
 
 function SiVoSwitcher({ projectId }: { projectId: string }) {
   const navigate = useNavigate()
+  const { profile } = useAuth()
+  const { enabled: ptwEnabled } = usePtwFlag()
+  const showPtw = ptwEnabled || profile?.global_role === 'admin'
   return (
     <div className="space-y-3">
       <p className="text-sm text-site-600 px-1">
@@ -483,19 +488,21 @@ function SiVoSwitcher({ projectId }: { projectId: string }) {
         </div>
         <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
       </button>
-      <button
-        onClick={() => navigate(`/project/${projectId}/ptw`)}
-        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left"
-      >
-        <div className="w-11 h-11 rounded-xl bg-red-50 text-red-700 flex items-center justify-center flex-shrink-0">
-          <Shield size={22} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-site-900">工作許可證</p>
-          <p className="text-xs text-site-500 mt-0.5">PTW · 動火 / 高空 / 吊運 + 安全主任簽核</p>
-        </div>
-        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
-      </button>
+      {showPtw && (
+        <button
+          onClick={() => navigate(`/project/${projectId}/ptw`)}
+          className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left"
+        >
+          <div className="w-11 h-11 rounded-xl bg-red-50 text-red-700 flex items-center justify-center flex-shrink-0">
+            <Shield size={22} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-site-900">工作許可證</p>
+            <p className="text-xs text-site-500 mt-0.5">PTW · 動火 / 高空 / 吊運 + 安全主任簽核</p>
+          </div>
+          <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
+        </button>
+      )}
     </div>
   )
 }

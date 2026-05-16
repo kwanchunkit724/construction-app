@@ -5,6 +5,8 @@ import { usePtw } from '../../contexts/PtwContext'
 import { PTW_TYPE_ZH, PTW_TYPE_V1 } from '../../types'
 import type { PtwType, PtwChecklistItem, PtwPayload } from '../../types'
 import { checklistTemplate } from '../../lib/ptw'
+import { useIsOnline } from '../../hooks/useIsOnline'
+import { OfflineBanner } from '../OfflineBanner'
 
 interface WorkerDraft {
   name: string
@@ -19,6 +21,7 @@ interface PtwSubmitFormProps {
 
 export function PtwSubmitForm({ open, onClose, onSubmitted }: PtwSubmitFormProps) {
   const { createDraft, saveVersion, submit, addWorker } = usePtw()
+  const online = useIsOnline()
   const [ptwType, setPtwType] = useState<PtwType>('hot_work')
   const [description, setDescription] = useState('')
   const [checklist, setChecklist] = useState<PtwChecklistItem[]>(() => checklistTemplate('hot_work'))
@@ -36,7 +39,7 @@ export function PtwSubmitForm({ open, onClose, onSubmitted }: PtwSubmitFormProps
     [workers],
   )
 
-  const canSubmit = description.trim().length > 0 && allRequiredChecked && validWorkers.length > 0
+  const canSubmit = description.trim().length > 0 && allRequiredChecked && validWorkers.length > 0 && online
 
   function handleTypeChange(t: PtwType) {
     setPtwType(t)
@@ -224,6 +227,8 @@ export function PtwSubmitForm({ open, onClose, onSubmitted }: PtwSubmitFormProps
             <p className="mt-2 text-xs text-amber-700">最少加入一名工人</p>
           )}
         </div>
+
+        {!online && <OfflineBanner />}
 
         {error && (
           <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-700">

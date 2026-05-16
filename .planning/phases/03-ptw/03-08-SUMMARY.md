@@ -90,8 +90,8 @@ These were NOT shipped in Phase 3 and need follow-on work:
 
 1. **Apple-compliance regression** (carried over from Plan 02-08): run `tests/e2e/delete-my-account.spec.ts` against live before next iOS App Store submit. PTW now also writes `in_flight_approvals` rows so the test should cover that.
 2. **Google Play release-signing**: follow `docs/android-play-store-release.md` (keystore + Codemagic env vars + Play Console service account + manual trigger of `Android Play Store Release` workflow).
-3. **`app_config.ptw_enabled` UI gating**: BottomNav/Sidebar/ProjectDetail PTW entries are currently always visible. Future plan should hide them when `ptw_enabled=false` (C3 Apple-re-review staging gate). For now operator can set the flag manually but UI surface doesn't react.
-4. **Offline banner**: `@capacitor/network` installed but no UI surface wired. PTW state-changing actions should display 「需要網絡連接」 banner when `isOnline=false`. Currently relies on RPC error if offline.
+3. ~~**`app_config.ptw_enabled` UI gating**~~: ✅ CLOSED (v1.1) — `get_ptw_enabled` / `set_ptw_enabled` SECURITY DEFINER RPCs + `PtwFlagContext` + `PtwGate` route guard + Sidebar/SiVoSwitcher conditional render + admin toggle in AdminProjects. Admins bypass the gate.
+4. ~~**Offline banner**~~: ✅ CLOSED (v1.1) — `useIsOnline` hook (@capacitor/network on native, navigator.onLine + window events on web) + `OfflineBanner` 「需要網絡連接才能完成此操作」 wired into PtwSubmitForm, PtwApproverBar, and PtwDetail close-out + fire-watch start.
 5. **PPE / scene photos**: PtwSubmitForm currently passes empty `ppe_photo_paths` + `scene_photo_paths` arrays. Photo capture flow (camera + bucket upload) to land in a follow-on plan.
 6. **Worker photo capture**: PermitWorker.worker_photo_path supported in schema but not yet captured in submit form.
 7. **30-min fire-watch close-out E2E test**: `@ptw-smoke` spec stops at chain-complete (active state). Fire-watch close-out exceeds Playwright timeout, needs manual verification or a server-side clock injection.

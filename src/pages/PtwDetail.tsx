@@ -7,6 +7,8 @@ import { PtwApproverBar } from '../components/ptw/PtwApproverBar'
 import { PtwSignaturePad } from '../components/ptw/PtwSignaturePad'
 import { QrCard } from '../components/ptw/PtwQrCard'
 import { Modal } from '../components/Modal'
+import { OfflineBanner } from '../components/OfflineBanner'
+import { useIsOnline } from '../hooks/useIsOnline'
 import { PtwProvider, usePtw } from '../contexts/PtwContext'
 import { ProjectsProvider } from '../contexts/ProjectsContext'
 import { mintPtwQrToken } from '../lib/ptw-jwt'
@@ -18,6 +20,7 @@ function PtwDetailInner() {
   const { id: projectId, ptwId } = useParams<{ id: string; ptwId: string }>()
   const navigate = useNavigate()
   const { ptws, versionsByPtw, workersByPtw, approvalsByPtw, signoffsByPtw, scansByPtw, loading, startFireWatch, closeOut, refetch } = usePtw()
+  const online = useIsOnline()
 
   const ptw = useMemo(() => ptws.find(p => p.id === ptwId), [ptws, ptwId])
   const currentVersion = useMemo(() => {
@@ -169,7 +172,7 @@ function PtwDetailInner() {
               火警監察
             </h3>
             {!ptw.fire_watch_started_at ? (
-              <button type="button" className="btn-ghost" onClick={handleStartFireWatch}>
+              <button type="button" className="btn-ghost" disabled={!online} onClick={handleStartFireWatch}>
                 開始 30 分鐘火警監察
               </button>
             ) : fireWatchSecRemaining > 0 ? (
@@ -180,17 +183,21 @@ function PtwDetailInner() {
               <p className="text-sm text-green-700">火警監察已完成 — 可以關閉</p>
             )}
             {hotWorkFireWatchEligible(ptw) && (
-              <button type="button" className="btn-primary mt-2" onClick={() => setShowCloseOut(true)}>
+              <button type="button" className="btn-primary mt-2" disabled={!online} onClick={() => setShowCloseOut(true)}>
                 關閉許可證
               </button>
             )}
+            {!online && <OfflineBanner />}
           </div>
         )}
 
         {ptw.status === 'active' && ptw.ptw_type !== 'hot_work' && (
-          <button type="button" className="btn-primary" onClick={() => setShowCloseOut(true)}>
-            關閉許可證
-          </button>
+          <>
+            <button type="button" className="btn-primary" disabled={!online} onClick={() => setShowCloseOut(true)}>
+              關閉許可證
+            </button>
+            {!online && <OfflineBanner />}
+          </>
         )}
 
         {/* Approval timeline */}

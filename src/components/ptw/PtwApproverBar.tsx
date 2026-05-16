@@ -4,6 +4,8 @@ import { Modal } from '../Modal'
 import { PtwSignaturePad } from './PtwSignaturePad'
 import { usePtw } from '../../contexts/PtwContext'
 import { useAuth } from '../../contexts/AuthContext'
+import { useIsOnline } from '../../hooks/useIsOnline'
+import { OfflineBanner } from '../OfflineBanner'
 import { supabase } from '../../lib/supabase'
 import type { PTW } from '../../types'
 
@@ -17,6 +19,7 @@ type Action = 'sign' | 'revision' | 'reject' | 'admin_override' | null
 export function PtwApproverBar({ ptw, onAction }: Props) {
   const { profile } = useAuth()
   const { approve, requestRevision, reject, adminOverride } = usePtw()
+  const online = useIsOnline()
   const [activeAction, setActiveAction] = useState<Action>(null)
   const [reason, setReason] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -73,10 +76,12 @@ export function PtwApproverBar({ ptw, onAction }: Props) {
 
   return (
     <>
+      {!online && <div className="mb-2"><OfflineBanner /></div>}
       <div className="card p-3 flex flex-wrap gap-2 sticky bottom-0">
         <button
           type="button"
           className="btn-primary flex-1 min-w-[8rem]"
+          disabled={!online}
           onClick={() => setActiveAction('sign')}
         >
           <Check size={16} className="inline mr-1" />
@@ -85,6 +90,7 @@ export function PtwApproverBar({ ptw, onAction }: Props) {
         <button
           type="button"
           className="btn-ghost flex-1 min-w-[7rem] text-amber-700"
+          disabled={!online}
           onClick={() => setActiveAction('revision')}
         >
           <ArrowLeftToLine size={16} className="inline mr-1" />
@@ -93,6 +99,7 @@ export function PtwApproverBar({ ptw, onAction }: Props) {
         <button
           type="button"
           className="btn-ghost flex-1 min-w-[6rem] text-red-700"
+          disabled={!online}
           onClick={() => setActiveAction('reject')}
         >
           <XIcon size={16} className="inline mr-1" />
@@ -102,6 +109,7 @@ export function PtwApproverBar({ ptw, onAction }: Props) {
           <button
             type="button"
             className="btn-ghost flex-1 min-w-[8rem] text-purple-700"
+            disabled={!online}
             onClick={() => setActiveAction('admin_override')}
           >
             <Shield size={16} className="inline mr-1" />

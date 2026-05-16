@@ -2,6 +2,8 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { lazy, Suspense } from 'react'
 import { AuthProvider } from './contexts/AuthContext'
 import { ProjectsProvider } from './contexts/ProjectsContext'
+import { PtwFlagProvider } from './contexts/PtwFlagContext'
+import { PtwGate } from './components/PtwGate'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { FullPageSpinner } from './components/Spinner'
 import Login from './pages/Login'
@@ -33,6 +35,7 @@ export default function App() {
   return (
     <AuthProvider>
       <ProjectsProvider>
+        <PtwFlagProvider>
         <HashRouter>
           <Routes>
           <Route path="/login" element={<Login />} />
@@ -50,12 +53,13 @@ export default function App() {
           <Route path="/project/:id/si/:siId" element={<ProtectedRoute><SiDetailPage /></ProtectedRoute>} />
           <Route path="/project/:id/vo" element={<ProtectedRoute><VoListPage /></ProtectedRoute>} />
           <Route path="/project/:id/vo/:voId" element={<ProtectedRoute><VoDetailPage /></ProtectedRoute>} />
-          <Route path="/project/:id/ptw" element={<ProtectedRoute>{lazyRoute(<PtwListPage />)}</ProtectedRoute>} />
-          <Route path="/project/:id/ptw/:ptwId" element={<ProtectedRoute>{lazyRoute(<PtwDetailPage />)}</ProtectedRoute>} />
-          <Route path="/verify/:token" element={<ProtectedRoute>{lazyRoute(<PtwVerifyPage />)}</ProtectedRoute>} />
+          <Route path="/project/:id/ptw" element={<ProtectedRoute><PtwGate>{lazyRoute(<PtwListPage />)}</PtwGate></ProtectedRoute>} />
+          <Route path="/project/:id/ptw/:ptwId" element={<ProtectedRoute><PtwGate>{lazyRoute(<PtwDetailPage />)}</PtwGate></ProtectedRoute>} />
+          <Route path="/verify/:token" element={<ProtectedRoute><PtwGate>{lazyRoute(<PtwVerifyPage />)}</PtwGate></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </HashRouter>
+        </PtwFlagProvider>
       </ProjectsProvider>
     </AuthProvider>
   )

@@ -2,6 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { Home, Building2, User, Shield, HardHat, LogOut, LayoutDashboard, Users, GitBranch, FileText, Receipt } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
+import { usePtwFlag } from '../contexts/PtwFlagContext'
 import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
 
 /**
@@ -11,8 +12,10 @@ import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
 export function Sidebar() {
   const { profile, signOut } = useAuth()
   const { projects } = useProjects()
+  const { enabled: ptwEnabled } = usePtwFlag()
   const location = useLocation()
   const isAdmin = profile?.global_role === 'admin'
+  const showPtw = ptwEnabled || isAdmin
   const isPM = !!profile && projects.some(p => p.assigned_pm_ids.includes(profile.id))
   const showDashboard = isAdmin || isPM
 
@@ -30,7 +33,7 @@ export function Sidebar() {
     ...(projectId ? [
       { to: `/project/${projectId}/si`, label: '工地指令', icon: FileText },
       { to: `/project/${projectId}/vo`, label: '變更指令', icon: Receipt },
-      { to: `/project/${projectId}/ptw`, label: '工作許可證', icon: HardHat },
+      ...(showPtw ? [{ to: `/project/${projectId}/ptw`, label: '工作許可證', icon: HardHat }] : []),
     ] : []),
     ...(isAdmin ? [
       { to: '/admin', label: '管理', icon: Shield },
