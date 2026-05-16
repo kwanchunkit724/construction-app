@@ -51,7 +51,7 @@ on conflict (id) do nothing;
 insert into user_profiles (id, phone, name, global_role, sub_role, company)
 values
   ('11110001-0001-0001-0001-000000000001', '60000001', '測試判頭工人', 'subcontractor_worker', 'foreman', '測試判頭'),
-  ('11110002-0002-0002-0002-000000000002', '60000002', '測試總承建商', 'main_contractor', 'site_agent', '測試總承建商'),
+  ('11110002-0002-0002-0002-000000000002', '60000002', '測試總承建商', 'main_contractor', 'engineer', '測試總承建商'),
   ('11110003-0003-0003-0003-000000000003', '60000003', '測試PM', 'pm', null, '測試管理公司'),
   ('11110099-0099-0099-0099-000000000099', '60000099', '測試管理員', 'admin', null, '測試管理公司')
 on conflict (id) do nothing;

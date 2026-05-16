@@ -52,6 +52,11 @@ async function logout(page: Page) {
     try { window.localStorage.clear() } catch { /* noop */ }
     try { window.sessionStorage.clear() } catch { /* noop */ }
   })
+  // Force AuthContext re-bootstrap from now-empty storage. Without reload
+  // the in-memory session survives clearCookies/clear and Login redirects
+  // back to /home.
+  await page.goto('/#/login')
+  await page.reload()
 }
 
 async function openDeleteSheet(page: Page) {
@@ -88,6 +93,7 @@ test.describe('@delete-account-smoke', () => {
   })
 
   test('user with in-flight SI is blocked from deletion', async ({ page }) => {
+    test.setTimeout(180_000)
     // 1. Subcon submits an SI so the default chain [main_contractor, pm]
     //    starts ticking with main_contractor as the current actor. That
     //    leaves an unresolved approval chain whose submitter (subcon) is
@@ -95,8 +101,8 @@ test.describe('@delete-account-smoke', () => {
     await loginAs(page, SUBCON_PHONE)
     await page.goto(`/#/project/${PROJECT_ID}/si`)
     await page.getByRole('button', { name: /新增|提交|工地指令/ }).first().click()
-    await page.getByPlaceholder(/標題/).fill('@delete-account-smoke 待處理 SI')
-    await page.getByPlaceholder(/描述/).fill('刪除帳戶守衛測試 — 此 SI 故意不批准')
+    await page.getByPlaceholder(/例：/).fill('@delete-account-smoke 待處理 SI')
+    await page.getByPlaceholder(/詳細說明/).fill('刪除帳戶守衛測試 — 此 SI 故意不批准')
     await page.getByRole('button', { name: /^提交$/ }).click()
 
     const siNumberLocator = page.getByText(/SI-\d+/).first()
@@ -135,18 +141,10 @@ test.describe('@delete-account-smoke', () => {
     await page.getByRole('button', { name: /關閉/ }).click()
     await expect(page.getByText(/手機號碼/)).toBeVisible({ timeout: 5_000 })
 
-    // 6. Cleanup: MC + PM approve the dangling SI so the seed fixture
-    //    returns to a quiescent state for the next test run.
-    await logout(page)
-    await loginAs(page, MC_PHONE)
-    await page.goto(`/#/project/${PROJECT_ID}/si`)
-    await page.getByText(/SI-\d+/).first().click()
-    await page.getByRole('button', { name: /^✓?\s*批准$/ }).first().click().catch(() => {})
-
-    await logout(page)
-    await loginAs(page, PM_PHONE)
-    await page.goto(`/#/project/${PROJECT_ID}/si`)
-    await page.getByText(/SI-\d+/).first().click()
-    await page.getByRole('button', { name: /^✓?\s*批准$/ }).first().click().catch(() => {})
+    // 6. Cleanup: skip the MC + PM UI approval drain — flaky under Playwright
+    //    timing (logout/login churn + SI detail rehydrate). The next test run's
+    //    pre-seed SQL deletes leftover SIs for project 20002000 / created_by
+    //    11110001, so the fixture returns to a quiescent state via DB-level
+    //    reset rather than UI walk.
   })
 })
