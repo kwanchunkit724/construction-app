@@ -10,7 +10,6 @@ import { Modal } from '../components/Modal'
 import { OfflineBanner } from '../components/OfflineBanner'
 import { useIsOnline } from '../hooks/useIsOnline'
 import { PtwProvider, usePtw } from '../contexts/PtwContext'
-import { ProjectsProvider } from '../contexts/ProjectsContext'
 import { mintPtwQrToken } from '../lib/ptw-jwt'
 import { remainingFireWatchSeconds, hotWorkFireWatchEligible } from '../lib/ptw'
 import { PTW_TYPE_ZH, PTW_STATUS_ZH } from '../types'
@@ -252,10 +251,8 @@ export default function PtwDetailPage() {
   const { id: projectId } = useParams<{ id: string }>()
   if (!projectId) return null
   return (
-    <ProjectsProvider>
-      <PtwProvider projectId={projectId}>
-        <PtwDetailInner />
-      </PtwProvider>
-    </ProjectsProvider>
+    <PtwProvider projectId={projectId}>
+      <PtwDetailInner />
+    </PtwProvider>
   )
 }

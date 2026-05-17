@@ -6,7 +6,6 @@ import { Spinner } from '../components/Spinner'
 import { PtwCard } from '../components/ptw/PtwCard'
 import { PtwSubmitForm } from '../components/ptw/PtwSubmitForm'
 import { PtwProvider, usePtw } from '../contexts/PtwContext'
-import { ProjectsProvider } from '../contexts/ProjectsContext'
 import type { PtwStatus } from '../types'
 
 type StatusFilter = 'all' | 'draft' | 'in_review' | 'active' | 'closed_out' | 'expired' | 'rejected' | 'revision_requested'
@@ -114,10 +113,8 @@ export default function PtwListPage() {
   const { id: projectId } = useParams<{ id: string }>()
   if (!projectId) return null
   return (
-    <ProjectsProvider>
-      <PtwProvider projectId={projectId}>
-        <PtwListInner />
-      </PtwProvider>
-    </ProjectsProvider>
+    <PtwProvider projectId={projectId}>
+      <PtwListInner />
+    </PtwProvider>
   )
 }
