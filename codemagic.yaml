@@ -354,13 +354,13 @@ workflows:
       - android/app/build/outputs/**/*.aab
       - android/app/build/outputs/**/mapping.txt
 
-    publishing:
-      # Google Play Console publishing. Requires GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
-      # env var (service-account JSON granted "Releases" role on the app
-      # in Play Console → Setup → API access).
-      google_play:
-        credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
-        track: internal
-        # Optional: pin to a specific Play Console internal-test cohort.
-        # in_app_update_priority: 3
-        # release_status: completed
+    # Auto-publish to Google Play Internal Testing is disabled until a
+    # Play Console service account JSON is provisioned. Re-enable by
+    # uncommenting the block below and setting
+    # GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS in Codemagic env vars
+    # (see Play Console → Setup → API access → Create service account).
+    #
+    # publishing:
+    #   google_play:
+    #     credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
+    #     track: internal
