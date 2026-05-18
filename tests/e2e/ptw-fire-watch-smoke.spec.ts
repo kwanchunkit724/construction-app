@@ -72,18 +72,6 @@ const SUPABASE_BASE = process.env.TEST_SUPABASE_URL ||
 const SUPABASE_API_KEY = process.env.TEST_SUPABASE_ANON_KEY ||
   'sb_publishable_BHKTjGCKkot6GVa2M6BCMQ_0qBAl1jP'
 
-// Resolve PTW id from its number by navigating to the list, clicking the
-// card, and reading the hash route. Avoids cross-context fetches entirely.
-async function resolvePtwIdByNumber(page: Page, projectId: string, ptwNumber: string): Promise<string> {
-  await page.goto(`/#/project/${projectId}/ptw`)
-  await page.getByText(ptwNumber).first().click()
-  await page.waitForURL(/#\/project\/[^/]+\/ptw\/[0-9a-f-]{36}/, { timeout: 15_000 })
-  const url = page.url()
-  const m = url.match(/\/ptw\/([0-9a-f-]{36})/)
-  if (!m) throw new Error('could not parse PTW id from URL: ' + url)
-  return m[1]
-}
-
 // Call the admin-only backdate RPC via raw PostgREST fetch using the
 // admin session's access_token from localStorage. No Supabase client
 // needed — keeps page.evaluate serializable.
@@ -168,15 +156,24 @@ test.describe('@ptw-fire-watch-smoke', () => {
     await expect(page.getByText(/簽核紀錄 \(2\)/).first()).toBeVisible({ timeout: 15_000 })
     await expect(page.getByText(/生效中/).first()).toBeVisible({ timeout: 10_000 })
 
-    // -------- 4. Admin backdates fire_watch_started_at by 31 min --------
+    // -------- 4. Subcon starts fire watch via UI, then admin backdates --------
     //
-    // The UI "開始 30 分鐘火警監察" button does a direct UPDATE on
-    // permits_to_work.fire_watch_started_at, but RLS blocks that for
-    // status='active' (only draft is updatable). We side-step that
-    // missing RPC by using the admin-only `backdate_ptw_fire_watch`
-    // helper, which (1) starts the fire watch and (2) backdates it 31
-    // minutes in one shot — exactly the regression we want to test.
-    const ptwId = await resolvePtwIdByNumber(page, PROJECT_ID, ptwNumber)
+    // The "開始 30 分鐘火警監察" button now calls the SECURITY DEFINER RPC
+    // start_ptw_fire_watch (v10-start-ptw-fire-watch.sql) — the prior
+    // direct UPDATE was silently dropped by the draft-only UPDATE RLS
+    // policy. Clicking the button here covers the real user path.
+    // Admin then backdates the timestamp 31 minutes so close_out_ptw's
+    // 30-min server-side guard considers it elapsed (skips real wait).
+    await logout(page)
+    await loginAs(page, SUBCON_PHONE)
+    await page.goto(`/#/project/${PROJECT_ID}/ptw`)
+    await page.getByText(ptwNumber).first().click()
+    await page.waitForURL(/#\/project\/[^/]+\/ptw\/[0-9a-f-]{36}/, { timeout: 15_000 })
+    await page.getByRole('button', { name: /開始 30 分鐘火警監察/ }).click()
+    // Countdown view shows once fire_watch_started_at is set.
+    await expect(page.getByText(/還需 \d+ 分/).first()).toBeVisible({ timeout: 10_000 })
+
+    const ptwId = page.url().match(/\/ptw\/([0-9a-f-]{36})/)![1]
     await logout(page)
     await loginAs(page, ADMIN_PHONE)
     await page.goto(`/#/project/${PROJECT_ID}/ptw`)

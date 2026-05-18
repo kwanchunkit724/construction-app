@@ -178,14 +178,11 @@ export function PtwProvider({ projectId, children }: { projectId: string; childr
   }, [])
 
   const startFireWatch = useCallback(async (ptwId: string) => {
-    // Direct update on permits_to_work. RLS UPDATE policy currently only allows
-    // the creator to update during draft. Need a SECURITY DEFINER RPC for this
-    // — to be added in a future plan. For now, use direct update under the
-    // assumption the operator is the creator (typical hot_work close-out path).
-    const { error } = await supabase
-      .from('permits_to_work')
-      .update({ fire_watch_started_at: new Date().toISOString() })
-      .eq('id', ptwId)
+    // Direct UPDATE is blocked by RLS once status leaves 'draft', so the
+    // SECURITY DEFINER RPC start_ptw_fire_watch (v10-start-ptw-fire-watch.sql)
+    // is the only working path. The RPC enforces creator + active + hot_work
+    // + null-guard server-side.
+    const { error } = await supabase.rpc('start_ptw_fire_watch', { p_ptw_id: ptwId })
     return { error: error?.message ?? null }
   }, [])
 
