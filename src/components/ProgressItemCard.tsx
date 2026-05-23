@@ -197,67 +197,67 @@ export function ProgressItemCard({
               )}
 
               {(canEdit || (isLeaf && drawingsCtx)) && (
-                <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-site-100">
+                <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-site-100">
                   {isLeaf && drawingsCtx && (
                     <button
                       onClick={() => setDrawingsOpen(o => !o)}
-                      className="text-[11px] bg-site-100 hover:bg-site-200 text-site-700 px-2.5 py-1 rounded-lg flex items-center gap-1 min-h-0 font-medium"
+                      className="text-sm bg-site-100 hover:bg-site-200 text-site-700 px-3 py-2 rounded-lg flex items-center gap-1.5 min-h-[44px] font-medium"
                     >
-                      <ImageIcon size={11} /> 🖼 圖則 ({drawingCount})
+                      <ImageIcon size={16} /> 🖼 圖則 ({drawingCount})
                     </button>
                   )}
                   {canEdit && isLeaf && (
                     <button
                       onClick={() => onUpdate(item)}
-                      className="text-[11px] bg-safety-500 hover:bg-safety-600 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 min-h-0"
+                      className="text-sm bg-safety-500 hover:bg-safety-600 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 min-h-[44px] font-medium"
                     >
-                      <Edit3 size={11} /> 更新
+                      <Edit3 size={16} /> 更新
                     </button>
                   )}
                   {canEdit && isLeaf && (
                     <button
                       onClick={() => onAssign(item)}
-                      className="text-[11px] bg-site-700 hover:bg-site-800 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 min-h-0"
+                      className="text-sm bg-site-700 hover:bg-site-800 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 min-h-[44px] font-medium"
                     >
-                      <Users size={11} /> 指派
+                      <Users size={16} /> 指派
                     </button>
                   )}
                   {canEdit && isLeaf && (
                     <button
                       onClick={() => onHistory(item)}
-                      className="text-[11px] border border-site-200 text-site-600 hover:bg-site-50 px-2.5 py-1 rounded-lg flex items-center gap-1 min-h-0"
+                      className="text-sm border border-site-200 text-site-600 hover:bg-site-50 px-3 py-2 rounded-lg flex items-center gap-1.5 min-h-[44px] font-medium"
                     >
-                      <History size={11} /> 歷史
+                      <History size={16} /> 歷史
                     </button>
                   )}
                   {canEdit && (
                     <button
                       onClick={() => onAddChild(item)}
-                      className="text-[11px] bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 min-h-0"
+                      className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 min-h-[44px] font-medium"
                     >
-                      <Plus size={11} /> 細項
+                      <Plus size={16} /> 細項
                     </button>
                   )}
                   {canEdit && !confirmDel && (
                     <button
                       onClick={() => setConfirmDel(true)}
-                      className="text-[11px] bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 px-2.5 py-1 rounded-lg flex items-center gap-1 min-h-0"
+                      className="text-sm bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 px-3 py-2 rounded-lg flex items-center gap-1.5 min-h-[44px] font-medium"
                     >
-                      <Trash2 size={11} /> 刪除
+                      <Trash2 size={16} /> 刪除
                     </button>
                   )}
                   {canEdit && confirmDel && (
-                    <span className="flex items-center gap-1">
-                      <span className="text-[11px] text-red-600 font-semibold">確認?</span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-sm text-red-600 font-semibold">確認?</span>
                       <button
                         onClick={() => { onDelete(item); setConfirmDel(false) }}
-                        className="text-[11px] bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded-lg min-h-0"
+                        className="text-sm bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg min-h-[44px] font-medium"
                       >
                         刪除
                       </button>
                       <button
                         onClick={() => setConfirmDel(false)}
-                        className="text-[11px] border border-site-200 text-site-500 px-2.5 py-1 rounded-lg min-h-0"
+                        className="text-sm border border-site-200 text-site-500 px-3 py-2 rounded-lg min-h-[44px] font-medium"
                       >
                         取消
                       </button>

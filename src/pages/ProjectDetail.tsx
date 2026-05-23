@@ -155,12 +155,12 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
             onExportProgressXlsx={async () => {
               if (!project) return
               const { exportProgressToExcel } = await import('../lib/export')
-              exportProgressToExcel(project, items)
+              await exportProgressToExcel(project, items)
             }}
             onExportProgressPdf={async () => {
               if (!project) return
               const { exportProgressToPDF } = await import('../lib/export')
-              exportProgressToPDF(project, items)
+              await exportProgressToPDF(project, items)
             }}
             onExportIssuesXlsx={async () => {
               if (!project) return
@@ -171,7 +171,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
                 if (data) for (const u of data as UserProfile[]) users[u.id] = u
               }
               const { exportIssuesToExcel } = await import('../lib/export')
-              exportIssuesToExcel(project, issues, users)
+              await exportIssuesToExcel(project, issues, users)
             }}
           />
           <button onClick={manualRefresh} disabled={refreshing} className="text-site-500 hover:text-site-800 p-2" aria-label="刷新">

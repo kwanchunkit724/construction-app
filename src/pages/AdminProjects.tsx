@@ -37,7 +37,7 @@ export default function AdminProjects() {
       if (data) for (const u of data as UserProfile[]) users[u.id] = u
     }
     const { exportProjectsToExcel } = await import('../lib/export')
-    exportProjectsToExcel(projects, users)
+    await exportProjectsToExcel(projects, users)
   }
 
   async function togglePtw() {

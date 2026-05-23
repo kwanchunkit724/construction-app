@@ -1,5 +1,7 @@
 // Excel + PDF export helpers.
-// Mobile-friendly: triggers a file download via Blob URL.
+// Mobile-friendly: triggers a file download via Blob URL on web; writes to
+// the Documents directory via Capacitor Filesystem on native (iOS/Android),
+// since WebView blocks anchor-based downloads inside Capacitor.
 //
 // VO PDF export (exportVOToPDF below) embeds Noto Sans HK subset
 // (SIL Open Font License, Google) loaded lazily from public/fonts/.
@@ -7,6 +9,8 @@
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { Capacitor } from '@capacitor/core'
+import { Filesystem, Directory } from '@capacitor/filesystem'
 import {
   PROGRESS_STATUS_ZH, ISSUE_STATUS_ZH, ISSUE_HANDLER_ZH, ROLE_ZH,
   computeRollup, getDescendantLeaves,
@@ -18,7 +22,34 @@ import type {
 } from '../types'
 import { formatHKD } from './currency'
 
-function downloadBlob(blob: Blob, filename: string) {
+async function blobToBase64(blob: Blob): Promise<string> {
+  const buf = await blob.arrayBuffer()
+  const bytes = new Uint8Array(buf)
+  let bin = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 0x8000)))
+  }
+  return btoa(bin)
+}
+
+async function downloadBlob(blob: Blob, filename: string) {
+  if (Capacitor.isNativePlatform()) {
+    // Native (iOS / Android via Capacitor) — WebView blocks <a download>.
+    // Write to the platform Documents directory; user retrieves via the
+    // native Files app (iOS) or file manager (Android).
+    const b64 = await blobToBase64(blob)
+    // Note: omit `encoding` so Capacitor writes the base64 payload as raw
+    // bytes; passing any Encoding value would utf8-encode the base64 string.
+    await Filesystem.writeFile({
+      path: filename,
+      data: b64,
+      directory: Directory.Documents,
+      recursive: true,
+    })
+    // eslint-disable-next-line no-alert
+    alert(`已儲存：${filename}\n位置：手機「文件」資料夾`)
+    return
+  }
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -50,19 +81,39 @@ interface ProgressRow {
   最後更新: string
 }
 
-function buildProgressRows(project: Project, items: ProgressItem[]): ProgressRow[] {
-  return items
-    .sort((a, b) => a.code.localeCompare(b.code))
-    .map(item => {
+function buildProgressRows(
+  project: Project,
+  items: ProgressItem[],
+): { rows: ProgressRow[]; outlineLevels: number[] } {
+  // Group items by parent_id to walk the tree depth-first, preserving the
+  // visual nesting that the UI shows. Output order: roots → children →
+  // grandchildren, each level sorted by `code`.
+  const byParent = new Map<string | null, ProgressItem[]>()
+  for (const i of items) {
+    const k = i.parent_id ?? null
+    if (!byParent.has(k)) byParent.set(k, [])
+    byParent.get(k)!.push(i)
+  }
+  for (const arr of byParent.values()) arr.sort((a, b) => a.code.localeCompare(b.code))
+
+  const rows: ProgressRow[] = []
+  const outlineLevels: number[] = []
+
+  function dfs(parentId: string | null, depth: number) {
+    for (const item of byParent.get(parentId) ?? []) {
       const isLeaf = !items.some(i => i.parent_id === item.id)
       const zoneName = project.zones.find(z => z.id === item.zone_id)?.name ?? item.zone_id ?? ''
       const actual = isLeaf ? item.actual_progress : computeRollup(getDescendantLeaves(items, item.id)).actual
       const planned = isLeaf ? item.planned_progress : computeRollup(getDescendantLeaves(items, item.id)).planned
       const status = isLeaf ? item.status : computeRollup(getDescendantLeaves(items, item.id)).status
-      return {
+      // Full-width space indent (U+3000) renders evenly with CJK headers
+      // and stays visible on both Excel and PDF without breaking column
+      // alignment.
+      const indent = '　'.repeat(depth)
+      rows.push({
         分區: zoneName,
         編號: item.code,
-        名稱: item.title,
+        名稱: indent + item.title,
         層級: item.level,
         追蹤模式: item.tracking_mode === 'floors' ? `樓層 (${item.floors_completed.length}/${item.floor_labels.length})` : '百分比',
         計劃進度: `${planned}%`,
@@ -72,49 +123,62 @@ function buildProgressRows(project: Project, items: ProgressItem[]): ProgressRow
         計劃完成: item.planned_end ?? '',
         備注: isLeaf ? item.notes : '',
         最後更新: new Date(item.last_updated_at).toLocaleString('zh-HK'),
-      }
-    })
+      })
+      outlineLevels.push(depth)
+      dfs(item.id, depth + 1)
+    }
+  }
+  dfs(null, 0)
+  return { rows, outlineLevels }
 }
 
-export function exportProgressToExcel(project: Project, items: ProgressItem[]) {
-  const rows = buildProgressRows(project, items)
+export async function exportProgressToExcel(project: Project, items: ProgressItem[]) {
+  const { rows, outlineLevels } = buildProgressRows(project, items)
   const ws = XLSX.utils.json_to_sheet(rows)
   ws['!cols'] = [
-    { wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 6 }, { wch: 14 },
+    { wch: 12 }, { wch: 12 }, { wch: 36 }, { wch: 6 }, { wch: 14 },
     { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 18 },
   ]
+  // Excel outline rows: index 0 is the header row, then one entry per data
+  // row carrying its tree depth. Excel renders +/− grouping controls on the
+  // left gutter so users can collapse subtrees.
+  ws['!rows'] = [{}, ...outlineLevels.map(lv => ({ level: lv }))]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, '進度追蹤')
   const blob = new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
-  downloadBlob(blob, `${safeName(project.name)}_進度_${dateStr()}.xlsx`)
+  await downloadBlob(blob, `${safeName(project.name)}_進度_${dateStr()}.xlsx`)
 }
 
-export function exportProgressToPDF(project: Project, items: ProgressItem[]) {
-  const rows = buildProgressRows(project, items)
+export async function exportProgressToPDF(project: Project, items: ProgressItem[]) {
+  const { rows } = buildProgressRows(project, items)
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
+  // Embed Noto Sans HK so Chinese project names + body cells render instead
+  // of showing 亂碼 (jsPDF's default Helvetica has no CJK glyphs).
+  await ensureChineseFont(doc)
   doc.setFontSize(14)
-  doc.text(`${project.name} - Progress Report`, 40, 40)
+  doc.text(`${project.name} - 進度報告`, 40, 40)
   doc.setFontSize(10)
-  doc.text(`Generated: ${new Date().toLocaleString('en-US')}`, 40, 58)
+  doc.text(`產生時間: ${new Date().toLocaleString('zh-HK')}`, 40, 58)
 
   autoTable(doc, {
     startY: 75,
-    head: [['Zone', 'Code', 'Title', 'Lvl', 'Mode', 'Plan%', 'Actual%', 'Status', 'Start', 'End']],
+    head: [['分區', '編號', '名稱', '層級', '模式', '計劃%', '實際%', '狀態', '開始', '完成']],
     body: rows.map(r => [
       r.分區, r.編號, r.名稱, r.層級, r.追蹤模式, r.計劃進度, r.實際進度, r.狀態, r.計劃開始, r.計劃完成,
     ]),
-    styles: { fontSize: 8, cellPadding: 4 },
-    headStyles: { fillColor: [249, 115, 22] },
+    styles: { fontSize: 8, cellPadding: 4, font: 'NotoHK' },
+    headStyles: { fillColor: [249, 115, 22], font: 'NotoHK', textColor: 255 },
     columnStyles: { 2: { cellWidth: 180 } },
   })
-  doc.save(`${safeName(project.name)}_progress_${dateStr()}.pdf`)
+  const blob = doc.output('blob') as Blob
+  await downloadBlob(blob, `${safeName(project.name)}_progress_${dateStr()}.pdf`)
 }
 
 // ── Issues export ────────────────────────────────────────────
 
-export function exportIssuesToExcel(
+export async function exportIssuesToExcel(
   project: Project,
   issues: Issue[],
   users: Record<string, UserProfile>,
@@ -143,12 +207,12 @@ export function exportIssuesToExcel(
   const blob = new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
-  downloadBlob(blob, `${safeName(project.name)}_問題_${dateStr()}.xlsx`)
+  await downloadBlob(blob, `${safeName(project.name)}_問題_${dateStr()}.xlsx`)
 }
 
 // ── Projects list export (admin) ─────────────────────────────
 
-export function exportProjectsToExcel(
+export async function exportProjectsToExcel(
   projects: Project[],
   users: Record<string, UserProfile>,
 ) {
@@ -166,7 +230,7 @@ export function exportProjectsToExcel(
   const blob = new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
-  downloadBlob(blob, `工地清單_${dateStr()}.xlsx`)
+  await downloadBlob(blob, `工地清單_${dateStr()}.xlsx`)
 }
 
 function safeName(name: string): string {
@@ -329,5 +393,6 @@ export async function exportVOToPDF(
   doc.setFontSize(8)
   doc.text(`產生時間：${new Date().toLocaleString('zh-HK')} — 由 CK工程系統產生`, 40, 820)
 
-  doc.save(`${safeName(project.name)}_${vo.number}_${dateStr()}.pdf`)
+  const blob = doc.output('blob') as Blob
+  await downloadBlob(blob, `${safeName(project.name)}_${vo.number}_${dateStr()}.pdf`)
 }
