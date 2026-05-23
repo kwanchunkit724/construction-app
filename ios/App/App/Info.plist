@@ -61,5 +61,14 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<!--
+	Export-compliance declaration. The app uses only HTTPS (Apple's built-in
+	TLS via NSURLSession / WebKit) and standard OS frameworks — no proprietary
+	encryption and no third-party crypto libraries shipped inside the bundle.
+	Setting this to NO marks the build as exempt under U.S. export rules so
+	TestFlight stops blocking each upload with "缺少出口合規資訊".
+	-->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
