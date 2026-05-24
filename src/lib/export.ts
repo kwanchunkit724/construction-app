@@ -152,28 +152,142 @@ export async function exportProgressToExcel(project: Project, items: ProgressIte
 }
 
 export async function exportProgressToPDF(project: Project, items: ProgressItem[]) {
-  const { rows } = buildProgressRows(project, items)
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
-  // Embed Noto Sans HK so Chinese project names + body cells render instead
-  // of showing 亂碼 (jsPDF's default Helvetica has no CJK glyphs).
-  await ensureChineseFont(doc)
-  doc.setFontSize(14)
-  doc.text(`${project.name} - 進度報告`, 40, 40)
-  doc.setFontSize(10)
-  doc.text(`產生時間: ${new Date().toLocaleString('zh-HK')}`, 40, 58)
+  // Strategy: render an offscreen HTML table with the browser's own CJK
+  // fallback chain, snapshot via html2canvas, then paginate the resulting
+  // bitmap into A4 landscape pages. The previous jsPDF-autoTable path
+  // depended on `public/fonts/noto-sans-hk-subset.ttf` which was built for
+  // the VO export's fixed vocabulary (Plan 02-06, ~186 KB) and lacked
+  // glyphs for arbitrary project zone names + item titles — every uncovered
+  // character collapsed to the `.notdef` glyph, producing the garbled
+  // output users saw. html2canvas hands the work back to the browser font
+  // stack (Microsoft JhengHei / PingFang HK / etc. per tailwind.config.js
+  // `font-sans`), so any CJK string the user can type is rendered.
 
-  autoTable(doc, {
-    startY: 75,
-    head: [['分區', '編號', '名稱', '層級', '模式', '計劃%', '實際%', '狀態', '開始', '完成']],
-    body: rows.map(r => [
-      r.分區, r.編號, r.名稱, r.層級, r.追蹤模式, r.計劃進度, r.實際進度, r.狀態, r.計劃開始, r.計劃完成,
-    ]),
-    styles: { fontSize: 8, cellPadding: 4, font: 'NotoHK' },
-    headStyles: { fillColor: [249, 115, 22], font: 'NotoHK', textColor: 255 },
-    columnStyles: { 2: { cellWidth: 180 } },
-  })
-  const blob = doc.output('blob') as Blob
-  await downloadBlob(blob, `${safeName(project.name)}_progress_${dateStr()}.pdf`)
+  const { rows } = buildProgressRows(project, items)
+  const html2canvasMod = await import('html2canvas')
+  const html2canvas = html2canvasMod.default
+
+  // Build the offscreen table. position:fixed + left:-10000 keeps it off
+  // the visible viewport but still attached to the document (html2canvas
+  // refuses detached nodes). Width is sized for A4 landscape at scale=2
+  // so the snapshot maps cleanly into the page.
+  const container = document.createElement('div')
+  container.style.cssText = [
+    'position: fixed',
+    'top: 0',
+    'left: -10000px',
+    'width: 1100px',
+    'padding: 24px',
+    'background: #ffffff',
+    'font-family: Inter, "Microsoft JhengHei", "PingFang HK", "Heiti TC", "Noto Sans CJK TC", sans-serif',
+    'font-size: 11px',
+    'color: #0f172a',
+  ].join('; ')
+
+  const statusBg: Record<string, string> = {
+    '未開始': '#f1f5f9',
+    '進行中': '#dbeafe',
+    '已完工': '#dcfce7',
+    '延誤': '#fee2e2',
+    '阻塞': '#fef3c7',
+  }
+
+  // Hand-rolled HTML to control colors + indent precisely. Title row +
+  // generated-at line above the table, orange header band, alternating
+  // row backgrounds for readability.
+  container.innerHTML = `
+    <h1 style="margin:0 0 4px 0; font-size:20px; font-weight:700; color:#0f172a;">
+      ${escapeHtml(project.name)} — 進度報告
+    </h1>
+    <div style="margin:0 0 12px 0; font-size:11px; color:#64748b;">
+      產生時間：${new Date().toLocaleString('zh-HK')}
+    </div>
+    <table style="width:100%; border-collapse:collapse; font-size:11px;">
+      <thead>
+        <tr style="background:#f97316; color:#ffffff;">
+          <th style="padding:8px 6px; text-align:left; width:70px;">分區</th>
+          <th style="padding:8px 6px; text-align:left; width:90px;">編號</th>
+          <th style="padding:8px 6px; text-align:left;">名稱</th>
+          <th style="padding:8px 6px; text-align:center; width:40px;">層級</th>
+          <th style="padding:8px 6px; text-align:left; width:110px;">追蹤模式</th>
+          <th style="padding:8px 6px; text-align:right; width:60px;">計劃%</th>
+          <th style="padding:8px 6px; text-align:right; width:60px;">實際%</th>
+          <th style="padding:8px 6px; text-align:center; width:70px;">狀態</th>
+          <th style="padding:8px 6px; text-align:left; width:90px;">計劃開始</th>
+          <th style="padding:8px 6px; text-align:left; width:90px;">計劃完成</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((r, i) => `
+          <tr style="background:${i % 2 === 0 ? '#ffffff' : '#f8fafc'}; border-bottom:1px solid #e2e8f0;">
+            <td style="padding:6px;">${escapeHtml(r.分區)}</td>
+            <td style="padding:6px; font-family:Consolas,monospace;">${escapeHtml(r.編號)}</td>
+            <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(r.名稱)}</td>
+            <td style="padding:6px; text-align:center;">${r.層級}</td>
+            <td style="padding:6px;">${escapeHtml(r.追蹤模式)}</td>
+            <td style="padding:6px; text-align:right;">${escapeHtml(r.計劃進度)}</td>
+            <td style="padding:6px; text-align:right; font-weight:600;">${escapeHtml(r.實際進度)}</td>
+            <td style="padding:6px; text-align:center;">
+              <span style="background:${statusBg[r.狀態] ?? '#f1f5f9'}; padding:2px 8px; border-radius:8px; font-size:10px;">
+                ${escapeHtml(r.狀態)}
+              </span>
+            </td>
+            <td style="padding:6px;">${escapeHtml(r.計劃開始)}</td>
+            <td style="padding:6px;">${escapeHtml(r.計劃完成)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `
+
+  document.body.appendChild(container)
+  try {
+    const canvas = await html2canvas(container, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      logging: false,
+    })
+
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
+    const pageW = doc.internal.pageSize.getWidth()
+    const pageH = doc.internal.pageSize.getHeight()
+    // Maintain aspect ratio: scale canvas to page width, compute page-height
+    // in canvas pixels, then slice the bitmap into N pages.
+    const imgW = pageW
+    const imgH = (canvas.height * imgW) / canvas.width
+    const pageHCanvasPx = (pageH * canvas.width) / pageW
+
+    let yOffsetPx = 0
+    let isFirst = true
+    while (yOffsetPx < canvas.height) {
+      const sliceH = Math.min(pageHCanvasPx, canvas.height - yOffsetPx)
+      const sliceCanvas = document.createElement('canvas')
+      sliceCanvas.width = canvas.width
+      sliceCanvas.height = sliceH
+      const ctx = sliceCanvas.getContext('2d')!
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height)
+      ctx.drawImage(canvas, 0, -yOffsetPx)
+      if (!isFirst) doc.addPage()
+      doc.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', 0, 0, imgW, (sliceH * imgW) / canvas.width)
+      yOffsetPx += pageHCanvasPx
+      isFirst = false
+    }
+    void imgH // silence ts-unused-warning safeguard
+
+    const blob = doc.output('blob') as Blob
+    await downloadBlob(blob, `${safeName(project.name)}_progress_${dateStr()}.pdf`)
+  } finally {
+    container.remove()
+  }
+}
+
+function escapeHtml(s: string | number): string {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }
 
 // ── Issues export ────────────────────────────────────────────
