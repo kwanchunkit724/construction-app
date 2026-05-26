@@ -1,0 +1,36 @@
+fix(security): real tab bleed fix — per-tab storageKey + lock company column
+
+Round 3 PM persona definitively root-caused the tab bleed at the
+supabase-js BroadcastChannel layer:
+
+  this.broadcastChannel.addEventListener("message", async o =>
+    await this._notifyAllSubscribers(o.data.event, o.data.session, false));
+
+`supabase-js` creates `new BroadcastChannel(storageKey)` whenever
+`persistSession && storageKey` are truthy. v17 renamed the channel from
+the default to `ckcon-auth-v1` thinking that disabled it. It does NOT —
+both tabs in the same browser sharing the storageKey still share the
+channel by name. When Tab B emits SIGNED_IN, Tab A's listener receives
+the new session and AuthContext re-fetches profile → identity flip.
+
+PM verified: open Tab A as PM, sign into Tab B as 何判頭, Tab A's
+sidebar flips to 何判頭 within ~30s. Reproduced 5+ times.
+
+REAL FIX (src/lib/supabase.ts):
+- Web: each tab generates its own UUID in sessionStorage on first load
+  (`ckcon-tab-id`). The supabase storageKey is then
+  `ckcon-auth-tab-<uuid>`. Tab A and Tab B now have DIFFERENT
+  BroadcastChannels — no cross-talk.
+- Native (Capacitor): single webview, stable shared key
+  `ckcon-auth-native-v1` in localStorage so cold-launch session
+  restoration still works.
+- Same-tab reload: sessionStorage survives reload → same uuid → same
+  storageKey → same session restored.
+
+ALSO (v19 DB migration applied):
+- Round 3 何判頭 found `user_profiles.company` was self-editable —
+  attack vector (spoof "中華電力" in dispute screenshots). Extended
+  enforce_user_profile_write_gate trigger to revert company on
+  non-admin writes.
+
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
