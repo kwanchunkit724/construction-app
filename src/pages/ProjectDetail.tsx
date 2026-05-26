@@ -6,6 +6,7 @@ import {
   ListChecks, AlertCircle, Download, FileCheck2,
   FileText, Receipt, Shield,
   Wrench, BookOpen, Package, CalendarDays,
+  Contact as ContactIcon,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { UserProfile } from '../types'
@@ -557,6 +558,19 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
         <div className="flex-1 min-w-0">
           <p className="font-bold text-site-900">行事曆</p>
           <p className="text-xs text-site-500 mt-0.5">物料到貨 · 進度完工 · 會議與檢查</p>
+        </div>
+        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
+      </button>
+      <button
+        onClick={() => navigate(`/project/${projectId}/contacts`)}
+        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
+      >
+        <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0">
+          <ContactIcon size={22} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-site-900">聯絡人</p>
+          <p className="text-xs text-site-500 mt-0.5">行頭通訊錄 · 一鍵打電話</p>
         </div>
         <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
       </button>

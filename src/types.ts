@@ -612,3 +612,6 @@ export type {
 } from './types-material'
 
 export type { Event, TimetableEntry } from './types-timetable'
+
+export type { Contact, ContactInput } from './types-contact'
+export { TRADE_SUGGESTIONS } from './types-contact'

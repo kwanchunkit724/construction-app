@@ -33,6 +33,7 @@ const DailyListPage = lazy(() => import('./pages/DailyList'))
 const DailyEditPage = lazy(() => import('./pages/DailyEdit'))
 const MaterialListPage = lazy(() => import('./pages/MaterialList'))
 const TimetablePage = lazy(() => import('./pages/TimetablePage'))
+const ContactListPage = lazy(() => import('./pages/ContactList'))
 
 function lazyRoute(node: React.ReactNode) {
   return <Suspense fallback={<FullPageSpinner label="載入中..." />}>{node}</Suspense>
@@ -68,6 +69,7 @@ export default function App() {
           <Route path="/project/:id/daily/edit" element={<ProtectedRoute>{lazyRoute(<DailyEditPage />)}</ProtectedRoute>} />
           <Route path="/project/:id/materials" element={<ProtectedRoute>{lazyRoute(<MaterialListPage />)}</ProtectedRoute>} />
           <Route path="/project/:id/timetable" element={<ProtectedRoute>{lazyRoute(<TimetablePage />)}</ProtectedRoute>} />
+          <Route path="/project/:id/contacts" element={<ProtectedRoute>{lazyRoute(<ContactListPage />)}</ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </HashRouter>
