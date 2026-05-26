@@ -9,7 +9,21 @@ interface ProgressContextType {
   loading: boolean
   items: ProgressItem[]
   fetchError: string | null
+  // Project-structure rights (create 大項 / 細項, delete, reassign).
+  // Supervisor tier only — admin, assigned PM, or members whose
+  // global_role is pm / general_foreman. Foreman / engineer / 判頭 /
+  // worker / owner / safety_officer do NOT get this even when they're
+  // approved members of the project.
+  canManageStructure: boolean
+  // Legacy alias kept so existing consumers that gate destructive
+  // structural buttons on `canEdit` keep working. New code should
+  // prefer `canManageStructure` or `canUpdateItem(item)`.
   canEdit: boolean
+  // Per-row update right: supervisor OR the row's assigned_to /
+  // delegated_to array contains the current user. Used to gate the
+  // "更新" button so contributors can still tick progress on the
+  // items they were assigned.
+  canUpdateItem: (item: ProgressItem) => boolean
   refetch: () => Promise<void>
   addItem: (input: AddItemInput) => Promise<{ error: string | null }>
   updateProgress: (id: string, actual: number, notes: string) => Promise<{ error: string | null }>
@@ -41,19 +55,38 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
   const [items, setItems] = useState<ProgressItem[]>([])
   const [fetchError, setFetchError] = useState<string | null>(null)
 
-  const canEdit = (() => {
+  // Supervisor / structural-edit right. Mirrors the server-side
+  // can_manage_project_progress() check so the UI hides the same
+  // affordances the DB would reject anyway.
+  const canManageStructure = (() => {
     if (!profile) return false
     if (profile.global_role === 'admin') return true
     const project = projects.find(p => p.id === projectId)
     if (project?.assigned_pm_ids.includes(profile.id)) return true
-    const myMembership = memberships.find(
-      m => m.user_id === profile.id && m.project_id === projectId && m.status === 'approved'
-    )
-    if (myMembership && ['pm', 'main_contractor', 'general_foreman', 'subcontractor'].includes(myMembership.role)) {
-      return true
+    if (profile.global_role === 'pm' || profile.global_role === 'general_foreman') {
+      const myMembership = memberships.find(
+        m => m.user_id === profile.id && m.project_id === projectId && m.status === 'approved',
+      )
+      if (myMembership) return true
     }
     return false
   })()
+
+  // Per-row update gate. Supervisor passes through; contributors only
+  // pass when this specific row was assigned/delegated to them.
+  const canUpdateItem = useCallback(
+    (item: ProgressItem): boolean => {
+      if (canManageStructure) return true
+      if (!profile) return false
+      return item.assigned_to.includes(profile.id) || item.delegated_to.includes(profile.id)
+    },
+    [canManageStructure, profile],
+  )
+
+  // Legacy alias: most existing call sites use canEdit to gate
+  // destructive structural buttons (add child, delete, reassign).
+  // Map to the new structural flag so they keep behaving correctly.
+  const canEdit = canManageStructure
 
   const refetch = useCallback(async () => {
     const { data, error } = await supabase.rpc('get_visible_progress_items', { p_project_id: projectId })
@@ -200,7 +233,9 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
 
   return (
     <ProgressContext.Provider value={{
-      loading, items, fetchError, canEdit, refetch,
+      loading, items, fetchError,
+      canManageStructure, canEdit, canUpdateItem,
+      refetch,
       addItem, updateProgress, updateFloors,
       setAssignment, fetchHistory, deleteItem,
     }}>

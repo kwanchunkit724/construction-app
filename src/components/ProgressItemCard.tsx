@@ -85,7 +85,8 @@ export function ProgressItemCard({
   onHistory: (item: ProgressItem) => void
   onDelete: (item: ProgressItem) => void
 }) {
-  const { items, canEdit } = useProgress()
+  const { items, canEdit, canUpdateItem } = useProgress()
+  const canUpdateThis = canUpdateItem(item)
   const [confirmDel, setConfirmDel] = useState(false)
   const [drawingsOpen, setDrawingsOpen] = useState(false)
 
@@ -196,7 +197,7 @@ export function ProgressItemCard({
                 </div>
               )}
 
-              {(canEdit || (isLeaf && drawingsCtx)) && (
+              {(canEdit || canUpdateThis || (isLeaf && drawingsCtx)) && (
                 <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-site-100">
                   {isLeaf && drawingsCtx && (
                     <button
@@ -206,7 +207,7 @@ export function ProgressItemCard({
                       <ImageIcon size={16} /> 🖼 圖則 ({drawingCount})
                     </button>
                   )}
-                  {canEdit && isLeaf && (
+                  {canUpdateThis && isLeaf && (
                     <button
                       onClick={() => onUpdate(item)}
                       className="text-sm bg-safety-500 hover:bg-safety-600 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 min-h-[44px] font-medium"
