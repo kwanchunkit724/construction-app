@@ -32,7 +32,12 @@ export function CreateItemModal({
 
   // Multi-zone selection (root-level adds only)
   const isRootAdd = parent === null
-  const project = projects.find(p => p.zones.some(z => z.id === zone.id))
+  // Prefer the parent's project_id when we have one — zone.id ("A"/"B"/
+  // "1") can be ambiguous across projects and projects.find then picks the
+  // wrong one, breaking next_progress_code with "parent item not found".
+  const project = parent
+    ? projects.find(p => p.id === parent.project_id)
+    : projects.find(p => p.zones.some(z => z.id === zone.id))
   const projectId = project?.id ?? ''
   const allZones: Zone[] = project?.zones ?? [zone]
   const [selectedZoneIds, setSelectedZoneIds] = useState<string[]>([zone.id])
