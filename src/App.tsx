@@ -27,6 +27,13 @@ const PtwListPage = lazy(() => import('./pages/PtwList'))
 const PtwDetailPage = lazy(() => import('./pages/PtwDetail'))
 const PtwVerifyPage = lazy(() => import('./pages/PtwVerify'))
 
+// v1.2 feature pages — lazy so the entry chunk stays under the 800 KB CI
+// guard. None of these load until the user actually opens the route.
+const DailyListPage = lazy(() => import('./pages/DailyList'))
+const DailyEditPage = lazy(() => import('./pages/DailyEdit'))
+const MaterialListPage = lazy(() => import('./pages/MaterialList'))
+const TimetablePage = lazy(() => import('./pages/TimetablePage'))
+
 function lazyRoute(node: React.ReactNode) {
   return <Suspense fallback={<FullPageSpinner label="載入中..." />}>{node}</Suspense>
 }
@@ -56,6 +63,11 @@ export default function App() {
           <Route path="/project/:id/ptw" element={<ProtectedRoute><PtwGate>{lazyRoute(<PtwListPage />)}</PtwGate></ProtectedRoute>} />
           <Route path="/project/:id/ptw/:ptwId" element={<ProtectedRoute><PtwGate>{lazyRoute(<PtwDetailPage />)}</PtwGate></ProtectedRoute>} />
           <Route path="/verify/:token" element={<ProtectedRoute><PtwGate>{lazyRoute(<PtwVerifyPage />)}</PtwGate></ProtectedRoute>} />
+          {/* v1.2: site diary, on-site materials, and the unified timetable. */}
+          <Route path="/project/:id/daily" element={<ProtectedRoute>{lazyRoute(<DailyListPage />)}</ProtectedRoute>} />
+          <Route path="/project/:id/daily/edit" element={<ProtectedRoute>{lazyRoute(<DailyEditPage />)}</ProtectedRoute>} />
+          <Route path="/project/:id/materials" element={<ProtectedRoute>{lazyRoute(<MaterialListPage />)}</ProtectedRoute>} />
+          <Route path="/project/:id/timetable" element={<ProtectedRoute>{lazyRoute(<TimetablePage />)}</ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </HashRouter>

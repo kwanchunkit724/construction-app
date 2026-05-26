@@ -56,16 +56,14 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
   })()
 
   const refetch = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('progress_items')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('code', { ascending: true })
+    const { data, error } = await supabase.rpc('get_visible_progress_items', { p_project_id: projectId })
     if (error) {
       console.error('progress_items fetch error:', error)
       setFetchError(error.message)
     } else {
-      setItems(data as ProgressItem[])
+      const rows = (data ?? []) as ProgressItem[]
+      const sorted = [...rows].sort((a, b) => a.code.localeCompare(b.code))
+      setItems(sorted)
       setFetchError(null)
     }
   }, [projectId])

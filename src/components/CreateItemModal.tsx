@@ -3,6 +3,8 @@ import { Layers, Percent } from 'lucide-react'
 import { Modal } from './Modal'
 import { Spinner } from './Spinner'
 import { useProgress } from '../contexts/ProgressContext'
+import { useProjects } from '../contexts/ProjectsContext'
+import { supabase } from '../lib/supabase'
 import type { ProgressItem, TrackingMode, Zone } from '../types'
 
 export function CreateItemModal({
@@ -14,7 +16,7 @@ export function CreateItemModal({
   zone: Zone
 }) {
   const { addItem } = useProgress()
-  const [code, setCode] = useState('')
+  const { projects } = useProjects()
   const [title, setTitle] = useState('')
   const [plannedStart, setPlannedStart] = useState('')
   const [plannedEnd, setPlannedEnd] = useState('')
@@ -25,11 +27,23 @@ export function CreateItemModal({
   const [baseFloor, setBaseFloor] = useState(1)
   const [customFloors, setCustomFloors] = useState('')
   const [error, setError] = useState('')
+  const [successMsg, setSuccessMsg] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  // Multi-zone selection (root-level adds only)
+  const isRootAdd = parent === null
+  const project = projects.find(p => p.zones.some(z => z.id === zone.id))
+  const projectId = project?.id ?? ''
+  const allZones: Zone[] = project?.zones ?? [zone]
+  const [selectedZoneIds, setSelectedZoneIds] = useState<string[]>([zone.id])
+
+  // Auto-code per zone
+  const [codeMap, setCodeMap] = useState<Record<string, string>>({})
+  const [codeLoading, setCodeLoading] = useState(false)
+  const [codeError, setCodeError] = useState('')
 
   useEffect(() => {
     if (open) {
-      setCode('')
       setTitle('')
       setPlannedStart('')
       setPlannedEnd('')
@@ -40,8 +54,53 @@ export function CreateItemModal({
       setBaseFloor(1)
       setCustomFloors('')
       setError('')
+      setSuccessMsg('')
+      setSelectedZoneIds([zone.id])
+      setCodeMap({})
+      setCodeError('')
     }
-  }, [open])
+  }, [open, zone.id])
+
+  // Fetch auto-codes whenever the relevant inputs change
+  useEffect(() => {
+    if (!open) return
+    if (!projectId) return
+    const zoneIdsToFetch = isRootAdd ? selectedZoneIds : [zone.id]
+    if (zoneIdsToFetch.length === 0) {
+      setCodeMap({})
+      return
+    }
+    let cancelled = false
+    setCodeLoading(true)
+    setCodeError('')
+    ;(async () => {
+      try {
+        const results = await Promise.all(
+          zoneIdsToFetch.map(async zid => {
+            const { data, error } = await supabase.rpc('next_progress_code', {
+              p_project_id: projectId,
+              p_zone_id: zid,
+              p_parent_id: parent?.id ?? null,
+            })
+            if (error) throw error
+            return [zid, (data as string) ?? ''] as const
+          })
+        )
+        if (cancelled) return
+        const next: Record<string, string> = {}
+        for (const [zid, code] of results) next[zid] = code
+        setCodeMap(next)
+      } catch (err: any) {
+        if (cancelled) return
+        console.error('next_progress_code error:', err)
+        setCodeError(err?.message ?? '無法取得自動編號')
+        setCodeMap({})
+      } finally {
+        if (!cancelled) setCodeLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [open, projectId, isRootAdd, selectedZoneIds, parent?.id, zone.id])
 
   const level = parent ? parent.level + 1 : 1
   const levelLabel = level === 1 ? '大項' : level === 2 ? '中項' : `第 ${level} 層細項`
@@ -61,30 +120,78 @@ export function CreateItemModal({
     ? autoFloorLabels
     : customFloors.split(/[,，\n]/).map(s => s.trim()).filter(Boolean)
 
+  function toggleZone(zid: string) {
+    setSelectedZoneIds(prev => prev.includes(zid) ? prev.filter(x => x !== zid) : [...prev, zid])
+  }
+
+  function toggleSelectAll() {
+    if (selectedZoneIds.length === allZones.length) setSelectedZoneIds([])
+    else setSelectedZoneIds(allZones.map(z => z.id))
+  }
+
+  function zoneName(zid: string): string {
+    return allZones.find(z => z.id === zid)?.name ?? zid
+  }
+
+  const codeDisplay = (() => {
+    if (codeLoading) return '載入中…'
+    if (codeError) return `錯誤：${codeError}`
+    if (isRootAdd) {
+      if (selectedZoneIds.length === 0) return '—'
+      return selectedZoneIds
+        .map(zid => `${zoneName(zid)}=${codeMap[zid] ?? '?'}`)
+        .join('、')
+    }
+    return codeMap[zone.id] ?? '—'
+  })()
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setError('')
-    if (!code.trim()) return setError('請輸入編號')
+    setSuccessMsg('')
     if (!title.trim()) return setError('請輸入名稱')
     if (trackingMode === 'floors' && resolvedFloorLabels.length === 0) {
       return setError('樓層模式需要至少一個樓層')
     }
 
+    const zoneIds = isRootAdd ? selectedZoneIds : [zone.id]
+    if (isRootAdd && zoneIds.length === 0) return setError('請至少選擇一個分區')
+
+    // Validate every required code is available
+    const missing = zoneIds.filter(zid => !codeMap[zid])
+    if (missing.length > 0) return setError('自動編號尚未準備好，請稍候')
+
     setSubmitting(true)
-    const { error } = await addItem({
-      parent_id: parent?.id ?? null,
-      code,
-      title,
-      zone_id: zone.id,
-      planned_start: plannedStart || null,
-      planned_end: plannedEnd || null,
-      planned_progress: plannedProgress,
-      tracking_mode: trackingMode,
-      floor_labels: trackingMode === 'floors' ? resolvedFloorLabels : [],
-    })
+
+    const results = await Promise.all(
+      zoneIds.map(zid => addItem({
+        parent_id: parent?.id ?? null,
+        code: codeMap[zid],
+        title,
+        zone_id: zid,
+        planned_start: plannedStart || null,
+        planned_end: plannedEnd || null,
+        planned_progress: plannedProgress,
+        tracking_mode: trackingMode,
+        floor_labels: trackingMode === 'floors' ? resolvedFloorLabels : [],
+      }))
+    )
+
     setSubmitting(false)
-    if (error) setError(error)
-    else onClose()
+
+    const failed = results.filter(r => r.error)
+    if (failed.length > 0) {
+      setError(failed[0].error ?? '新增失敗')
+      return
+    }
+
+    if (isRootAdd && zoneIds.length > 1) {
+      setSuccessMsg(`已新增到 ${zoneIds.length} 個分區`)
+      // Brief delay so user sees the toast, then close
+      setTimeout(() => onClose(), 1200)
+    } else {
+      onClose()
+    }
   }
 
   return (
@@ -93,28 +200,64 @@ export function CreateItemModal({
       onClose={onClose}
       title={`加入 ${levelLabel}`}
       footer={
-        <button onClick={onSubmit} disabled={submitting} className="btn-primary w-full">
+        <button onClick={onSubmit} disabled={submitting || codeLoading} className="btn-primary w-full">
           {submitting ? <Spinner size={18} className="text-white" /> : '建立'}
         </button>
       }
     >
       <div className="text-xs text-site-500 mb-3 bg-site-100 rounded-lg p-2.5 space-y-1">
-        <div>分區：<span className="font-semibold text-site-700"><span className="font-mono">{zone.id}</span> {zone.name}</span></div>
+        {!isRootAdd && (
+          <div>分區：<span className="font-semibold text-site-700"><span className="font-mono">{zone.id}</span> {zone.name}</span></div>
+        )}
         {parent && (
           <div>上級：<span className="font-mono">{parent.code}</span> {parent.title}</div>
         )}
+        <div>
+          編號（自動）：<span className="font-mono font-semibold text-site-700">{codeDisplay}</span>
+        </div>
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4">
-        <div>
-          <label className="label">編號 *</label>
-          <input
-            value={code}
-            onChange={e => setCode(e.target.value)}
-            placeholder={parent ? `${parent.code}-01` : `${zone.id}-01`}
-            className="input font-mono"
-          />
-        </div>
+        {isRootAdd && allZones.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="label mb-0">套用到分區 *</label>
+              <button
+                type="button"
+                onClick={toggleSelectAll}
+                className="text-xs font-semibold text-safety-600 hover:text-safety-700 min-h-0"
+              >
+                {selectedZoneIds.length === allZones.length ? '全部取消' : '全選'}
+              </button>
+            </div>
+            <div className="space-y-1.5 bg-site-50 border border-site-200 rounded-xl p-2.5 max-h-56 overflow-y-auto">
+              {allZones.map(z => {
+                const checked = selectedZoneIds.includes(z.id)
+                return (
+                  <label
+                    key={z.id}
+                    className={`flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer min-h-[44px] ${
+                      checked ? 'bg-white border border-safety-300' : 'border border-transparent'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleZone(z.id)}
+                      className="accent-safety-600 h-4 w-4"
+                    />
+                    <span className="font-mono text-xs text-site-500">{z.id}</span>
+                    <span className="text-sm text-site-800 truncate flex-1">{z.name}</span>
+                  </label>
+                )
+              })}
+            </div>
+            {selectedZoneIds.length === 0 && (
+              <p className="text-xs text-red-600 mt-1.5">請至少選擇一個分區</p>
+            )}
+          </div>
+        )}
+
         <div>
           <label className="label">名稱 *</label>
           <input
@@ -251,6 +394,12 @@ export function CreateItemModal({
         {error && (
           <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
             {error}
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-xl px-3 py-2">
+            ✓ {successMsg}
           </div>
         )}
       </form>

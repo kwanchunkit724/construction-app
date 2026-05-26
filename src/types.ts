@@ -588,3 +588,27 @@ export const PTW_STATUS_ZH: Record<PtwStatus, string> = {
   rejected: '已拒絕',
   revision_requested: '已退回',
 }
+
+// ── v1.2 forwards ────────────────────────────────────────────
+// Daily, Material, Event/Timetable shapes live alongside their
+// owning context files so the lane that authored them stays the
+// single source of truth. types.ts re-exports them so feature
+// consumers can keep importing `from '../types'` like everything
+// else in the codebase.
+
+export { WEATHER_OPTIONS } from './types-daily'
+export type { Daily, Weather, DailyPayload } from './types-daily'
+
+export {
+  MATERIAL_STATUS_ZH,
+  MATERIAL_STATUS_BADGE_CLASS,
+  isMaterialLate,
+} from './types-material'
+export type {
+  Material,
+  MaterialStatus,
+  CreateMaterialInput,
+  UpdateMaterialPatch,
+} from './types-material'
+
+export type { Event, TimetableEntry } from './types-timetable'

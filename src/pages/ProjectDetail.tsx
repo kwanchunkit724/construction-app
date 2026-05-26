@@ -5,6 +5,7 @@ import {
   CheckCircle2, AlertTriangle, Clock, Minus,
   ListChecks, AlertCircle, Download, FileCheck2,
   FileText, Receipt, Shield,
+  Wrench, BookOpen, Package, CalendarDays,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { UserProfile } from '../types'
@@ -28,7 +29,7 @@ import { usePtwFlag } from '../contexts/PtwFlagContext'
 import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH } from '../types'
 import type { ProgressItem, ProgressStatus, Zone } from '../types'
 
-type Tab = 'progress' | 'issues' | 'si-vo'
+type Tab = 'progress' | 'issues' | 'si-vo' | 'tools'
 
 const STATUS_ICON: Record<ProgressStatus, typeof Minus> = {
   'not-started': Minus,
@@ -186,6 +187,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
           <TabButton active={tab === 'progress'} onClick={() => setTab('progress')} icon={ListChecks} label="進度" />
           <TabButton active={tab === 'issues'} onClick={() => setTab('issues')} icon={AlertCircle} label="問題" badge={openIssueCount} />
           <TabButton active={tab === 'si-vo'} onClick={() => setTab('si-vo')} icon={FileCheck2} label="簽核" />
+          <TabButton active={tab === 'tools'} onClick={() => setTab('tools')} icon={Wrench} label="工具" />
         </div>
       </div>
 
@@ -248,6 +250,9 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
 
         {tab === 'si-vo' && (
           <SiVoSwitcher projectId={projectId} />
+        )}
+        {tab === 'tools' && (
+          <ToolsSwitcher projectId={projectId} />
         )}
       </main>
       </div>
@@ -507,6 +512,58 @@ function SiVoSwitcher({ projectId }: { projectId: string }) {
   )
 }
 
+// v1.2 mobile entry point for the three new feature surfaces. Sidebar
+// covers desktop; mobile users land here from the 工具 tab strip.
+function ToolsSwitcher({ projectId }: { projectId: string }) {
+  const navigate = useNavigate()
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-site-600 px-1">
+        工地工具：選擇要使用的功能
+      </p>
+      <button
+        onClick={() => navigate(`/project/${projectId}/daily`)}
+        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
+      >
+        <div className="w-11 h-11 rounded-xl bg-sky-50 text-sky-700 flex items-center justify-center flex-shrink-0">
+          <BookOpen size={22} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-site-900">每日日誌</p>
+          <p className="text-xs text-site-500 mt-0.5">每日工地記錄 · 天氣 · 完成項目 · 備註</p>
+        </div>
+        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
+      </button>
+      <button
+        onClick={() => navigate(`/project/${projectId}/materials`)}
+        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
+      >
+        <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center flex-shrink-0">
+          <Package size={22} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-site-900">物料</p>
+          <p className="text-xs text-site-500 mt-0.5">叫料 · 預計到貨 · 入貨進度</p>
+        </div>
+        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
+      </button>
+      <button
+        onClick={() => navigate(`/project/${projectId}/timetable`)}
+        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
+      >
+        <div className="w-11 h-11 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center flex-shrink-0">
+          <CalendarDays size={22} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-site-900">行事曆</p>
+          <p className="text-xs text-site-500 mt-0.5">物料到貨 · 進度完工 · 會議與檢查</p>
+        </div>
+        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
+      </button>
+    </div>
+  )
+}
+
 function Stat({ label, count, color }: { label: string; count: number; color: string }) {
   return (
     <div className={`rounded-xl border p-2 text-center ${color}`}>
@@ -538,13 +595,17 @@ function ExportMenu({
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-full mt-1 bg-white rounded-xl border border-site-200 shadow-card-md py-1 min-w-[160px] z-40">
-            {tab === 'progress' ? (
+            {tab === 'progress' && (
               <>
                 <MenuItem label="匯出 Excel" onClick={() => { onExportProgressXlsx(); setOpen(false) }} />
                 <MenuItem label="匯出 PDF" onClick={() => { onExportProgressPdf(); setOpen(false) }} />
               </>
-            ) : (
+            )}
+            {tab === 'issues' && (
               <MenuItem label="匯出 Excel" onClick={() => { void onExportIssuesXlsx(); setOpen(false) }} />
+            )}
+            {(tab === 'si-vo' || tab === 'tools') && (
+              <MenuItem label="此頁面冇匯出選項" onClick={() => setOpen(false)} />
             )}
           </div>
         </>
