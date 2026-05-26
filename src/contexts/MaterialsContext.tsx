@@ -110,7 +110,7 @@ export function MaterialsProvider({
     const myMembership = memberships.find(
       m => m.user_id === profile.id && m.project_id === projectId && m.status === 'approved',
     )
-    if (myMembership && ['pm', 'main_contractor', 'subcontractor'].includes(myMembership.role)) {
+    if (myMembership && ['pm', 'main_contractor', 'general_foreman', 'subcontractor'].includes(myMembership.role)) {
       return true
     }
     return false

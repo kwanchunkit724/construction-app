@@ -71,7 +71,7 @@ export function ContactsProvider({ projectId, children }: { projectId: string; c
   const projectIdRef = useRef(projectId)
   projectIdRef.current = projectId
 
-  const canManage = profile?.global_role === 'admin' || profile?.global_role === 'pm'
+  const canManage = profile?.global_role === 'admin' || profile?.global_role === 'pm' || profile?.global_role === 'general_foreman'
 
   const refresh = useCallback(async () => {
     setLoading(true)

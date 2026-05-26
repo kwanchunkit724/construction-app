@@ -15,7 +15,7 @@ export function CreateItemModal({
   parent: ProgressItem | null
   zone: Zone
 }) {
-  const { addItem } = useProgress()
+  const { addItem, items } = useProgress()
   const { projects } = useProjects()
   const [title, setTitle] = useState('')
   const [plannedStart, setPlannedStart] = useState('')
@@ -37,7 +37,29 @@ export function CreateItemModal({
   const allZones: Zone[] = project?.zones ?? [zone]
   const [selectedZoneIds, setSelectedZoneIds] = useState<string[]>([zone.id])
 
-  // Auto-code per zone
+  // When the user is adding a 細項 under a first-level parent, we expose a
+  // "同時加入其他分區嘅同名大項" picker so they don't have to repeat the
+  // same child add across the 4 座 of a building. We match peers by title
+  // because zone-prefixed codes (土瓜灣=01 vs 九龍城=01) are independent
+  // per-zone counters and won't line up.
+  const isFirstLevelChildAdd = parent !== null && parent.parent_id === null
+  const peerParents = useMemo<ProgressItem[]>(() => {
+    if (!isFirstLevelChildAdd || !parent) return []
+    return items
+      .filter(i =>
+        i.parent_id === null
+        && i.title === parent.title
+        && i.id !== parent.id,
+      )
+      .sort((a, b) => (a.zone_id ?? '').localeCompare(b.zone_id ?? ''))
+  }, [isFirstLevelChildAdd, parent, items])
+
+  // The parent itself is always pre-selected; the picker only appears if
+  // at least one peer was found.
+  const [selectedParentIds, setSelectedParentIds] = useState<string[]>(parent ? [parent.id] : [])
+
+  // Auto-code per zone (root adds keyed by zone_id, child adds keyed by
+  // peer parent_id — both maps live here under their respective keys).
   const [codeMap, setCodeMap] = useState<Record<string, string>>({})
   const [codeLoading, setCodeLoading] = useState(false)
   const [codeError, setCodeError] = useState('')
@@ -56,17 +78,38 @@ export function CreateItemModal({
       setError('')
       setSuccessMsg('')
       setSelectedZoneIds([zone.id])
+      setSelectedParentIds(parent ? [parent.id] : [])
       setCodeMap({})
       setCodeError('')
     }
-  }, [open, zone.id])
+  }, [open, zone.id, parent])
 
-  // Fetch auto-codes whenever the relevant inputs change
+  // Build the list of (zone_id, parent_id) pairs we'll insert into. Root
+  // adds fan out across selected zones with parent_id=null. Peer-parent
+  // adds fan out across the selected first-level peers, each carrying its
+  // own zone_id and parent_id. Single-child adds collapse to one target.
+  type InsertTarget = { key: string; zoneId: string; parentId: string | null }
+  const insertTargets = useMemo<InsertTarget[]>(() => {
+    if (isRootAdd) {
+      return selectedZoneIds.map(zid => ({ key: zid, zoneId: zid, parentId: null }))
+    }
+    if (isFirstLevelChildAdd && peerParents.length > 0) {
+      const all = parent ? [parent, ...peerParents] : peerParents
+      return selectedParentIds
+        .map(pid => all.find(p => p.id === pid))
+        .filter((p): p is ProgressItem => Boolean(p))
+        .map(p => ({ key: p.id, zoneId: p.zone_id ?? zone.id, parentId: p.id }))
+    }
+    return parent
+      ? [{ key: parent.id, zoneId: zone.id, parentId: parent.id }]
+      : []
+  }, [isRootAdd, isFirstLevelChildAdd, peerParents, parent, selectedZoneIds, selectedParentIds, zone.id])
+
+  // Fetch auto-codes whenever the targets change.
   useEffect(() => {
     if (!open) return
     if (!projectId) return
-    const zoneIdsToFetch = isRootAdd ? selectedZoneIds : [zone.id]
-    if (zoneIdsToFetch.length === 0) {
+    if (insertTargets.length === 0) {
       setCodeMap({})
       return
     }
@@ -76,19 +119,19 @@ export function CreateItemModal({
     ;(async () => {
       try {
         const results = await Promise.all(
-          zoneIdsToFetch.map(async zid => {
+          insertTargets.map(async t => {
             const { data, error } = await supabase.rpc('next_progress_code', {
               p_project_id: projectId,
-              p_zone_id: zid,
-              p_parent_id: parent?.id ?? null,
+              p_zone_id: t.zoneId,
+              p_parent_id: t.parentId,
             })
             if (error) throw error
-            return [zid, (data as string) ?? ''] as const
+            return [t.key, (data as string) ?? ''] as const
           })
         )
         if (cancelled) return
         const next: Record<string, string> = {}
-        for (const [zid, code] of results) next[zid] = code
+        for (const [k, code] of results) next[k] = code
         setCodeMap(next)
       } catch (err: any) {
         if (cancelled) return
@@ -100,7 +143,7 @@ export function CreateItemModal({
       }
     })()
     return () => { cancelled = true }
-  }, [open, projectId, isRootAdd, selectedZoneIds, parent?.id, zone.id])
+  }, [open, projectId, insertTargets])
 
   const level = parent ? parent.level + 1 : 1
   const levelLabel = level === 1 ? '大項' : level === 2 ? '中項' : `第 ${level} 層細項`
@@ -129,6 +172,18 @@ export function CreateItemModal({
     else setSelectedZoneIds(allZones.map(z => z.id))
   }
 
+  function togglePeerParent(pid: string) {
+    setSelectedParentIds(prev =>
+      prev.includes(pid) ? prev.filter(x => x !== pid) : [...prev, pid],
+    )
+  }
+
+  function togglePeerSelectAll() {
+    const all = parent ? [parent.id, ...peerParents.map(p => p.id)] : []
+    if (selectedParentIds.length === all.length) setSelectedParentIds(parent ? [parent.id] : [])
+    else setSelectedParentIds(all)
+  }
+
   function zoneName(zid: string): string {
     return allZones.find(z => z.id === zid)?.name ?? zid
   }
@@ -136,13 +191,14 @@ export function CreateItemModal({
   const codeDisplay = (() => {
     if (codeLoading) return '載入中…'
     if (codeError) return `錯誤：${codeError}`
-    if (isRootAdd) {
-      if (selectedZoneIds.length === 0) return '—'
-      return selectedZoneIds
-        .map(zid => `${zoneName(zid)}=${codeMap[zid] ?? '?'}`)
-        .join('、')
+    if (insertTargets.length === 0) return '—'
+    if (insertTargets.length === 1) {
+      const t = insertTargets[0]
+      return codeMap[t.key] ?? '—'
     }
-    return codeMap[zone.id] ?? '—'
+    return insertTargets
+      .map(t => `${zoneName(t.zoneId)}=${codeMap[t.key] ?? '?'}`)
+      .join('、')
   })()
 
   async function onSubmit(e: FormEvent) {
@@ -154,21 +210,22 @@ export function CreateItemModal({
       return setError('樓層模式需要至少一個樓層')
     }
 
-    const zoneIds = isRootAdd ? selectedZoneIds : [zone.id]
-    if (isRootAdd && zoneIds.length === 0) return setError('請至少選擇一個分區')
+    if (insertTargets.length === 0) {
+      return setError(isRootAdd ? '請至少選擇一個分區' : '請至少選擇一個目標項目')
+    }
 
     // Validate every required code is available
-    const missing = zoneIds.filter(zid => !codeMap[zid])
+    const missing = insertTargets.filter(t => !codeMap[t.key])
     if (missing.length > 0) return setError('自動編號尚未準備好，請稍候')
 
     setSubmitting(true)
 
     const results = await Promise.all(
-      zoneIds.map(zid => addItem({
-        parent_id: parent?.id ?? null,
-        code: codeMap[zid],
+      insertTargets.map(t => addItem({
+        parent_id: t.parentId,
+        code: codeMap[t.key],
         title,
-        zone_id: zid,
+        zone_id: t.zoneId,
         planned_start: plannedStart || null,
         planned_end: plannedEnd || null,
         planned_progress: plannedProgress,
@@ -185,9 +242,8 @@ export function CreateItemModal({
       return
     }
 
-    if (isRootAdd && zoneIds.length > 1) {
-      setSuccessMsg(`已新增到 ${zoneIds.length} 個分區`)
-      // Brief delay so user sees the toast, then close
+    if (insertTargets.length > 1) {
+      setSuccessMsg(`已新增到 ${insertTargets.length} 個位置`)
       setTimeout(() => onClose(), 1200)
     } else {
       onClose()
@@ -254,6 +310,56 @@ export function CreateItemModal({
             </div>
             {selectedZoneIds.length === 0 && (
               <p className="text-xs text-red-600 mt-1.5">請至少選擇一個分區</p>
+            )}
+          </div>
+        )}
+
+        {isFirstLevelChildAdd && peerParents.length > 0 && parent && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="label mb-0">同時加入其他分區嘅同名大項</label>
+              <button
+                type="button"
+                onClick={togglePeerSelectAll}
+                className="text-xs font-semibold text-safety-600 hover:text-safety-700 min-h-0"
+              >
+                {selectedParentIds.length === peerParents.length + 1 ? '全部取消' : '全選'}
+              </button>
+            </div>
+            <p className="text-[11px] text-site-500 mb-1.5">
+              偵測到其他分區有同名嘅大項「{parent.title}」。揀埋以下分區，會自動將
+              呢個細項加去同一個大項下面，編號獨立計算。
+            </p>
+            <div className="space-y-1.5 bg-site-50 border border-site-200 rounded-xl p-2.5 max-h-56 overflow-y-auto">
+              {[parent, ...peerParents].map(p => {
+                const checked = selectedParentIds.includes(p.id)
+                const zName = allZones.find(z => z.id === p.zone_id)?.name ?? p.zone_id ?? '—'
+                const isSourceZone = p.id === parent.id
+                return (
+                  <label
+                    key={p.id}
+                    className={`flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer min-h-[44px] ${
+                      checked ? 'bg-white border border-safety-300' : 'border border-transparent'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => togglePeerParent(p.id)}
+                      className="accent-safety-600 h-4 w-4"
+                    />
+                    <span className="font-mono text-xs text-site-500">{p.zone_id ?? '—'}</span>
+                    <span className="text-sm text-site-800 truncate flex-1">{zName}</span>
+                    <span className="font-mono text-[11px] text-site-400">{p.code}</span>
+                    {isSourceZone && (
+                      <span className="text-[10px] bg-safety-100 text-safety-700 px-1.5 py-0.5 rounded-full font-medium">當前</span>
+                    )}
+                  </label>
+                )
+              })}
+            </div>
+            {selectedParentIds.length === 0 && (
+              <p className="text-xs text-red-600 mt-1.5">請至少選擇一個目標項目</p>
             )}
           </div>
         )}

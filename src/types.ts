@@ -6,6 +6,7 @@ export type GlobalRole =
   | 'subcontractor_worker'
   | 'owner'
   | 'safety_officer'
+  | 'general_foreman'
 
 export type SubRole = 'engineer' | 'foreman' | 'safety' | null
 
@@ -57,6 +58,7 @@ export const ROLE_ZH: Record<GlobalRole, string> = {
   subcontractor_worker: '判頭工人',
   owner: '業主',
   safety_officer: '安全主任',
+  general_foreman: '老總',
 }
 
 export const SUB_ROLE_ZH: Record<NonNullable<SubRole>, string> = {
