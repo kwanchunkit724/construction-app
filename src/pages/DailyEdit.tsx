@@ -62,18 +62,22 @@ function DailyEditInner({ projectId }: { projectId: string }) {
   useEffect(() => {
     let mounted = true
     setItemsLoading(true)
+    // Use the visibility RPC so non-supervisor roles (foreman, engineer,
+    // 判頭, worker, owner, safety_officer) only see their assigned items
+    // when picking what they worked on today. Supervisors still get the
+    // full project tree.
     supabase
-      .from('progress_items')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('code', { ascending: true })
+      .rpc('get_visible_progress_items', { p_project_id: projectId })
       .then(({ data, error }) => {
         if (!mounted) return
         if (error) {
           console.error('progress_items fetch error:', error)
           setItems([])
         } else {
-          setItems((data || []) as ProgressItem[])
+          const rows = ((data || []) as ProgressItem[]).slice().sort(
+            (a, b) => a.code.localeCompare(b.code),
+          )
+          setItems(rows)
         }
         setItemsLoading(false)
       })
