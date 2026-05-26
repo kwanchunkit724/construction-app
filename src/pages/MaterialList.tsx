@@ -72,6 +72,11 @@ function MaterialCard({
             >
               {MATERIAL_STATUS_ZH[m.status]}
             </span>
+            {m.urgent && (
+              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold bg-red-600 text-white">
+                急件
+              </span>
+            )}
             {late && (
               <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold bg-red-100 text-red-700">
                 <AlertTriangle size={10} />
@@ -157,9 +162,14 @@ function MaterialListInner({ projectId }: { projectId: string }) {
   const [actionError, setActionError] = useState<string | null>(null)
 
   const visible = useMemo(() => {
-    if (filter === 'all') return materials
-    if (filter === 'late') return materials.filter(isMaterialLate)
-    return materials.filter(m => m.status === filter)
+    let rows = materials
+    if (filter === 'late') rows = materials.filter(isMaterialLate)
+    else if (filter !== 'all') rows = materials.filter(m => m.status === filter)
+    // Urgent first within whatever filter is active.
+    return rows.slice().sort((a, b) => {
+      if (a.urgent !== b.urgent) return a.urgent ? -1 : 1
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
   }, [materials, filter])
 
   async function handleDelete(m: Material) {

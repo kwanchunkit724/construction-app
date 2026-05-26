@@ -65,6 +65,7 @@ export function MaterialForm({
   )
   const [plannedAt, setPlannedAt] = useState<string>(toLocalInput(material?.planned_arrival_at ?? null))
   const [notes, setNotes] = useState(material?.notes ?? '')
+  const [urgent, setUrgent] = useState<boolean>(material?.urgent ?? false)
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>(
     material?.item_ids ?? [],
   )
@@ -133,6 +134,7 @@ export function MaterialForm({
           item_ids: selectedItemIds,
           planned_arrival_at: fromLocalInput(plannedAt),
           notes: notes,
+          urgent,
         })
         if (e) { setError(e); return }
       } else if (material) {
@@ -143,6 +145,7 @@ export function MaterialForm({
           item_ids: selectedItemIds,
           planned_arrival_at: fromLocalInput(plannedAt),
           notes: notes,
+          urgent,
         })
         if (e) { setError(e); return }
       }
@@ -238,6 +241,27 @@ export function MaterialForm({
             value={plannedAt}
             onChange={e => setPlannedAt(e.target.value)}
           />
+        </div>
+
+        <div className="flex items-center justify-between gap-2 card p-3">
+          <div className="min-w-0">
+            <p className="label !mb-0">急件</p>
+            <p className="text-[11px] text-site-500 mt-0.5">
+              標記為急件後，物料清單會以紅色標示，方便老總優先處理。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setUrgent(v => !v)}
+            aria-pressed={urgent}
+            className={`min-h-[44px] min-w-[88px] rounded-full font-semibold text-sm transition-colors ${
+              urgent
+                ? 'bg-red-600 text-white'
+                : 'bg-site-100 text-site-600 border border-site-200'
+            }`}
+          >
+            {urgent ? '急件 ✓' : '一般'}
+          </button>
         </div>
 
         <div className="card p-3">

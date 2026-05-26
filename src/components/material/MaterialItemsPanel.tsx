@@ -62,6 +62,11 @@ export function MaterialItemsPanel({ itemId, title = '相關物料' }: MaterialI
                 >
                   {MATERIAL_STATUS_ZH[m.status]}
                 </span>
+                {m.urgent && (
+                  <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-red-600 text-white">
+                    急件
+                  </span>
+                )}
                 {late && (
                   <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-red-100 text-red-700">
                     <AlertTriangle size={9} />

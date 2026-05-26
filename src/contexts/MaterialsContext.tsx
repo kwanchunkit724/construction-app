@@ -28,6 +28,7 @@ export interface Material {
   planned_arrival_at: string | null
   arrived_at: string | null
   notes: string | null
+  urgent: boolean
   created_at: string
   updated_at: string
   status: MaterialStatus
@@ -62,6 +63,7 @@ export interface CreateMaterialInput {
   item_ids?: string[]
   planned_arrival_at?: string | null
   notes?: string | null
+  urgent?: boolean
 }
 
 export interface UpdateMaterialPatch {
@@ -71,6 +73,7 @@ export interface UpdateMaterialPatch {
   item_ids?: string[]
   planned_arrival_at?: string | null
   notes?: string | null
+  urgent?: boolean
 }
 
 interface MaterialsContextValue {
@@ -156,6 +159,7 @@ export function MaterialsProvider({
         item_ids: input.item_ids ?? [],
         planned_arrival_at: input.planned_arrival_at ?? null,
         notes: input.notes?.trim() || null,
+        urgent: input.urgent ?? false,
         requested_by: profile.id,
       }
       const { data, error } = await supabase
@@ -181,6 +185,7 @@ export function MaterialsProvider({
       if (patch.item_ids !== undefined) cleaned.item_ids = patch.item_ids
       if (patch.planned_arrival_at !== undefined) cleaned.planned_arrival_at = patch.planned_arrival_at
       if (patch.notes !== undefined) cleaned.notes = patch.notes?.trim() || null
+      if (patch.urgent !== undefined) cleaned.urgent = patch.urgent
       const { error } = await supabase.from('materials').update(cleaned).eq('id', id)
       if (error) {
         console.error('materials update error:', error)

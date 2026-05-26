@@ -114,6 +114,9 @@ export function UpdateProgressModal({
             <label className="label mb-0">實際完成進度</label>
             <span className="text-2xl font-black text-safety-600">{actual}%</span>
           </div>
+          {/* Tap target: native range track is ~4px; thumb size browser-defined.
+              Wrap in py-3 (24px) so vertical hit area is 44px+, matching HIG.
+              `touch-none` so swipes don't scroll the modal. */}
           <input
             type="range"
             min={0}
@@ -121,8 +124,27 @@ export function UpdateProgressModal({
             step={1}
             value={actual}
             onChange={e => setActual(Number(e.target.value))}
-            className="w-full accent-safety-600"
+            className="w-full accent-safety-600 h-12 touch-none cursor-pointer"
+            aria-label="實際完成進度"
           />
+          {/* Quick-tap chips so foreman with gloves can land 50/75/100 without
+              sliding the thin native thumb. */}
+          <div className="flex gap-2 mt-1">
+            {[25, 50, 75, 100].map(v => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setActual(v)}
+                className={`flex-1 min-h-[44px] rounded-lg text-sm font-semibold border transition-colors ${
+                  actual === v
+                    ? 'bg-safety-600 text-white border-safety-600'
+                    : 'bg-white text-site-700 border-site-200 hover:bg-site-50'
+                }`}
+              >
+                {v}%
+              </button>
+            ))}
+          </div>
           <div className="flex justify-between text-xs text-site-400 mt-1">
             <span>0%</span>
             <span className="text-orange-500">計劃: {item.planned_progress}%</span>

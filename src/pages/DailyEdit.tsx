@@ -147,7 +147,15 @@ function DailyEditInner({ projectId }: { projectId: string }) {
     })
     setSubmitting(false)
     if (error) {
-      setSubmitError(error)
+      // RLS rejects edits to yesterday's row (date != today HKT) with
+      // a sparse error message; map to readable Chinese fallback.
+      // (persona-sim engineer round 1 C5.)
+      const msg = error.toLowerCase()
+      const friendly =
+        msg.includes('row-level security') || msg.includes('rls') || msg.trim() === ''
+          ? '尋日嘅日誌已鎖，唔可以再改。'
+          : error
+      setSubmitError(friendly)
       return
     }
     navigate(`/project/${projectId}/daily`)
