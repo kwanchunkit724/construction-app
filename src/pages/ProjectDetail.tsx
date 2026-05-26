@@ -24,6 +24,7 @@ import { CreateIssueModal } from '../components/CreateIssueModal'
 import { ProgressProvider, useProgress } from '../contexts/ProgressContext'
 import { IssuesProvider, useIssues } from '../contexts/IssuesContext'
 import { DrawingsProvider } from '../contexts/DrawingsContext'
+import { MaterialsProvider } from '../contexts/MaterialsContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { usePtwFlag } from '../contexts/PtwFlagContext'
@@ -54,7 +55,9 @@ export default function ProjectDetail() {
     <ProgressProvider projectId={id}>
       <IssuesProvider projectId={id}>
         <DrawingsProvider projectId={id}>
-          <ProjectDetailInner projectId={id} />
+          <MaterialsProvider projectId={id}>
+            <ProjectDetailInner projectId={id} />
+          </MaterialsProvider>
         </DrawingsProvider>
       </IssuesProvider>
     </ProgressProvider>

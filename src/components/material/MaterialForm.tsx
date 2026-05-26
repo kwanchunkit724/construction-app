@@ -4,6 +4,7 @@ import { Modal } from '../Modal'
 import { Spinner } from '../Spinner'
 import { supabase } from '../../lib/supabase'
 import { useMaterials } from '../../contexts/MaterialsContext'
+import { useProjects } from '../../contexts/ProjectsContext'
 import type { Material } from '../../contexts/MaterialsContext'
 
 interface ProgressItemLite {
@@ -49,6 +50,13 @@ export function MaterialForm({
   onSaved,
 }: MaterialFormProps) {
   const { createMaterial, updateMaterial } = useMaterials()
+  const { projects } = useProjects()
+  const project = projects.find(p => p.id === projectId)
+  const zoneNameById = useMemo(() => {
+    const map: Record<string, string> = {}
+    project?.zones.forEach(z => { map[z.id] = z.name })
+    return map
+  }, [project])
 
   const [name, setName] = useState(material?.name ?? '')
   const [unit, setUnit] = useState(material?.unit ?? '')
@@ -68,22 +76,25 @@ export function MaterialForm({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch progress items for the project so the user can link this material.
+  // Fetch progress items via the visibility RPC so non-supervisor roles
+  // (foreman, engineer, 判頭, worker, owner, safety_officer) only see items
+  // assigned to them + ancestor chain — preventing the picker from leaking
+  // the full project tree to restricted roles. (persona-sim 2026-05-26)
   useEffect(() => {
     let cancelled = false
     setItemsLoading(true)
     supabase
-      .from('progress_items')
-      .select('id,code,title,zone_id')
-      .eq('project_id', projectId)
-      .order('code', { ascending: true })
+      .rpc('get_visible_progress_items', { p_project_id: projectId })
       .then(({ data, error }) => {
         if (cancelled) return
         if (error) {
-          console.error('progress_items fetch error (MaterialForm):', error)
+          console.error('progress_items RPC error (MaterialForm):', error)
           setItems([])
         } else {
-          setItems((data ?? []) as ProgressItemLite[])
+          const rows = ((data ?? []) as ProgressItemLite[]).slice().sort(
+            (a, b) => a.code.localeCompare(b.code),
+          )
+          setItems(rows)
         }
         setItemsLoading(false)
       })
@@ -270,6 +281,11 @@ export function MaterialForm({
                       <span className="font-mono text-[11px] text-site-500 mr-1">
                         {i.code}
                       </span>
+                      {i.zone_id && zoneNameById[i.zone_id] && (
+                        <span className="text-[10px] font-semibold bg-site-100 text-site-600 px-1.5 py-0.5 rounded-full mr-1">
+                          {zoneNameById[i.zone_id]}
+                        </span>
+                      )}
                       {i.title}
                     </span>
                     {picked && <Check size={14} className="flex-shrink-0" />}

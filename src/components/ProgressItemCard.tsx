@@ -8,9 +8,11 @@ import { ProgressBar } from './ProgressBar'
 import { useProgress } from '../contexts/ProgressContext'
 import { DrawingsContext } from '../contexts/DrawingsContext'
 import { DrawingsSection } from './drawings/DrawingsSection'
+import { MaterialItemsPanel } from './material/MaterialItemsPanel'
 import { PROGRESS_STATUS_ZH, computeRollup, getDescendantLeaves } from '../types'
 import type { ProgressItem, ProgressStatus, UserProfile } from '../types'
 import { supabase } from '../lib/supabase'
+import { useProjects } from '../contexts/ProjectsContext'
 
 // useDrawingsOptional — returns null when no DrawingsProvider is mounted in the tree.
 // Lets ProgressItemCard render safely outside ProjectDetail (e.g., dashboard previews)
@@ -86,9 +88,19 @@ export function ProgressItemCard({
   onDelete: (item: ProgressItem) => void
 }) {
   const { items, canEdit, canUpdateItem } = useProgress()
+  const { projects } = useProjects()
   const canUpdateThis = canUpdateItem(item)
   const [confirmDel, setConfirmDel] = useState(false)
   const [drawingsOpen, setDrawingsOpen] = useState(false)
+
+  // Zone label prefix — e.g. "[1座]" or "[A]" — to disambiguate items
+  // when supervisors view the full 4-zone tree. Computed once per item.
+  const zoneLabel = useMemo(() => {
+    if (!item.zone_id) return null
+    const project = projects.find(p => p.id === item.project_id)
+    const zone = project?.zones.find(z => z.id === item.zone_id)
+    return zone?.name ?? null
+  }, [projects, item.project_id, item.zone_id])
 
   const children = items.filter(i => i.parent_id === item.id)
   const isLeaf = children.length === 0
@@ -142,6 +154,11 @@ export function ProgressItemCard({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="font-mono text-[11px] text-site-400 flex-shrink-0">{item.code}</span>
+                    {zoneLabel && (
+                      <span className="text-[10px] font-semibold bg-site-100 text-site-600 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                        {zoneLabel}
+                      </span>
+                    )}
                     <span className={`font-semibold text-site-900 ${item.level === 1 ? 'text-sm' : 'text-xs'} leading-snug`}>
                       {item.title}
                     </span>
@@ -270,6 +287,11 @@ export function ProgressItemCard({
               {isLeaf && drawingsOpen && drawingsCtx && (
                 <DrawingsSection leafItemId={item.id} />
               )}
+
+              {/* Linked materials panel — only renders when this leaf has
+                  materials linked via materials.item_ids. Silent no-op when
+                  outside <MaterialsProvider> (e.g., dashboard preview). */}
+              {isLeaf && <MaterialItemsPanel itemId={item.id} title="需用物料" />}
             </div>
           </div>
         </div>

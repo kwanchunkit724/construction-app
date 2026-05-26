@@ -14,11 +14,19 @@ import {
 import { supabase } from '../lib/supabase'
 import { isLeaf } from '../types'
 import type { ProgressItem } from '../types'
+import { useProjects } from '../contexts/ProjectsContext'
 
 function DailyEditInner({ projectId }: { projectId: string }) {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const { dailies, loading, upsertMyDaily } = useDailies()
+  const { projects } = useProjects()
+  const project = projects.find(p => p.id === projectId)
+  const zoneNameById = useMemo(() => {
+    const m: Record<string, string> = {}
+    project?.zones.forEach(z => { m[z.id] = z.name })
+    return m
+  }, [project])
 
   const today = todayHKT()
 
@@ -244,7 +252,14 @@ function DailyEditInner({ projectId }: { projectId: string }) {
                     className="mt-1 h-5 w-5 accent-safety-600"
                   />
                   <span className="flex-1 min-w-0">
-                    <span className="block font-mono text-[11px] text-site-400">{it.code}</span>
+                    <span className="block font-mono text-[11px] text-site-400">
+                      {it.code}
+                      {it.zone_id && zoneNameById[it.zone_id] && (
+                        <span className="ml-1.5 inline-block text-[10px] font-semibold bg-site-100 text-site-600 px-1.5 py-0.5 rounded-full">
+                          {zoneNameById[it.zone_id]}
+                        </span>
+                      )}
+                    </span>
                     <span className="block text-sm text-site-800 break-words">{it.title}</span>
                   </span>
                 </label>
@@ -309,9 +324,14 @@ function DailyEditInner({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      {/* Sticky action bar */}
+      {/* Spacer so form content isn't hidden behind the sticky action bar
+          (persona-sim 2026-05-26: foreman's 儲存 was overlapping BottomNav). */}
+      <div className="h-24 md:h-16" aria-hidden />
+
+      {/* Sticky action bar — sits ABOVE the fixed BottomNav (h-16 = 64px) on
+          mobile; on md+ there's no BottomNav so stick directly to bottom. */}
       <div
-        className="sticky bottom-0 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-white border-t border-site-200 flex gap-2"
+        className="sticky bottom-16 md:bottom-0 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-white border-t border-site-200 flex gap-2 z-30"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
       >
         <button

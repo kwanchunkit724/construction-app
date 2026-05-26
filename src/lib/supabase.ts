@@ -31,11 +31,35 @@ const fetchWithTimeout: typeof fetch = (input, init) => {
   })
 }
 
+// Tab bleed fix (persona-sim 2026-05-26):
+// Supabase persists auth tokens in localStorage by default + broadcasts
+// SIGNED_IN events across tabs via BroadcastChannel. On the web that means
+// signing in as user B in tab 2 flips tab 1's profile to user B.
+// On Capacitor (single webview) we still want localStorage so session
+// survives app cold-start. On the web we scope to sessionStorage so each
+// browser tab gets its own session. Same-tab reload still works because
+// sessionStorage survives reload (only closes the tab clears it).
+const isNativeApp =
+  typeof window !== 'undefined' &&
+  // @ts-expect-error Capacitor adds this global at runtime
+  typeof window.Capacitor !== 'undefined'
+
+const authStorage =
+  typeof window === 'undefined'
+    ? undefined
+    : isNativeApp
+      ? window.localStorage
+      : window.sessionStorage
+
 export const supabase = createClient(url, anonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: false,
+    storage: authStorage,
+    // Per-build storage key — also disables Supabase's default broadcast
+    // channel keying which is what propagates SIGNED_IN across tabs.
+    storageKey: 'ckcon-auth-v1',
   },
   realtime: {
     params: { eventsPerSecond: 10 },

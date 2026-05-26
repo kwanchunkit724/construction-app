@@ -12,6 +12,7 @@ import {
 } from '../contexts/DailiesContext'
 import { supabase } from '../lib/supabase'
 import type { UserProfile, ProgressItem } from '../types'
+import { useProjects } from '../contexts/ProjectsContext'
 
 function relativeTime(iso: string): string {
   const now = Date.now()
@@ -39,6 +40,23 @@ function DailyListInner({ projectId }: { projectId: string }) {
     !!profile &&
     profile.global_role === 'main_contractor' &&
     (profile.sub_role === 'foreman' || profile.sub_role === 'engineer')
+
+  // Explain to the current user WHY they can't author a daily, so the
+  // "新增" CTA absence isn't a silent UX dead-end. (persona-sim 2026-05-26)
+  const cannotAuthorReason: string | null = (() => {
+    if (!profile) return null
+    if (canAuthor) return null
+    if (profile.global_role === 'subcontractor' || profile.global_role === 'subcontractor_worker') {
+      return '判頭 / 工人唔可以寫日誌 — 由總承建商管工或工程師代為填寫。'
+    }
+    if (profile.global_role === 'owner') {
+      return '業主只能閱讀日誌。'
+    }
+    if (profile.global_role === 'main_contractor') {
+      return '只有 sub_role 為「管工」或「工程師」嘅總承建商員工可以寫日誌。'
+    }
+    return '你嘅角色唔可以寫每日日誌，只能閱讀。'
+  })()
 
   const myDaily = useMemo(
     () => (profile ? dailies.find(d => d.user_id === profile.id) ?? null : null),
@@ -69,8 +87,17 @@ function DailyListInner({ projectId }: { projectId: string }) {
     }
   }, [dailies])
 
-  // ── Resolve referenced progress item titles ────────────────
-  const [itemsById, setItemsById] = useState<Record<string, Pick<ProgressItem, 'id' | 'code' | 'title'>>>({})
+  // ── Resolve referenced progress item titles + zone ──────────
+  const { projects } = useProjects()
+  const project = projects.find(p => p.id === projectId)
+  const zoneNameById = useMemo(() => {
+    const m: Record<string, string> = {}
+    project?.zones.forEach(z => { m[z.id] = z.name })
+    return m
+  }, [project])
+
+  type ItemLite = Pick<ProgressItem, 'id' | 'code' | 'title' | 'zone_id'>
+  const [itemsById, setItemsById] = useState<Record<string, ItemLite>>({})
   useEffect(() => {
     const ids = Array.from(new Set(dailies.flatMap(d => d.progress_item_ids)))
     if (ids.length === 0) {
@@ -80,12 +107,12 @@ function DailyListInner({ projectId }: { projectId: string }) {
     let mounted = true
     supabase
       .from('progress_items')
-      .select('id,code,title')
+      .select('id,code,title,zone_id')
       .in('id', ids)
       .then(({ data }) => {
         if (!mounted || !data) return
-        const map: Record<string, Pick<ProgressItem, 'id' | 'code' | 'title'>> = {}
-        for (const row of data as Pick<ProgressItem, 'id' | 'code' | 'title'>[]) map[row.id] = row
+        const map: Record<string, ItemLite> = {}
+        for (const row of data as ItemLite[]) map[row.id] = row
         setItemsById(map)
       })
     return () => {
@@ -138,6 +165,12 @@ function DailyListInner({ projectId }: { projectId: string }) {
         </div>
       )}
 
+      {cannotAuthorReason && isToday && (
+        <div className="bg-amber-50 text-amber-800 border border-amber-200 rounded-xl px-3 py-2 text-xs mb-3">
+          {cannotAuthorReason}
+        </div>
+      )}
+
       {/* Body */}
       {loading ? (
         <div className="flex items-center justify-center py-12">
@@ -174,7 +207,7 @@ function DailyListInner({ projectId }: { projectId: string }) {
                   </span>
                 </div>
 
-                <DailyBody daily={d} itemsById={itemsById} />
+                <DailyBody daily={d} itemsById={itemsById} zoneNameById={zoneNameById} />
 
                 {mine && isToday && (
                   <div className="mt-3 pt-3 border-t border-site-100 flex justify-end">
@@ -212,9 +245,11 @@ function DailyListInner({ projectId }: { projectId: string }) {
 function DailyBody({
   daily,
   itemsById,
+  zoneNameById,
 }: {
   daily: Daily
-  itemsById: Record<string, Pick<ProgressItem, 'id' | 'code' | 'title'>>
+  itemsById: Record<string, Pick<ProgressItem, 'id' | 'code' | 'title' | 'zone_id'>>
+  zoneNameById: Record<string, string>
 }) {
   const hasProgress = daily.progress_item_ids.length > 0
   const hasFreeform = daily.freeform_items.length > 0
@@ -230,11 +265,17 @@ function DailyBody({
           <ul className="space-y-0.5">
             {daily.progress_item_ids.map(id => {
               const it = itemsById[id]
+              const zoneName = it?.zone_id ? zoneNameById[it.zone_id] : null
               return (
-                <li key={id} className="text-sm text-site-800 flex items-start gap-2">
+                <li key={id} className="text-sm text-site-800 flex items-start gap-2 flex-wrap">
                   <span className="font-mono text-[11px] text-site-400 mt-0.5">
                     {it?.code || '—'}
                   </span>
+                  {zoneName && (
+                    <span className="text-[10px] font-semibold bg-site-100 text-site-600 px-1.5 py-0.5 rounded-full mt-0.5">
+                      {zoneName}
+                    </span>
+                  )}
                   <span className="flex-1 break-words">{it?.title || `(${id.slice(0, 8)})`}</span>
                 </li>
               )

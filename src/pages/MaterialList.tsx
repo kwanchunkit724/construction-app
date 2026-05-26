@@ -14,6 +14,7 @@ import type { Material } from '../contexts/MaterialsContext'
 import { MaterialForm } from '../components/material/MaterialForm'
 import { MaterialReceiveModal } from '../components/material/MaterialReceiveModal'
 import { useAuth } from '../contexts/AuthContext'
+import { useProjects } from '../contexts/ProjectsContext'
 
 type FilterKey = 'all' | 'requested' | 'partial' | 'arrived' | 'late'
 
@@ -38,14 +39,14 @@ function fmtPlanned(iso: string | null): string {
 
 function MaterialCard({
   m,
-  canManage,
+  isSupervisor,
   isOwner,
   onReceive,
   onEdit,
   onDelete,
 }: {
   m: Material
-  canManage: boolean
+  isSupervisor: boolean
   isOwner: boolean
   onReceive: (m: Material) => void
   onEdit: (m: Material) => void
@@ -53,12 +54,10 @@ function MaterialCard({
 }) {
   const late = isMaterialLate(m)
   const linkedCount = m.item_ids?.length ?? 0
-  // RLS: delete is requester OR admin/pm. We can't see the role split here, so
-  // the parent passes `canManage` (admin/pm/main_contractor/subcontractor) and
-  // `isOwner` (current user is requester). Show delete if either applies.
-  const canDelete = canManage || isOwner
-  // Update RLS: same role group as INSERT — gate edit on canManage.
-  const canEdit = canManage
+  // Per-row gate matching v16 RLS: only requester OR supervisor (admin / pm /
+  // general_foreman / assigned PM) can mutate. Subcontractor/foreman/engineer
+  // members can only mutate their own rows.
+  const canMutate = isSupervisor || isOwner
 
   return (
     <div className="card p-3 mb-2">
@@ -102,9 +101,9 @@ function MaterialCard({
         </div>
       </div>
 
-      {(canManage || canDelete) && (
+      {canMutate && (
         <div className="mt-3 flex flex-wrap gap-2">
-          {canManage && m.status !== 'arrived' && (
+          {m.status !== 'arrived' && (
             <button
               type="button"
               onClick={() => onReceive(m)}
@@ -114,26 +113,22 @@ function MaterialCard({
               <span>入貨</span>
             </button>
           )}
-          {canEdit && (
-            <button
-              type="button"
-              onClick={() => onEdit(m)}
-              className="btn-ghost inline-flex items-center gap-1 px-3 py-2 text-sm"
-            >
-              <Pencil size={16} />
-              <span>編輯</span>
-            </button>
-          )}
-          {canDelete && (
-            <button
-              type="button"
-              onClick={() => onDelete(m)}
-              className="btn-ghost inline-flex items-center gap-1 px-3 py-2 text-sm text-red-600 border-red-200"
-            >
-              <Trash2 size={16} />
-              <span>刪除</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => onEdit(m)}
+            className="btn-ghost inline-flex items-center gap-1 px-3 py-2 text-sm"
+          >
+            <Pencil size={16} />
+            <span>編輯</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(m)}
+            className="btn-ghost inline-flex items-center gap-1 px-3 py-2 text-sm text-red-600 border-red-200"
+          >
+            <Trash2 size={16} />
+            <span>刪除</span>
+          </button>
         </div>
       )}
     </div>
@@ -143,6 +138,17 @@ function MaterialCard({
 function MaterialListInner({ projectId }: { projectId: string }) {
   const { materials, loading, fetchError, canManage, deleteMaterial } = useMaterials()
   const { profile } = useAuth()
+  // Supervisor = admin OR pm OR general_foreman OR assigned PM. Mirrors
+  // v16-materials-rls-fix.sql `is_material_supervisor()`. Only supervisors
+  // (or row owner) may mutate any given material row.
+  const { projects } = useProjects()
+  const project = projects.find(p => p.id === projectId)
+  const isSupervisor = !!profile && (
+    profile.global_role === 'admin'
+    || profile.global_role === 'pm'
+    || profile.global_role === 'general_foreman'
+    || (project?.assigned_pm_ids.includes(profile.id) ?? false)
+  )
   const [filter, setFilter] = useState<FilterKey>('all')
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Material | null>(null)
@@ -224,7 +230,7 @@ function MaterialListInner({ projectId }: { projectId: string }) {
             <MaterialCard
               key={m.id}
               m={m}
-              canManage={canManage}
+              isSupervisor={isSupervisor}
               isOwner={profile?.id === m.requested_by}
               onReceive={setReceiving}
               onEdit={setEditing}
