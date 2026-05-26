@@ -44,11 +44,12 @@ export function InFlightApprovalsModal({ userId, userName, open, onClose }: Prop
     async function load() {
       setLoading(true)
 
-      // Load target user profile
-      const { data: u } = await supabase
-        .from('user_profiles').select('*').eq('id', userId).single()
+      // Load target user profile via admin RPC (v17 narrowed direct SELECT).
+      const { data: rows } = await supabase
+        .rpc('admin_get_user_profile', { p_user: userId })
       if (cancelled) return
-      setTarget((u as UserProfile) || null)
+      const u = Array.isArray(rows) ? (rows[0] as UserProfile) : null
+      setTarget(u || null)
 
       // Per-project role for the target via project_members
       const { data: mems } = await supabase

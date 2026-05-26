@@ -43,10 +43,11 @@ export default function AdminUsers() {
   const [viewingInFlight, setViewingInFlight] = useState<UserProfile | null>(null)
 
   async function fetchUsers() {
+    // v17 narrowed user_profiles SELECT policy to self + project teammates,
+    // so admin must go through the admin_list_user_profiles RPC (security
+    // definer + row_security off) to enumerate every user.
     const { data, error } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .order('created_at', { ascending: false })
+      .rpc('admin_list_user_profiles')
     if (error) console.error('users fetch error:', error)
     else setUsers((data as UserProfile[]) ?? [])
   }
@@ -216,13 +217,13 @@ function EditRoleModal({
   async function save() {
     setSubmitting(true)
     setError('')
-    const { error: e } = await supabase
-      .from('user_profiles')
-      .update({
-        global_role: role,
-        sub_role: role === 'main_contractor' ? subRole : null,
-      })
-      .eq('id', user.id)
+    // v17: user_profiles UPDATE policy + trigger blocks direct role changes.
+    // Use admin_update_user_role RPC (security definer, admin-gated).
+    const { error: e } = await supabase.rpc('admin_update_user_role', {
+      p_target: user.id,
+      p_global_role: role,
+      p_sub_role: role === 'main_contractor' ? subRole : '',
+    })
     setSubmitting(false)
     if (e) setError(e.message)
     else onUpdated()

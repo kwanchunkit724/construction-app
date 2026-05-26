@@ -33,8 +33,14 @@ export default function AdminProjects() {
     const ids = Array.from(new Set(projects.flatMap(p => p.assigned_pm_ids)))
     const users: Record<string, UserProfile> = {}
     if (ids.length > 0) {
-      const { data } = await supabase.from('user_profiles').select('*').in('id', ids)
-      if (data) for (const u of data as UserProfile[]) users[u.id] = u
+      // v17: admin RPC bypasses narrowed user_profiles SELECT policy.
+      const { data } = await supabase.rpc('admin_list_user_profiles')
+      if (data) {
+        const idSet = new Set(ids)
+        for (const u of data as UserProfile[]) {
+          if (idSet.has(u.id)) users[u.id] = u
+        }
+      }
     }
     const { exportProjectsToExcel } = await import('../lib/export')
     await exportProjectsToExcel(projects, users)

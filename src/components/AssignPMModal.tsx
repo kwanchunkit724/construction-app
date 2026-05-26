@@ -25,15 +25,16 @@ export function AssignPMModal({
     setSelected(project.assigned_pm_ids ?? [])
     setError('')
     setLoading(true)
+    // v17: user_profiles SELECT narrowed; admin uses RPC.
     supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('global_role', 'pm')
-      .order('name')
+      .rpc('admin_list_user_profiles')
       .then(({ data, error }) => {
         setLoading(false)
-        if (error) setError(error.message)
-        else setPMs(data as UserProfile[])
+        if (error) { setError(error.message); return }
+        const pms = ((data as UserProfile[]) ?? [])
+          .filter(u => u.global_role === 'pm')
+          .sort((a, b) => a.name.localeCompare(b.name))
+        setPMs(pms)
       })
   }, [open, project])
 
