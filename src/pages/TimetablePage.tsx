@@ -89,7 +89,7 @@ function TimetableInner({ projectId }: { projectId: string }) {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Event | null>(null)
 
-  const canWrite = !!profile && ['admin', 'pm', 'main_contractor'].includes(profile.global_role)
+  const canWrite = !!profile && ['admin', 'pm', 'main_contractor', 'general_foreman'].includes(profile.global_role)
 
   // Range picker derived state — represent endpoints as local YYYY-MM-DD.
   const fromDateValue = useMemo(() => isoToDateInputValue(rangeFrom), [rangeFrom])

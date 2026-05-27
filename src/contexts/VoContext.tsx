@@ -35,7 +35,7 @@ export function VoProvider({ projectId, children }: { projectId: string; childre
   // VO-01: MC raises VO. Admin + PM can also submit; subcontractor cannot.
   const canSubmit = useMemo(() => {
     if (!profile) return false
-    return ['admin', 'pm', 'main_contractor'].includes(profile.global_role)
+    return ['admin', 'pm', 'main_contractor', 'general_foreman'].includes(profile.global_role)
   }, [profile])
 
   const refetch = useCallback(async () => {

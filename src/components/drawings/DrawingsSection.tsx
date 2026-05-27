@@ -63,7 +63,7 @@ export function DrawingsSection({ leafItemId }: DrawingsSectionProps) {
 
   // ISSUE-07 FIX: explicit array .includes — NOT shorthand-OR.
   const canUpload =
-    !!profile && ['admin', 'pm', 'main_contractor'].includes(profile.global_role)
+    !!profile && ['admin', 'pm', 'main_contractor', 'general_foreman'].includes(profile.global_role)
 
   // Filter to this leaf item, then by search, then sort created_at DESC (D-23)
   const itemDrawings = useMemo(() => {

@@ -1,7 +1,9 @@
 # iOS TestFlight v1.1 Test Checklist
 
-Build: ios-testflight #84 (commit `6401b50`)
+Build: ios-testflight **#85** (commit `1529e78` — includes CI purge fix so bundle is fresh)
 Version: 1.1 (CFBundleShortVersionString)
+TestFlight should show "CK Construction 1.1 build N" — pick newest available.
+**Skip #84** if both visible — has stale bundle (CI bug).
 Target: iPhone via TestFlight app
 Test accounts (all password `test1234`):
 - `60001001` 李 PM (project manager)
