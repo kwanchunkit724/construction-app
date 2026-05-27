@@ -26,8 +26,27 @@ workflows:
       - name: Check bundle size
         script: node scripts/check-bundle-size.cjs
 
+      - name: Purge stale build outputs (anti-cache)
+        # Codemagic mac_mini_m2 persistent runners can keep stale dist/ +
+        # ios/App/App/public/ between builds. Wipe so each build refreshes.
+        script: |
+          rm -rf dist
+          rm -rf ios/App/App/public
+          npm run build
+
       - name: Sync Capacitor
         script: npx cap sync ios
+
+      - name: Verify packaged bundle matches fresh dist
+        script: |
+          DIST_INDEX=$(grep -oE 'index-[A-Za-z0-9_-]+\.js' dist/index.html | head -1)
+          PACK_INDEX=$(grep -oE 'index-[A-Za-z0-9_-]+\.js' ios/App/App/public/index.html | head -1)
+          echo "dist/ main bundle:       $DIST_INDEX"
+          echo "ios packaged bundle:     $PACK_INDEX"
+          if [ "$DIST_INDEX" != "$PACK_INDEX" ]; then
+            echo "ERROR: packaged bundle is stale; cap sync did not refresh ios/App/App/public"
+            exit 1
+          fi
 
       - name: Set bundle version from build number
         script: |
@@ -133,8 +152,27 @@ workflows:
       - name: Check bundle size
         script: node scripts/check-bundle-size.cjs
 
+      - name: Purge stale build outputs (anti-cache)
+        # Codemagic mac_mini_m2 persistent runners can keep stale dist/ +
+        # ios/App/App/public/ between builds. Wipe so each build refreshes.
+        script: |
+          rm -rf dist
+          rm -rf ios/App/App/public
+          npm run build
+
       - name: Sync Capacitor
         script: npx cap sync ios
+
+      - name: Verify packaged bundle matches fresh dist
+        script: |
+          DIST_INDEX=$(grep -oE 'index-[A-Za-z0-9_-]+\.js' dist/index.html | head -1)
+          PACK_INDEX=$(grep -oE 'index-[A-Za-z0-9_-]+\.js' ios/App/App/public/index.html | head -1)
+          echo "dist/ main bundle:       $DIST_INDEX"
+          echo "ios packaged bundle:     $PACK_INDEX"
+          if [ "$DIST_INDEX" != "$PACK_INDEX" ]; then
+            echo "ERROR: packaged bundle is stale; cap sync did not refresh ios/App/App/public"
+            exit 1
+          fi
 
       - name: Set bundle version from build number
         script: |
@@ -241,8 +279,34 @@ workflows:
       - name: Check bundle size
         script: node scripts/check-bundle-size.cjs
 
+      - name: Purge stale build outputs (anti-cache)
+        # Codemagic mac_mini_m2 instances are persistent across builds.
+        # Stale `dist/` + `android/app/src/main/assets/public/` from prior
+        # builds can survive and get repackaged if cap sync's copy step
+        # doesn't fully overwrite. Wipe them so each build starts clean.
+        script: |
+          rm -rf dist
+          rm -rf android/app/src/main/assets/public
+          rm -f android/app/src/main/assets/capacitor.config.json
+          rm -f android/app/src/main/assets/capacitor.plugins.json
+          # Re-run vite build now that dist is gone.
+          npm run build
+
       - name: Sync Capacitor
         script: npx cap sync android
+
+      - name: Verify packaged bundle matches fresh dist
+        # Defensive check: confirm packaged index.html references the exact
+        # same main bundle hash that vite just emitted. Fail the build if not.
+        script: |
+          DIST_INDEX=$(grep -oE 'index-[A-Za-z0-9_-]+\.js' dist/index.html | head -1)
+          PACK_INDEX=$(grep -oE 'index-[A-Za-z0-9_-]+\.js' android/app/src/main/assets/public/index.html | head -1)
+          echo "dist/ main bundle:       $DIST_INDEX"
+          echo "android packaged bundle: $PACK_INDEX"
+          if [ "$DIST_INDEX" != "$PACK_INDEX" ]; then
+            echo "ERROR: packaged bundle is stale; cap sync did not refresh assets/public"
+            exit 1
+          fi
 
       - name: Set Android version code from build number
         script: |
@@ -331,8 +395,34 @@ workflows:
       - name: Check bundle size
         script: node scripts/check-bundle-size.cjs
 
+      - name: Purge stale build outputs (anti-cache)
+        # Codemagic mac_mini_m2 instances are persistent across builds.
+        # Stale `dist/` + `android/app/src/main/assets/public/` from prior
+        # builds can survive and get repackaged if cap sync's copy step
+        # doesn't fully overwrite. Wipe them so each build starts clean.
+        script: |
+          rm -rf dist
+          rm -rf android/app/src/main/assets/public
+          rm -f android/app/src/main/assets/capacitor.config.json
+          rm -f android/app/src/main/assets/capacitor.plugins.json
+          # Re-run vite build now that dist is gone.
+          npm run build
+
       - name: Sync Capacitor
         script: npx cap sync android
+
+      - name: Verify packaged bundle matches fresh dist
+        # Defensive check: confirm packaged index.html references the exact
+        # same main bundle hash that vite just emitted. Fail the build if not.
+        script: |
+          DIST_INDEX=$(grep -oE 'index-[A-Za-z0-9_-]+\.js' dist/index.html | head -1)
+          PACK_INDEX=$(grep -oE 'index-[A-Za-z0-9_-]+\.js' android/app/src/main/assets/public/index.html | head -1)
+          echo "dist/ main bundle:       $DIST_INDEX"
+          echo "android packaged bundle: $PACK_INDEX"
+          if [ "$DIST_INDEX" != "$PACK_INDEX" ]; then
+            echo "ERROR: packaged bundle is stale; cap sync did not refresh assets/public"
+            exit 1
+          fi
 
       - name: Set Android version code from build number
         script: |
