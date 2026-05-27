@@ -54,7 +54,7 @@ workflows:
           # Bump marketing version (CFBundleShortVersionString) too — App Store
           # Connect rejects re-uploading the same MARKETING_VERSION once a build
           # has been approved. Derive monotonic 1.0.<BUILD_NUMBER> per CI run.
-          agvtool new-marketing-version "1.0.$BUILD_NUMBER"
+          agvtool new-marketing-version "1.1"
         working_directory: ios/App
 
       - name: Fetch App Store signing files
@@ -180,7 +180,7 @@ workflows:
           # Bump marketing version (CFBundleShortVersionString) too — App Store
           # Connect rejects re-uploading the same MARKETING_VERSION once a build
           # has been approved. Derive monotonic 1.0.<BUILD_NUMBER> per CI run.
-          agvtool new-marketing-version "1.0.$BUILD_NUMBER"
+          agvtool new-marketing-version "1.1"
         working_directory: ios/App
 
       - name: Fetch App Store signing files

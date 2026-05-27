@@ -29,7 +29,7 @@ Project: DC2026 油塘住宅 [persona-sim], 4 zones (1座/2座/3座/4座)
 
 - [ ] Type `60001001` + `test1234` → tap 登入
 - [ ] Profile loads, sidebar shows "李 PM · 項目經理"
-- [ ] BottomNav visible (5 icons on phone, not sidebar)
+- [ ] BottomNav visible (4 icons on phone: 首頁/工地/簽核/個人; TopNav inside project: 進度/問題/簽核/工具)
 - [ ] Tap 工地 → DC2026 油塘住宅 project visible
 - [ ] Tap DC2026 → progress tree shows all 4 zones (老總/PM/admin only)
 
