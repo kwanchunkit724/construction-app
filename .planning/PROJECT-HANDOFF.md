@@ -348,3 +348,20 @@ If user says "continue" or you just spawned and need to figure out where you are
 - No uncommitted local changes expected on the worktree
 - User wants daily updates to this file (this section)
 - Next things to watch: Apple review email; tester opt-in count staying ≥12; any tester bug reports
+
+### 2026-05-28 (CronCreate session-only fired ~00:30 HKT, local agent)
+
+- **Apple App Store v1.1**: ⚠ couldn't check — App Store Connect session expired (redirect to login). User needs to re-login in Chrome MCP tab `1224145339` before next check. Status assumption: **still in review** (no email received per user, would've been mentioned).
+- **Android Play closed alpha**: ✅ **12 / 12 testers opted in** (maintained from yesterday). 申請發佈正式版本 button still grayed (14-day clock continuing). Earliest production-access apply ~2026-06-10.
+- **git log origin/main (top 5)**:
+  - `9d8729b` docs(handoff): create PROJECT-HANDOFF.md for cross-session continuity
+  - `4b0b812` fix(ci): iOS marketing version 1.1 not 1.0.<build>
+  - `6b21633` fix: iOS testing findings — 老總 events + 指派 picker empty
+  - `1529e78` fix(ci): purge stale dist before cap sync + verify bundle hash matches
+  - `6401b50` chore(release): bump app version 1.0 → 1.1
+- **No new commits since yesterday's log** (handoff doc creation was the latest push).
+- **Action items waiting on user**:
+  1. Re-login App Store Connect in Chrome so daily checks can verify Apple verdict automatically
+  2. Wait for Apple review email
+  3. Wait for 14-day clock (~2026-06-10) before applying Google production access
+- **Persistent remote routine `trig_01HtHaHGhnoXmEeYNpBVfHVb` was created today** (cron `8 1 * * *` UTC = daily 9:08 AM HKT). First fire 2026-05-28 09:08 HKT. Anthropic infrastructure, survives session restarts. https://claude.ai/code/routines/trig_01HtHaHGhnoXmEeYNpBVfHVb
