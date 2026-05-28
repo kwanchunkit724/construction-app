@@ -365,3 +365,15 @@ If user says "continue" or you just spawned and need to figure out where you are
   2. Wait for Apple review email
   3. Wait for 14-day clock (~2026-06-10) before applying Google production access
 - **Persistent remote routine `trig_01HtHaHGhnoXmEeYNpBVfHVb` was created today** (cron `8 1 * * *` UTC = daily 9:08 AM HKT). First fire 2026-05-28 09:08 HKT. Anthropic infrastructure, survives session restarts. https://claude.ai/code/routines/trig_01HtHaHGhnoXmEeYNpBVfHVb
+
+### 2026-05-29 (user requested status check)
+
+- **🎉 iOS App Store v1.1 APPROVED** by Apple. Status now `1.1 已可發佈` (Ready for Sale) — green dot in sidebar. v1.1 LIVE on App Store. Apple review took ~48hr (submitted 5/27). v1.0 entry no longer shown in sidebar (1.1 superseded).
+- **Android Play closed alpha**: ✅ 12/12 testers maintained, **Day 1 of 14** ("至今已有 12 名測試員人員選擇加入測試 1 天"). 14-day clock now visibly counting. Earliest production-access apply still ~2026-06-10.
+- **git log**: no new commits since yesterday's log entry.
+- **Action items waiting on user**:
+  1. ~~Re-login App Store Connect~~ ✅ done today
+  2. ~~Wait for Apple review email~~ ✅ approved
+  3. Wait for 14-day clock (~2026-06-10) before applying Google production access
+  4. Optional: announce v1.1 to existing iOS App Store users (auto-update will roll out automatically, but a 微信/WhatsApp blast highlighting the security + UX changes may help adoption)
+- **Daily Log status**: 1 entry per day going forward via remote routine `trig_01HtHaHGhnoXmEeYNpBVfHVb`. Today's entry was triggered manually by user request, not by cron (cron fires 09:08 HKT each morning).
