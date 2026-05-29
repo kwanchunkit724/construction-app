@@ -377,3 +377,22 @@ If user says "continue" or you just spawned and need to figure out where you are
   3. Wait for 14-day clock (~2026-06-10) before applying Google production access
   4. Optional: announce v1.1 to existing iOS App Store users (auto-update will roll out automatically, but a 微信/WhatsApp blast highlighting the security + UX changes may help adoption)
 - **Daily Log status**: 1 entry per day going forward via remote routine `trig_01HtHaHGhnoXmEeYNpBVfHVb`. Today's entry was triggered manually by user request, not by cron (cron fires 09:08 HKT each morning).
+
+### 2026-05-29 (sales kit shipped + later-day status sweep)
+
+- **Sales kit shipped**: 10 files under `.planning/sales-kit/` (00-README + 01-09). Covers customer profiles, market channels, outreach scripts, pitch deck, demo script, pricing/packages, objection handlers, follow-up framework, 30-day launch plan. Commit `45275ec` on main. Built in response to user `/goal` ask: "please help me create everything, including how to present, where should i find the client, how i reach the client".
+- **Positioning one-liner** (canonical, reuse everywhere): 「CK工程取代地盤嘅 WhatsApp + Excel + 紙簿。判頭、工程師、PM 一齊喺同一個 app 寫每日進度、報問題、申請物料、簽 PTW。出 dispute 嗰時，每一個 action 都有時間戳同 audit trail。」
+- **Pricing tiers (locked)**: Pilot HK$0 (1 month), Standard HK$3,800/月 per project, Pro HK$9,800/月 unlimited projects, Enterprise quote. Founding customer lock HK$2,850/月 for sign-by 2026-06-30.
+- **iOS App Store v1.1**: ⚠ couldn't verify — App Store Connect session expired again (URL `authResult=FAILED`). Status assumed unchanged: **1.1 已可發佈** (was confirmed Ready for Sale earlier today). User needs Chrome MCP tab `1224145339` re-login before next automated check.
+- **Android Play closed alpha**: ✅ 12 / 12 testers opted in (maintained). Closed-test clock still reading "至今已有 12 名測試人員選擇加入測試 **1 天**" (NOT 2 — clock may not have ticked yet, possibly because Google updates the counter once per UTC day and we're checking before the tick, OR counter resets when membership churns). 申請發佈正式版本 button still grayed. Earliest production-access apply still tracking ~2026-06-10 but watch for clock anomaly tomorrow.
+- **git log origin/main top 5**:
+  - `45275ec` docs(sales): complete 9-file sales kit
+  - `6728502` docs(handoff): 2026-05-29 — iOS v1.1 APPROVED + Android Day 1/14
+  - `94395b7` docs(handoff): daily log 2026-05-28
+  - `9d8729b` docs(handoff): create PROJECT-HANDOFF.md for cross-session continuity
+  - `4b0b812` fix(ci): iOS marketing version 1.1 not 1.0.<build>
+- **Action items waiting on user**:
+  1. Re-login App Store Connect in Chrome (session keeps expiring — 2FA required, user has to do it)
+  2. Wait for Android 14-day clock (~2026-06-10) — watch tomorrow whether counter rolls to "2 天" or stays stuck at "1 天"
+  3. Pick a sales-kit next build: PPTX from 04 / Loom demo video / `/sell` landing page / A4 PDF takeaway
+  4. Start Day 1 outreach per `.planning/sales-kit/09-30-DAY-LAUNCH-PLAN.md` whenever ready
