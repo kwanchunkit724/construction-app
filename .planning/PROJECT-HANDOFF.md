@@ -396,3 +396,20 @@ If user says "continue" or you just spawned and need to figure out where you are
   2. Wait for Android 14-day clock (~2026-06-10) — watch tomorrow whether counter rolls to "2 天" or stays stuck at "1 天"
   3. Pick a sales-kit next build: PPTX from 04 / Loom demo video / `/sell` landing page / A4 PDF takeaway
   4. Start Day 1 outreach per `.planning/sales-kit/09-30-DAY-LAUNCH-PLAN.md` whenever ready
+
+### 2026-05-30 (daily routine — remote agent fire)
+
+- **iOS App Store v1.1**: ⚠ couldn't verify automated — App Store Connect tab `1224145339` still on `authResult=FAILED` login page (user has not re-logged-in since yesterday). Status assumed unchanged: **1.1 已可發佈** (live on store, no email reported). 2FA blocks auto-login.
+- **Android Play closed alpha**: ✅ 12 / 12 testers opted in, **clock ticked to Day 2** ("至今有 12 名測試人員已連續 **2 天**選擇加入測試"). Yesterday's "stuck at 1 天" anomaly resolved — Google updates the counter once per UTC day. Production-access apply still tracking ~2026-06-10. 申請發佈正式版本 button still grayed.
+- **Play dashboard side note**: 正式版 status now showing "未接受訂購" (Not Subscribed — i.e. production track not yet enabled). Expected behaviour pre-production. No action.
+- **git log origin/main top 5** (no new commits since yesterday's log):
+  - `5e82de1` docs(handoff): daily log 2026-05-29 (sales kit shipped + status sweep)
+  - `45275ec` docs(sales): complete 9-file sales kit
+  - `6728502` docs(handoff): 2026-05-29 — iOS v1.1 APPROVED + Android Day 1/14
+  - `94395b7` docs(handoff): daily log 2026-05-28
+  - `9d8729b` docs(handoff): create PROJECT-HANDOFF.md for cross-session continuity
+- **Action items waiting on user**:
+  1. Re-login App Store Connect in Chrome tab `1224145339` (2FA required — only user can do it). Not blocking ship since v1.1 already live, but blocks automated verdict checks.
+  2. Wait for Android 14-day clock — Day 2 of 14, earliest production-access apply ~2026-06-10.
+  3. Pick a sales-kit next build: PPTX from 04 / Loom demo video / `/sell` landing page / A4 PDF takeaway.
+  4. Start Day 1 outreach per `.planning/sales-kit/09-30-DAY-LAUNCH-PLAN.md` whenever ready.
