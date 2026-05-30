@@ -35,6 +35,10 @@ const MaterialListPage = lazy(() => import('./pages/MaterialList'))
 const TimetablePage = lazy(() => import('./pages/TimetablePage'))
 const ContactListPage = lazy(() => import('./pages/ContactList'))
 
+// Mission control panel — public-read sales dashboard at /#/mission.
+// Lazy so the entry chunk isn't bloated for users who never open it.
+const MissionPage = lazy(() => import('./pages/Mission'))
+
 function lazyRoute(node: React.ReactNode) {
   return <Suspense fallback={<FullPageSpinner label="載入中..." />}>{node}</Suspense>
 }
@@ -70,6 +74,8 @@ export default function App() {
           <Route path="/project/:id/materials" element={<ProtectedRoute>{lazyRoute(<MaterialListPage />)}</ProtectedRoute>} />
           <Route path="/project/:id/timetable" element={<ProtectedRoute>{lazyRoute(<TimetablePage />)}</ProtectedRoute>} />
           <Route path="/project/:id/contacts" element={<ProtectedRoute>{lazyRoute(<ContactListPage />)}</ProtectedRoute>} />
+          {/* Public sales mission control panel — no ProtectedRoute wrap. */}
+          <Route path="/mission" element={lazyRoute(<MissionPage />)} />
           <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </HashRouter>
