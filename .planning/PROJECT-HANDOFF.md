@@ -48,7 +48,7 @@
 | **Apple Team ID** | `C22JSRYW54` |
 | **Developer account** | kck980724@gmail.com |
 | **Personal name on stores** | Kwan Chun Kit / Kwan Chun Robinson Kwan |
-| **Current version** | 1.1 (App Store production review pending) |
+| **Current version** | 1.1 — **LIVE on iOS App Store** (approved 5/29); Android closed alpha Day 2/14 |
 
 ---
 
@@ -242,28 +242,38 @@ to e.g. `"1.2"`. Build numbers (`CFBundleVersion`) auto-increment by `date +%s`.
 
 ---
 
-## 10. Current Ship State (as of last update)
+## 10. Current Ship State (as of 2026-05-30)
 
 ### ✅ Live in production
-- **Web (Vercel `lime-six`)**: commit `4b0b812` — full v1.1 + iOS testing fixes
-- **Supabase DB**: v16-v21 migrations applied, 25/25 attack vectors hold
-- **iOS TestFlight**: build 1779860261 v1.1 — user tested + passed
-- **Android Play Closed Alpha**: v1.1 — security + UX LIVE since 5/27 13:44 to 12 opted-in testers
+- **iOS App Store v1.1 LIVE** — approved by Apple 2026-05-29, status `1.1 已可發佈` (Ready for Sale). Auto-update rolling out to existing v1.0.71 users. Submitted 5/27, approved ~48hr later.
+- **Web (Vercel `lime-six`)**: commit `7c57460` — handoff log + full v1.1 code (sales kit included)
+- **Supabase DB**: v16-v21 migrations applied, 25/25 attack vectors hold (persona-sim R4 prod validation)
+- **Android Play Closed Alpha**: v1.1 LIVE since 5/27 13:44 to 12 opted-in testers; **Day 2 / 14** of opt-in clock
+- **Sales kit**: 10 files under `.planning/sales-kit/` (00-README + 01-09). Ready-to-use. Pricing locked: Pilot HK$0, Standard HK$3,800/月, Pro HK$9,800/月, founding lock HK$2,850/月 sign-by 2026-06-30.
 
 ### ⏳ Outstanding waits
-- **iOS App Store production review**: submitted 5/27, Apple ETA up to 48hr
-- **Android production track gate**: 12/12 testers opted in ✅, 14-day clock running (eligible ~6/10/2026 earliest)
+- **Android production track gate**: 12/12 testers maintained ✅, **Day 2 / 14** of opt-in clock. Earliest production-access apply ~2026-06-10. After that: Google production-access questionnaire + their review (~7 days typical).
+- **Sales execution**: Day 1 outreach NOT started yet (sales kit shipped 5/29 but user hasn't begun cold DMs).
 
 ### 🚫 NOT done (future iterations)
-- Android production track release (locked behind 14-day clock + Google production-access questionnaire)
-- iOS app store production rollout (waiting Apple verdict)
-- Production-track for either platform = public stores
+- Android production track release (locked behind 14-day clock + Google production-access questionnaire — eligible ~2026-06-10)
+- First paying customer signed (sales kit ready, outreach pending user start)
+- PPTX deck from `04-PITCH-DECK.md` (content ready, slide build pending)
+- 60-sec Loom demo video (script ready in `05-DEMO-SCRIPT.md`)
+- `/sell` landing page on Vercel
+- A4 PDF takeaway from pricing table
 
 ---
 
 ## 11. Recent Commits (most-recent-first on `main`)
 
 ```
+7c57460 docs(handoff): daily log 2026-05-30
+5e82de1 docs(handoff): daily log 2026-05-29 (sales kit shipped + status sweep)
+45275ec docs(sales): complete 9-file sales kit
+6728502 docs(handoff): 2026-05-29 — iOS v1.1 APPROVED + Android Day 1/14
+94395b7 docs(handoff): daily log 2026-05-28
+9d8729b docs(handoff): create PROJECT-HANDOFF.md for cross-session continuity
 4b0b812 fix(ci): iOS marketing version 1.1 not 1.0.<build>
 6b21633 fix: iOS testing findings — 老總 events + 指派 picker empty (v21 + general_foreman gates)
 1529e78 fix(ci): purge stale dist before cap sync + verify bundle hash matches

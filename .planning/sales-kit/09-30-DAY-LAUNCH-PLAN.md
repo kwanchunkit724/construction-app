@@ -4,6 +4,34 @@
 >
 > Math: 3 customers × HK$3,800/mo Standard = HK$11,400 MRR. At 12-month retention, that's HK$136,800/year. Beyond, all referral compounding.
 
+---
+
+## Progress Tracker (updated 2026-05-30)
+
+| Phase | Status | Notes |
+|---|---|---|
+| Sales kit built | ✅ done 2026-05-29 | 10 files in `.planning/sales-kit/` |
+| iOS App Store live | ✅ done 2026-05-29 | v1.1 LIVE, demo prop ready |
+| Android Play closed alpha | ⏳ Day 2 / 14 | Eligible production-access ~2026-06-10 |
+| Day 1 outreach started | ❌ not started | Awaiting user kickoff |
+| First demo booked | ❌ not started | |
+| First pilot signed | ❌ not started | |
+| First paying customer | ❌ not started | Target: 3 by Day 30 |
+| **MRR** | **HK$0** | Target: HK$11,400 by Day 30 |
+
+**Anchor date convention**: "Day 1" = the day user sends first cold DM. Plan dates float — start the clock when ready.
+
+**Recommended start window**: Tue / Wed afternoon HKT (highest B2B reply rate per script 03). User has not yet started — pick a date and announce in PROJECT-HANDOFF.md daily log.
+
+**Pre-launch readiness checklist** (do before Day 1):
+- [ ] Print 06 (pricing) + 07 (objections) on 80gsm paper
+- [ ] Set up target spreadsheet (CRM minimum viable per 08)
+- [ ] LinkedIn profile polish (title, about, banner)
+- [ ] Decide: build PPTX deck OR demo via live app on iPhone (recommended: live app, deck is fallback)
+- [ ] Decide: record Loom demo OR skip (recommended: record once, attach to all cold DMs)
+
+---
+
 ## Week 1 (Days 1-7) — Prep + List Build
 
 ### Day 1 (today)
