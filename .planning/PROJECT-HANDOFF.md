@@ -464,3 +464,37 @@ If user says "continue" or you just spawned and need to figure out where you are
      now loads live (login as kck980724 admin to edit/post; others view-only).
 - **Watch**: first offline-mode TestFlight build — verify the offline banner +
   write-block on a real device in airplane mode.
+
+### 2026-06-02 (sales-build batch + iOS build verified)
+
+- **iOS v1.2 build verified in Codemagic** (build #98, `ios-testflight`, commit
+  f4762e0): IPA built + **uploaded to TestFlight + finished processing** (so
+  1.2 is installable for INTERNAL testers now). The "post-processing failed"
+  status is ONLY the auto external-beta-review submit → `422 Another build is
+  in review` (Apple allows one build in beta review at a time). Does not block
+  internal testing or the eventual App Store submit. Android #52 = green.
+- **Android testing track clarified**: Play Console shows the app is on the
+  **Closed testing track** (NOT Internal App Sharing) — production-access gate
+  is the 14-day clock (was Day 4/14 on 6/1). Developer **identity verification
+  is already met**. To push 1.2 to the 12 closed testers needs a release/
+  upload-key-signed AAB (android-play-store + keystore) — user parked this.
+- **Sales builds shipped (all on main + Vercel):**
+  - **Lead capture** — `supabase/v23-leads.sql` (`leads` table, public insert /
+    admin read; applied to prod + verified, probes cleaned). `/#/sell` now has
+    a 留低聯絡 form → writes leads. `/#/mission` gained an admin "潛在客戶" tab
+    (status pipeline new→…→won/lost) + a new-leads alert on Overview.
+  - **OG/link preview** — index.html now has zh-HK Open Graph + Twitter meta so
+    pasted `/#/sell` links render a branded card (hash routes share index.html's
+    static head).
+  - **Outreach drafts** — `.planning/sales-kit/10-OUTREACH-DRAFTS.md`: ready-to-
+    send LinkedIn/WhatsApp/email with live links; only [姓] + [你電話] to fill.
+  - **/mission populated** — current_focus set to v1.2 reality; /sell + takeaway
+    tasks marked done; 4 real next-action tasks added (App Store submit, Loom,
+    first-10 outreach, Android keystore); session ship logged. (tasks=10, done=2)
+- **Commits on main**: lead-capture `bc07f24`, OG `44fefbe`, outreach `97075e4`,
+  + the v1.2 release chain from 6/1.
+- **Open user actions (unchanged + new):**
+  1. Install TestFlight 1.2 → test offline → submit 1.2 in App Store Connect.
+  2. Record the 60-sec Loom demo → paste into 10-OUTREACH-DRAFTS [Loom] slots.
+  3. Start Day-1 outreach: send `/#/sell` to first 10 Tier-1 prospects.
+  4. (Later) Android upload keystore → android-play-store → push 1.2 to closed test.
