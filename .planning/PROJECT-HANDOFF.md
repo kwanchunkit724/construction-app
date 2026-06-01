@@ -423,3 +423,43 @@ If user says "continue" or you just spawned and need to figure out where you are
   2. Wait for Android 14-day clock — Day 2 of 14, earliest production-access apply ~2026-06-10.
   3. Pick a sales-kit next build: PPTX from 04 / Loom demo video / `/sell` landing page / A4 PDF takeaway.
   4. Start Day 1 outreach per `.planning/sales-kit/09-30-DAY-LAUNCH-PLAN.md` whenever ready.
+
+### 2026-06-01 (offline mode + sales builds → v1.2 pushed to main)
+
+- **Shipped this session, merged to `main` (FF `cc0f9ab..c0fb582`, 7 commits):**
+  - **Offline mode (Option A — read-only cache)**: `src/lib/offline.ts`
+    (connectivity via `@capacitor/network` + window events, `useOnline`,
+    localStorage read-cache, `OFFLINE_WRITE_MSG`); fetch-layer write-guard in
+    `supabase.ts` (blocks `/rest/v1/` table + `/storage/v1/` writes offline,
+    excludes `/rpc/`, returns synthetic 503 → clean zh-HK message); profile
+    cache for offline-open in `AuthContext`; `OfflineBar` in `AppLayout`;
+    read-cache + reconnect-refetch in Projects/Progress/Issues contexts.
+  - **Multi-agent code-review** of the offline diff → 6 findings fixed, incl.
+    **CRITICAL**: `supabase.ts isNativeApp` used `typeof window.Capacitor`
+    (truthy on web too) → was silently defeating the per-tab tab-bleed fix on
+    web. Now `Capacitor.isNativePlatform()`. ⚠ Side effect: existing **web**
+    users re-login once (auth storage moved localStorage→per-tab
+    sessionStorage). Native iOS/Android unaffected.
+  - **Sales builds (WEB-ONLY, native-gated)**: `/#/sell` landing, `/#/takeaway`
+    A4 print one-pager, `/#/mission` panel (+ admin metrics editor), and
+    `.planning/sales-kit/ck-pitch-deck.pptx` (12-slide zh-HK deck). These are
+    sales tools for outreach — NOT in the native app, only on Vercel web.
+  - **Version bumped 1.1 → 1.2** (codemagic.yaml iOS marketing version +
+    Android VERSION_NAME both workflows; package.json 1.2.0).
+- **CI auto-triggered by the push to main**: `ios-testflight` (iOS **1.2** →
+  TestFlight) + `android-internal-test` (debug-signed APK/AAB). Vercel
+  auto-deploys web (offline mode + sales pages now live).
+- **STILL MANUAL / BLOCKED (agent could not do autonomously):**
+  1. **iOS App Store submit**: both iOS workflows are `submit_to_app_store:
+     false`. After the TestFlight build lands, submit build **1.2** for review
+     in **App Store Connect** (manual). `ios-app-store` production workflow has
+     no auto-trigger; start from Codemagic UI if wanted (no Codemagic API token
+     available to the agent).
+  2. **Android Play production**: `android-play-store` needs upload keystore +
+     service-account JSON + Play **identity verification** (~2026-06-10). Only
+     the internal-test build exists until then.
+  3. **`supabase/v22-mission-control.sql` still NOT applied** — paste into
+     Supabase Dashboard SQL Editor or `/#/mission` stays empty (agent MCP is
+     read-only).
+- **Watch**: first offline-mode TestFlight build — verify the offline banner +
+  write-block on a real device in airplane mode.
