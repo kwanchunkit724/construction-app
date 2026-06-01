@@ -458,8 +458,9 @@ If user says "continue" or you just spawned and need to figure out where you are
   2. **Android Play production**: `android-play-store` needs upload keystore +
      service-account JSON + Play **identity verification** (~2026-06-10). Only
      the internal-test build exists until then.
-  3. **`supabase/v22-mission-control.sql` still NOT applied** — paste into
-     Supabase Dashboard SQL Editor or `/#/mission` stays empty (agent MCP is
-     read-only).
+  3. ~~`supabase/v22-mission-control.sql` not applied~~ **DONE** — applied to
+     production 2026-06-01 via Claude-in-Chrome (Dashboard SQL Editor) and
+     verified (mission_tasks=6, mission_metrics=1, mission_log=1). `/#/mission`
+     now loads live (login as kck980724 admin to edit/post; others view-only).
 - **Watch**: first offline-mode TestFlight build — verify the offline banner +
   write-block on a real device in airplane mode.
