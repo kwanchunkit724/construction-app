@@ -10,6 +10,7 @@ import { MissionProvider, useMission } from '../contexts/MissionContext'
 import type {
   MissionTask, MissionTaskStatus, MissionTaskPriority,
   MissionTaskCategory, MissionTaskOwner, NewMissionTask,
+  Lead, LeadStatus,
 } from '../contexts/MissionContext'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -47,7 +48,19 @@ const OWNER_ZH: Record<MissionTaskOwner, string> = {
   user: '你', agent: '我 (Claude)', both: '一齊',
 }
 
-type Tab = 'overview' | 'tasks' | 'demos' | 'kit' | 'chat'
+type Tab = 'overview' | 'tasks' | 'leads' | 'demos' | 'kit' | 'chat'
+
+const LEAD_STATUS_ZH: Record<LeadStatus, string> = {
+  new: '新', contacted: '已聯絡', demo: '示範', pilot: '試用中', won: '成交', lost: '流失',
+}
+const LEAD_STATUS_COLOR: Record<LeadStatus, string> = {
+  new: 'bg-amber-100 text-amber-700',
+  contacted: 'bg-blue-100 text-blue-700',
+  demo: 'bg-purple-100 text-purple-700',
+  pilot: 'bg-cyan-100 text-cyan-700',
+  won: 'bg-green-100 text-green-700',
+  lost: 'bg-site-200 text-site-600',
+}
 
 export default function MissionPage() {
   return (
@@ -94,6 +107,9 @@ function MissionShell() {
         <nav className="max-w-6xl mx-auto px-2 flex gap-1 overflow-x-auto">
           <TabBtn active={tab === 'overview'} onClick={() => setTab('overview')} icon={<TrendingUp size={16} />}>總覽</TabBtn>
           <TabBtn active={tab === 'tasks'} onClick={() => setTab('tasks')} icon={<ListChecks size={16} />}>任務</TabBtn>
+          {canWrite && (
+            <TabBtn active={tab === 'leads'} onClick={() => setTab('leads')} icon={<Users size={16} />}>潛在客戶</TabBtn>
+          )}
           <TabBtn active={tab === 'demos'} onClick={() => setTab('demos')} icon={<PlayCircle size={16} />}>示範</TabBtn>
           <TabBtn active={tab === 'kit'} onClick={() => setTab('kit')} icon={<BookOpen size={16} />}>銷售工具</TabBtn>
           <TabBtn active={tab === 'chat'} onClick={() => setTab('chat')} icon={<MessageSquare size={16} />}>溝通</TabBtn>
@@ -123,6 +139,7 @@ function MissionShell() {
           <>
             {tab === 'overview' && <OverviewTab onJump={setTab} />}
             {tab === 'tasks' && <TasksTab />}
+            {tab === 'leads' && <LeadsTab />}
             {tab === 'demos' && <DemosTab />}
             {tab === 'kit' && <KitTab />}
             {tab === 'chat' && <ChatTab />}
@@ -154,8 +171,9 @@ function TabBtn({ active, onClick, icon, children }: { active: boolean; onClick:
 
 // ── OVERVIEW ────────────────────────────────────────────────
 function OverviewTab({ onJump }: { onJump: (t: Tab) => void }) {
-  const { metrics, tasks, log, canWrite } = useMission()
+  const { metrics, tasks, log, leads, canWrite } = useMission()
   const [editing, setEditing] = useState(false)
+  const newLeads = leads.filter(l => l.status === 'new').length
   const targetMrr = 11400
   const pct = metrics ? Math.min(100, Math.round((metrics.mrr_hkd / targetMrr) * 100)) : 0
   const pendingCount = tasks.filter(t => t.status === 'pending').length
@@ -176,6 +194,14 @@ function OverviewTab({ onJump }: { onJump: (t: Tab) => void }) {
             <Edit3 size={14} /> 更新數字
           </button>
         </div>
+      )}
+
+      {/* New leads alert */}
+      {canWrite && newLeads > 0 && (
+        <button onClick={() => onJump('leads')} className="w-full card bg-green-50 border-green-200 text-left flex items-center gap-2 hover:shadow-card-md transition">
+          <Users size={18} className="text-green-600 flex-shrink-0" />
+          <span className="text-sm text-green-800"><strong>{newLeads}</strong> 個新潛在客戶查詢 — 撳入去跟進 →</span>
+        </button>
       )}
 
       {/* Current focus banner */}
@@ -540,6 +566,89 @@ function Select({ label, value, onChange, options }: { label: string; value: str
         {options.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
       </select>
     </label>
+  )
+}
+
+// ── LEADS ───────────────────────────────────────────────────
+function LeadsTab() {
+  const { leads, canWrite, updateLead, deleteLead } = useMission()
+  const [filter, setFilter] = useState<LeadStatus | 'all'>('all')
+
+  const filtered = useMemo(
+    () => leads.filter(l => filter === 'all' || l.status === filter),
+    [leads, filter],
+  )
+
+  if (!canWrite) {
+    return <div className="card text-site-500 text-center py-8">潛在客戶資料只有管理員可睇。</div>
+  }
+
+  const statuses: LeadStatus[] = ['new', 'contacted', 'demo', 'pilot', 'won', 'lost']
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>全部 ({leads.length})</FilterChip>
+        {statuses.map(s => (
+          <FilterChip key={s} active={filter === s} onClick={() => setFilter(s)}>
+            {LEAD_STATUS_ZH[s]} ({leads.filter(l => l.status === s).length})
+          </FilterChip>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="card text-site-500 text-center py-8">未有潛在客戶 — 由 /sell 表單入嚟會喺度顯示。</div>
+      ) : (
+        <ul className="space-y-2">
+          {filtered.map(l => (
+            <li key={l.id}>
+              <LeadRow lead={l} onStatus={s => void updateLead(l.id, { status: s })} onDelete={() => void deleteLead(l.id)} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function LeadRow({ lead, onStatus, onDelete }: {
+  lead: Lead; onStatus: (s: LeadStatus) => void; onDelete: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="card">
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <button onClick={() => setOpen(o => !o)} className="text-left w-full">
+            <div className="font-medium text-site-900">
+              {lead.name}{lead.company && <span className="text-site-500 font-normal"> · {lead.company}</span>}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+              <span className={`text-xs px-2 py-0.5 rounded-full ${LEAD_STATUS_COLOR[lead.status]}`}>{LEAD_STATUS_ZH[lead.status]}</span>
+              <span className="text-xs text-site-600 font-mono">{lead.contact}</span>
+              <span className="text-xs text-site-400">{new Date(lead.created_at).toLocaleString('zh-HK')}</span>
+            </div>
+          </button>
+          {open && lead.message && (
+            <div className="mt-3 text-sm text-site-700 whitespace-pre-wrap bg-site-50 rounded-lg p-3">{lead.message}</div>
+          )}
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          <select
+            className="input text-xs py-1"
+            value={lead.status}
+            onChange={e => onStatus(e.target.value as LeadStatus)}
+          >
+            {(Object.keys(LEAD_STATUS_ZH) as LeadStatus[]).map(s => (
+              <option key={s} value={s}>{LEAD_STATUS_ZH[s]}</option>
+            ))}
+          </select>
+          <button onClick={() => { if (confirm('刪除此潛在客戶?')) onDelete() }} className="p-1.5 text-red-500 hover:text-red-700">
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 

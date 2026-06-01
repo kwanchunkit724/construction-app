@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Smartphone, Globe, MessageSquareOff, FileWarning, FileSpreadsheet,
   HardHat, ClipboardCheck, LayoutDashboard, Clock, ShieldCheck, Check, X,
-  ArrowRight, Mail, FileDown, Rocket,
+  ArrowRight, Mail, FileDown, Rocket, Loader2, Send,
 } from 'lucide-react'
+import { supabase } from '../lib/supabase'
 
 // Public sales landing page at /#/sell. No auth, no providers required.
 // Built from .planning/sales-kit/ (positioning + 04 pitch + 06 pricing).
@@ -27,6 +29,7 @@ export default function SellPage() {
       <Pricing />
       <Roi />
       <Trust />
+      <LeadCapture />
       <CloseCta />
       <Footer />
     </div>
@@ -44,7 +47,7 @@ function Nav() {
         </div>
         <div className="flex items-center gap-2">
           <a href="#pricing" className="hidden sm:inline text-sm text-site-600 hover:text-site-900 px-3 py-1.5">定價</a>
-          <a href={APP_STORE} target="_blank" rel="noreferrer" className="btn-primary text-xs sm:text-sm px-3 py-1.5">
+          <a href="#trial" className="btn-primary text-xs sm:text-sm px-3 py-1.5">
             免費試用
           </a>
         </div>
@@ -373,6 +376,87 @@ function Trust() {
         ))}
       </div>
     </Section>
+  )
+}
+
+// ── LEAD CAPTURE ────────────────────────────────────────────
+function LeadCapture() {
+  const [name, setName] = useState('')
+  const [company, setCompany] = useState('')
+  const [contact, setContact] = useState('')
+  const [message, setMessage] = useState('')
+  const [sending, setSending] = useState(false)
+  const [done, setDone] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const valid = name.trim() && contact.trim()
+
+  async function submit() {
+    if (!valid) return
+    setSending(true)
+    setErr(null)
+    const { error } = await supabase.from('leads').insert({
+      name: name.trim(),
+      company: company.trim(),
+      contact: contact.trim(),
+      message: message.trim(),
+      source: 'sell',
+    })
+    setSending(false)
+    if (error) setErr('提交失敗，請直接 WhatsApp / email 我哋。')
+    else setDone(true)
+  }
+
+  return (
+    <Section id="trial" tone="muted">
+      <SectionHead kicker="1 個月免費試用" title="留低聯絡，我哋當日搵你" />
+      <div className="max-w-xl mx-auto">
+        {done ? (
+          <div className="card text-center py-8">
+            <div className="w-12 h-12 rounded-full bg-green-100 text-green-600 grid place-items-center mx-auto mb-3">
+              <Check size={24} />
+            </div>
+            <div className="font-heading text-lg text-site-900">收到！</div>
+            <p className="text-sm text-site-600 mt-1">我哋會喺一個工作日內聯絡你安排 pilot。</p>
+          </div>
+        ) : (
+          <div className="card space-y-3">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <Field label="你嘅名 *" value={name} onChange={setName} placeholder="陳大文" />
+              <Field label="公司 / 工程" value={company} onChange={setCompany} placeholder="XX 建築" />
+            </div>
+            <Field label="聯絡方法 * (電話 / WhatsApp / email)" value={contact} onChange={setContact} placeholder="9123 4567" />
+            <label className="block">
+              <div className="text-xs text-site-500 mb-1">想了解啲咩？(可選)</div>
+              <textarea
+                className="input w-full text-sm" rows={3}
+                value={message} onChange={e => setMessage(e.target.value)}
+                placeholder="例如：想睇 demo / 想知幾錢 / 有幾個地盤想試"
+              />
+            </label>
+            {err && <div className="text-sm text-red-600">{err}</div>}
+            <button
+              onClick={submit} disabled={!valid || sending}
+              className="btn-primary w-full py-3 flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />} 申請免費試用
+            </button>
+            <p className="text-xs text-site-400 text-center">提交即表示同意我哋就 pilot 事宜聯絡你。我哋唔會賣你嘅資料。</p>
+          </div>
+        )}
+      </div>
+    </Section>
+  )
+}
+
+function Field({ label, value, onChange, placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string
+}) {
+  return (
+    <label className="block">
+      <div className="text-xs text-site-500 mb-1">{label}</div>
+      <input className="input w-full" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
+    </label>
   )
 }
 

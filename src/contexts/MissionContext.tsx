@@ -11,6 +11,19 @@ export type MissionTaskPriority = 'low' | 'medium' | 'high' | 'urgent'
 export type MissionTaskCategory = 'outreach' | 'demo' | 'pilot' | 'product' | 'infra' | 'admin' | 'content'
 export type MissionTaskOwner = 'user' | 'agent' | 'both'
 export type MissionLogAuthor = 'user' | 'agent' | 'system'
+export type LeadStatus = 'new' | 'contacted' | 'demo' | 'pilot' | 'won' | 'lost'
+
+export interface Lead {
+  id: string
+  name: string
+  company: string
+  contact: string
+  message: string
+  source: string
+  status: LeadStatus
+  notes: string
+  created_at: string
+}
 
 export interface MissionTask {
   id: string
@@ -63,6 +76,7 @@ interface MissionCtx {
   tasks: MissionTask[]
   log: MissionLogEntry[]
   metrics: MissionMetrics | null
+  leads: Lead[]
   loading: boolean
   error: string | null
   canWrite: boolean
@@ -72,6 +86,8 @@ interface MissionCtx {
   deleteTask: (id: string) => Promise<{ error: string | null }>
   postLog: (body: string, tags?: string[]) => Promise<{ error: string | null }>
   updateMetrics: (patch: Partial<MissionMetrics>) => Promise<{ error: string | null }>
+  updateLead: (id: string, patch: Partial<Pick<Lead, 'status' | 'notes'>>) => Promise<{ error: string | null }>
+  deleteLead: (id: string) => Promise<{ error: string | null }>
 }
 
 const Ctx = createContext<MissionCtx | null>(null)
@@ -81,6 +97,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<MissionTask[]>([])
   const [log, setLog] = useState<MissionLogEntry[]>([])
   const [metrics, setMetrics] = useState<MissionMetrics | null>(null)
+  const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -89,10 +106,12 @@ export function MissionProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const [tRes, lRes, mRes] = await Promise.all([
+    const [tRes, lRes, mRes, leadRes] = await Promise.all([
       supabase.from('mission_tasks').select('*').order('sort_order').order('created_at', { ascending: false }),
       supabase.from('mission_log').select('*').order('created_at', { ascending: false }).limit(100),
       supabase.from('mission_metrics').select('*').eq('id', 'current').maybeSingle(),
+      // Leads are admin-only via RLS; anon/non-admin simply get an empty set.
+      supabase.from('leads').select('*').order('created_at', { ascending: false }),
     ])
     if (tRes.error || lRes.error || mRes.error) {
       const msg = tRes.error?.message || lRes.error?.message || mRes.error?.message || 'fetch failed'
@@ -102,6 +121,8 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       setLog((lRes.data ?? []) as MissionLogEntry[])
       setMetrics((mRes.data ?? null) as MissionMetrics | null)
     }
+    // leadRes errors are non-fatal (RLS denial for non-admins is expected).
+    setLeads((leadRes.data ?? []) as Lead[])
     setLoading(false)
   }, [])
 
@@ -114,6 +135,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'mission_tasks' }, () => { void refresh() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'mission_log' }, () => { void refresh() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'mission_metrics' }, () => { void refresh() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => { void refresh() })
       .subscribe()
     return () => { void supabase.removeChannel(channel) }
   }, [refresh])
@@ -157,10 +179,21 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     return { error: err?.message ?? null }
   }, [])
 
+  const updateLead = useCallback(async (id: string, patch: Partial<Pick<Lead, 'status' | 'notes'>>) => {
+    const { error: err } = await supabase.from('leads').update(patch).eq('id', id)
+    return { error: err?.message ?? null }
+  }, [])
+
+  const deleteLead = useCallback(async (id: string) => {
+    const { error: err } = await supabase.from('leads').delete().eq('id', id)
+    return { error: err?.message ?? null }
+  }, [])
+
   return (
     <Ctx.Provider value={{
-      tasks, log, metrics, loading, error, canWrite,
+      tasks, log, metrics, leads, loading, error, canWrite,
       refresh, createTask, updateTask, deleteTask, postLog, updateMetrics,
+      updateLead, deleteLead,
     }}>
       {children}
     </Ctx.Provider>
