@@ -10,7 +10,7 @@ export function OfflineBar() {
   if (online) return null
   return (
     <div
-      className="sticky top-0 z-40 bg-amber-100 border-b border-amber-200 text-amber-800"
+      className="bg-amber-100 border-b border-amber-200 text-amber-800"
       role="status"
     >
       <div className="max-w-2xl md:max-w-7xl mx-auto px-4 py-2 flex items-center gap-2 text-sm">
