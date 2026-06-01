@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, ReactNode 
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { useProjects } from './ProjectsContext'
+import { cacheGet, cacheSet } from '../lib/offline'
 import { deriveStatus, floorsToProgress } from '../types'
 import type { ProgressItem, ProgressStatus, TrackingMode, ProgressHistoryEntry } from '../types'
 
@@ -92,11 +93,19 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     const { data, error } = await supabase.rpc('get_visible_progress_items', { p_project_id: projectId })
     if (error) {
       console.error('progress_items fetch error:', error)
-      setFetchError(error.message)
+      // Offline fallback: render last-synced items instead of an error.
+      const cached = cacheGet<ProgressItem[]>(`progress:${projectId}`)
+      if (cached) {
+        setItems(cached.data)
+        setFetchError(null)
+      } else {
+        setFetchError(error.message)
+      }
     } else {
       const rows = (data ?? []) as ProgressItem[]
       const sorted = [...rows].sort((a, b) => a.code.localeCompare(b.code))
       setItems(sorted)
+      cacheSet(`progress:${projectId}`, sorted)
       setFetchError(null)
     }
   }, [projectId])

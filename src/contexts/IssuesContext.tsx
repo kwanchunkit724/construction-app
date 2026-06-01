@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, ReactNode 
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { useProjects } from './ProjectsContext'
+import { cacheGet, cacheSet } from '../lib/offline'
 import { getInitialHandler, getNextHandler } from '../types'
 import type { Issue, IssueComment, IssueHandlerRole, GlobalRole } from '../types'
 
@@ -49,9 +50,17 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
       .order('created_at', { ascending: false })
     if (error) {
       console.error('issues fetch error:', error)
-      setFetchError(error.message)
+      // Offline fallback: render last-synced issues instead of an error.
+      const cached = cacheGet<Issue[]>(`issues:${projectId}`)
+      if (cached) {
+        setIssues(cached.data)
+        setFetchError(null)
+      } else {
+        setFetchError(error.message)
+      }
     } else {
       setIssues(data as Issue[])
+      cacheSet(`issues:${projectId}`, data as Issue[])
       setFetchError(null)
     }
   }, [projectId])

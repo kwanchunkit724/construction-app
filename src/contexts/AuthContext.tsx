@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { supabase } from '../lib/supabase'
 import { phoneToEmail, normalizePhone } from '../lib/phone'
 import { pushLoginUser, pushLogoutUser, consumePendingDeepLink } from '../lib/push'
+import { cacheGet, cacheSet, cacheClearAll } from '../lib/offline'
 import type { UserProfile, GlobalRole, SubRole } from '../types'
 
 interface AuthContextType {
@@ -37,11 +38,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq('id', userId)
       .single()
     if (error) {
+      // Offline (or transient) fetch failure: fall back to the last-synced
+      // profile so a logged-in user opening the app offline keeps their
+      // role/identity instead of being bounced from gated routes.
+      const cached = cacheGet<UserProfile>(`profile:${userId}`)
+      if (cached && cached.data.id === userId) {
+        console.warn('Profile fetch failed — using cached profile:', error.message)
+        setProfile(cached.data)
+        return
+      }
       console.error('Failed to load profile:', error)
       setProfile(null)
       return
     }
     setProfile(data as UserProfile)
+    cacheSet(`profile:${userId}`, data as UserProfile)
   }
 
   // Drain any cold-launch deep link queued by src/lib/push.ts BEFORE the
@@ -148,6 +159,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // surfaced — sign-out should always succeed.
     await pushLogoutUser().catch(() => {})
     await supabase.auth.signOut()
+    // Drop all cached reads (profile + data) so the next user on a shared
+    // device never sees the previous user's offline data.
+    cacheClearAll()
   }
 
   async function refreshProfile() {

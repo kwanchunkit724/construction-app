@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { getOnline, OFFLINE_WRITE_MSG } from './offline'
 
 const url = import.meta.env.VITE_SUPABASE_URL
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -12,7 +13,43 @@ if (!url || !anonKey) {
 // that callers can surface to users.
 const REQUEST_TIMEOUT_MS = 15000
 
+// REST methods that MUTATE data. When offline we reject these immediately
+// (Option A: offline mode is read-only) so all contexts surface one clear
+// zh-HK message instead of spinning for 15s and silently dropping the
+// write. Reads (GET) are left to fail naturally so callers can fall back
+// to the read-cache.
+const WRITE_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE'])
+
+function isOfflineBlockedWrite(input: RequestInfo | URL, init?: RequestInit): boolean {
+  const url =
+    typeof input === 'string' ? input :
+    input instanceof URL ? input.href :
+    input instanceof Request ? input.url : String(input)
+  // Only guard PostgREST *table* writes. Auth (/auth/v1/) and realtime are
+  // left alone. RPC (/rest/v1/rpc/) is excluded because an RPC POST can be
+  // a READ (e.g. get_visible_progress_items) — those should fail naturally
+  // offline so the caller can fall back to its read-cache, not get a
+  // "write blocked" message.
+  if (!url.includes('/rest/v1/')) return false
+  if (url.includes('/rest/v1/rpc/')) return false
+  const method = (
+    init?.method ?? (input instanceof Request ? input.method : 'GET')
+  ).toUpperCase()
+  return WRITE_METHODS.has(method)
+}
+
 const fetchWithTimeout: typeof fetch = (input, init) => {
+  // Offline write-guard: bail out before touching the network. Return a
+  // synthetic PostgREST-shaped error response (not a rejected Error) so
+  // supabase-js parses `error.message` to the bare zh-HK string instead of
+  // stringifying a thrown Error into "Error: 離線中…".
+  if (!getOnline() && isOfflineBlockedWrite(input, init)) {
+    return Promise.resolve(new Response(
+      JSON.stringify({ message: OFFLINE_WRITE_MSG, code: 'OFFLINE', details: null, hint: null }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } },
+    ))
+  }
+
   // Realtime websocket and OAuth callbacks shouldn't be aborted — only
   // REST calls need this. We can't easily distinguish here, but a 15s
   // timeout on websocket setup is also reasonable.

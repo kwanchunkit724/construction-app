@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
+import { cacheGet, cacheSet } from '../lib/offline'
 import type { Project, ProjectMember, ProjectRole, Zone } from '../types'
 
 interface ProjectsContextType {
@@ -36,17 +37,25 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       supabase.from('project_members').select('*').order('applied_at', { ascending: false }),
     ])
     const errors: string[] = []
+    const uid = session.user_id
     if (projRes.error) {
       console.error('projects fetch error:', projRes.error)
-      errors.push(`projects: ${projRes.error.message}`)
+      // Offline fallback: show last-synced projects instead of an error.
+      const cached = cacheGet<Project[]>(`projects:${uid}`)
+      if (cached) setProjects(cached.data)
+      else errors.push(`projects: ${projRes.error.message}`)
     } else {
       setProjects(projRes.data as Project[])
+      cacheSet(`projects:${uid}`, projRes.data as Project[])
     }
     if (memRes.error) {
       console.error('memberships fetch error:', memRes.error)
-      errors.push(`memberships: ${memRes.error.message}`)
+      const cached = cacheGet<ProjectMember[]>(`memberships:${uid}`)
+      if (cached) setMemberships(cached.data)
+      else errors.push(`memberships: ${memRes.error.message}`)
     } else {
       setMemberships(memRes.data as ProjectMember[])
+      cacheSet(`memberships:${uid}`, memRes.data as ProjectMember[])
     }
     setFetchError(errors.length ? errors.join(' | ') : null)
   }, [session])

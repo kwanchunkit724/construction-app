@@ -1,6 +1,7 @@
 import { ReactNode } from 'react'
 import { BottomNav } from './BottomNav'
 import { Sidebar } from './Sidebar'
+import { OfflineBar } from './OfflineBar'
 
 /**
  * Mobile: header + main + bottom nav (unchanged)
@@ -22,6 +23,7 @@ export function AppLayout({
 
       {/* Content area — pushed right on desktop to clear sidebar */}
       <div className="flex-1 flex flex-col md:pl-60 lg:pl-64">
+        <OfflineBar />
         {title && (
           <header
             className="sticky top-0 z-30 bg-white border-b border-site-200"
