@@ -145,8 +145,8 @@ export function MissionProvider({ children }: { children: ReactNode }) {
 
   const postLog = useCallback(async (body: string, tags: string[] = []) => {
     if (!profile) return { error: 'Not signed in' }
-    const author: MissionLogAuthor = profile.global_role === 'admin' ? 'user' : 'user'
-    const { error: err } = await supabase.from('mission_log').insert({ author, body, tags })
+    // RLS only lets admins insert; human posts are always authored 'user'.
+    const { error: err } = await supabase.from('mission_log').insert({ author: 'user', body, tags })
     return { error: err?.message ?? null }
   }, [profile])
 

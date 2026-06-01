@@ -4,6 +4,7 @@ import {
   Rocket, ListChecks, PlayCircle, BookOpen, MessageSquare,
   TrendingUp, Users, Sparkles, Send, Plus, Trash2, Edit3, X, Check,
   Smartphone, Globe, AppWindow, Loader2, AlertCircle, LogIn, LogOut,
+  FileDown, Presentation, ExternalLink,
 } from 'lucide-react'
 import { MissionProvider, useMission } from '../contexts/MissionContext'
 import type {
@@ -153,7 +154,8 @@ function TabBtn({ active, onClick, icon, children }: { active: boolean; onClick:
 
 // ── OVERVIEW ────────────────────────────────────────────────
 function OverviewTab({ onJump }: { onJump: (t: Tab) => void }) {
-  const { metrics, tasks, log } = useMission()
+  const { metrics, tasks, log, canWrite } = useMission()
+  const [editing, setEditing] = useState(false)
   const targetMrr = 11400
   const pct = metrics ? Math.min(100, Math.round((metrics.mrr_hkd / targetMrr) * 100)) : 0
   const pendingCount = tasks.filter(t => t.status === 'pending').length
@@ -161,8 +163,21 @@ function OverviewTab({ onJump }: { onJump: (t: Tab) => void }) {
   const urgentTasks = tasks.filter(t => t.priority === 'urgent' && t.status !== 'completed')
   const recentLog = log.slice(0, 5)
 
+  if (editing && canWrite) {
+    return <MetricsEditor onClose={() => setEditing(false)} />
+  }
+
   return (
     <div className="space-y-6">
+      {/* Admin edit bar */}
+      {canWrite && (
+        <div className="flex justify-end">
+          <button onClick={() => setEditing(true)} className="btn-ghost text-xs px-3 py-1.5 flex items-center gap-1">
+            <Edit3 size={14} /> 更新數字
+          </button>
+        </div>
+      )}
+
       {/* Current focus banner */}
       {metrics?.current_focus && (
         <div className="card bg-gradient-to-r from-safety-500 to-safety-600 text-white border-0">
@@ -244,6 +259,70 @@ function OverviewTab({ onJump }: { onJump: (t: Tab) => void }) {
             </ul>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+function MetricsEditor({ onClose }: { onClose: () => void }) {
+  const { metrics, updateMetrics } = useMission()
+  const [mrr, setMrr] = useState(String(metrics?.mrr_hkd ?? 0))
+  const [customers, setCustomers] = useState(String(metrics?.customers_signed ?? 0))
+  const [pilots, setPilots] = useState(String(metrics?.pilots_active ?? 0))
+  const [demos, setDemos] = useState(String(metrics?.demos_run ?? 0))
+  const [outreach, setOutreach] = useState(String(metrics?.outreach_sent ?? 0))
+  const [replies, setReplies] = useState(String(metrics?.replies_received ?? 0))
+  const [focus, setFocus] = useState(metrics?.current_focus ?? '')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  async function save() {
+    setSaving(true)
+    setErr(null)
+    const { error } = await updateMetrics({
+      mrr_hkd: Number(mrr) || 0,
+      customers_signed: Number(customers) || 0,
+      pilots_active: Number(pilots) || 0,
+      demos_run: Number(demos) || 0,
+      outreach_sent: Number(outreach) || 0,
+      replies_received: Number(replies) || 0,
+      current_focus: focus,
+    })
+    setSaving(false)
+    if (error) setErr(error)
+    else onClose()
+  }
+
+  const fields: [string, string, (v: string) => void][] = [
+    ['MRR (HK$)', mrr, setMrr],
+    ['付費客戶', customers, setCustomers],
+    ['試用中', pilots, setPilots],
+    ['完成示範', demos, setDemos],
+    ['陌生開發發出', outreach, setOutreach],
+    ['收到回覆', replies, setReplies],
+  ]
+
+  return (
+    <div className="card border-safety-300 space-y-3">
+      <div className="font-heading text-site-900">更新指標數字</div>
+      <label className="block text-xs">
+        <div className="text-site-500 mb-0.5">而家專注 (current focus)</div>
+        <textarea className="input w-full text-sm" rows={2} value={focus} onChange={e => setFocus(e.target.value)} />
+      </label>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+        {fields.map(([label, value, set]) => (
+          <label key={label} className="block text-xs">
+            <div className="text-site-500 mb-0.5">{label}</div>
+            <input type="number" inputMode="numeric" className="input w-full text-sm" value={value} onChange={e => set(e.target.value)} />
+          </label>
+        ))}
+      </div>
+      {err && <div className="text-sm text-red-600">{err}</div>}
+      <div className="flex gap-2 justify-end">
+        <button onClick={onClose} className="btn-ghost text-sm px-3 py-1.5 flex items-center gap-1"><X size={14} /> 取消</button>
+        <button onClick={save} disabled={saving} className="btn-primary text-sm px-3 py-1.5 flex items-center gap-1 disabled:opacity-50">
+          {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} 儲存
+        </button>
       </div>
     </div>
   )
@@ -568,8 +647,19 @@ function KitTab() {
     { num: '09', title: '30 日啟動計劃', sub: 'Day 1-30 + 進度追蹤' },
   ]
 
+  const pptxUrl = 'https://github.com/kwanchunkit724/construction-app/blob/main/.planning/sales-kit/ck-pitch-deck.pptx'
+
   return (
     <div className="space-y-4">
+      <div className="card">
+        <div className="font-heading text-site-900 mb-3 flex items-center gap-2"><Sparkles size={18} /> 互動銷售工具 — 即用</div>
+        <div className="grid sm:grid-cols-3 gap-3">
+          <ToolLink to="/sell" icon={<Globe size={20} />} title="銷售落地頁" sub="/#/sell · 直接 send 俾客戶" />
+          <ToolLink to="/takeaway" icon={<FileDown size={20} />} title="A4 價目表" sub="/#/takeaway · 列印或存 PDF" />
+          <ToolLink href={pptxUrl} icon={<Presentation size={20} />} title="12-slide PPTX" sub="下載推介書 · 直接 present" external />
+        </div>
+      </div>
+
       <div className="card bg-gradient-to-r from-site-50 to-safety-50 border-safety-200">
         <div className="font-heading text-site-900">定位一句話 (canonical)</div>
         <div className="text-sm text-site-700 mt-2 leading-relaxed">
@@ -616,6 +706,23 @@ function KitTab() {
       </div>
     </div>
   )
+}
+
+function ToolLink({ to, href, icon, title, sub, external }: {
+  to?: string; href?: string; icon: React.ReactNode; title: string; sub: string; external?: boolean
+}) {
+  const inner = (
+    <>
+      <div className="text-safety-600 flex-shrink-0">{icon}</div>
+      <div className="min-w-0">
+        <div className="font-medium text-site-900 truncate flex items-center gap-1">{title}{external && <ExternalLink size={12} className="text-site-400" />}</div>
+        <div className="text-xs text-site-500 truncate">{sub}</div>
+      </div>
+    </>
+  )
+  const cls = 'card hover:border-safety-500 hover:shadow-card-md transition flex items-start gap-3'
+  if (href) return <a href={href} target="_blank" rel="noreferrer" className={cls}>{inner}</a>
+  return <Link to={to ?? '#'} className={cls}>{inner}</Link>
 }
 
 function PriceCard({ tier, price, sub, highlight }: { tier: string; price: string; sub: string; highlight?: boolean }) {

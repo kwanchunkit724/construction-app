@@ -39,6 +39,12 @@ const ContactListPage = lazy(() => import('./pages/ContactList'))
 // Lazy so the entry chunk isn't bloated for users who never open it.
 const MissionPage = lazy(() => import('./pages/Mission'))
 
+// Public sales pages — marketing landing + A4 takeaway. No auth.
+// Lazy so prospects' first paint isn't blocked, and the app entry chunk
+// stays lean for logged-in users who never hit these.
+const SellPage = lazy(() => import('./pages/Sell'))
+const TakeawayPage = lazy(() => import('./pages/Takeaway'))
+
 function lazyRoute(node: React.ReactNode) {
   return <Suspense fallback={<FullPageSpinner label="載入中..." />}>{node}</Suspense>
 }
@@ -76,6 +82,9 @@ export default function App() {
           <Route path="/project/:id/contacts" element={<ProtectedRoute>{lazyRoute(<ContactListPage />)}</ProtectedRoute>} />
           {/* Public sales mission control panel — no ProtectedRoute wrap. */}
           <Route path="/mission" element={lazyRoute(<MissionPage />)} />
+          {/* Public marketing pages — no ProtectedRoute wrap. */}
+          <Route path="/sell" element={lazyRoute(<SellPage />)} />
+          <Route path="/takeaway" element={lazyRoute(<TakeawayPage />)} />
           <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </HashRouter>
