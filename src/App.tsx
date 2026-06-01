@@ -1,5 +1,6 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { lazy, Suspense } from 'react'
+import { Capacitor } from '@capacitor/core'
 import { AuthProvider } from './contexts/AuthContext'
 import { ProjectsProvider } from './contexts/ProjectsContext'
 import { PtwFlagProvider } from './contexts/PtwFlagContext'
@@ -49,6 +50,16 @@ function lazyRoute(node: React.ReactNode) {
   return <Suspense fallback={<FullPageSpinner label="載入中..." />}>{node}</Suspense>
 }
 
+// Sales/marketing surfaces (/mission, /sell, /takeaway) are WEB-ONLY tools
+// for going out and selling the system — they must NOT ship inside the
+// native iOS/Android app. Register those routes only on web (Vercel) builds;
+// on native they fall through to the catch-all → /home.
+//
+// NOTE: do NOT use `typeof window.Capacitor !== 'undefined'` — Capacitor's
+// web runtime ALSO defines that global (getPlatform() === 'web'). Only
+// isNativePlatform() reliably distinguishes the native WebView from web.
+const isNativeApp = Capacitor.isNativePlatform()
+
 export default function App() {
   return (
     <AuthProvider>
@@ -80,11 +91,14 @@ export default function App() {
           <Route path="/project/:id/materials" element={<ProtectedRoute>{lazyRoute(<MaterialListPage />)}</ProtectedRoute>} />
           <Route path="/project/:id/timetable" element={<ProtectedRoute>{lazyRoute(<TimetablePage />)}</ProtectedRoute>} />
           <Route path="/project/:id/contacts" element={<ProtectedRoute>{lazyRoute(<ContactListPage />)}</ProtectedRoute>} />
-          {/* Public sales mission control panel — no ProtectedRoute wrap. */}
-          <Route path="/mission" element={lazyRoute(<MissionPage />)} />
-          {/* Public marketing pages — no ProtectedRoute wrap. */}
-          <Route path="/sell" element={lazyRoute(<SellPage />)} />
-          <Route path="/takeaway" element={lazyRoute(<TakeawayPage />)} />
+          {/* Public sales surfaces — WEB-ONLY, never in the native app. */}
+          {!isNativeApp && (
+            <>
+              <Route path="/mission" element={lazyRoute(<MissionPage />)} />
+              <Route path="/sell" element={lazyRoute(<SellPage />)} />
+              <Route path="/takeaway" element={lazyRoute(<TakeawayPage />)} />
+            </>
+          )}
           <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </HashRouter>

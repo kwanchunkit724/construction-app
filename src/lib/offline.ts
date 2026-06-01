@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
 
 // Offline-mode primitives (read-only cache strategy / "Option A").
 //
@@ -46,10 +47,9 @@ function initDetection() {
 
   // Capacitor Network plugin — more reliable than navigator.onLine on
   // native (navigator.onLine can report stale "true" on iOS). Loaded
-  // lazily so web builds don't hard-depend on the native bridge.
-  // @ts-expect-error Capacitor global is injected at runtime on native.
-  const isNative = typeof window.Capacitor !== 'undefined'
-  if (isNative) {
+  // lazily so web builds don't pull the native plugin. Use
+  // isNativePlatform() — NOT `typeof window.Capacitor` (truthy on web too).
+  if (Capacitor.isNativePlatform()) {
     import('@capacitor/network')
       .then(({ Network }) => {
         Network.getStatus().then(s => setOnline(s.connected)).catch(() => {})
