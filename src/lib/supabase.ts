@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { Capacitor } from '@capacitor/core'
 import { getOnline, OFFLINE_WRITE_MSG } from './offline'
 
 const url = import.meta.env.VITE_SUPABASE_URL
@@ -25,13 +26,14 @@ function isOfflineBlockedWrite(input: RequestInfo | URL, init?: RequestInit): bo
     typeof input === 'string' ? input :
     input instanceof URL ? input.href :
     input instanceof Request ? input.url : String(input)
-  // Only guard PostgREST *table* writes. Auth (/auth/v1/) and realtime are
-  // left alone. RPC (/rest/v1/rpc/) is excluded because an RPC POST can be
-  // a READ (e.g. get_visible_progress_items) — those should fail naturally
-  // offline so the caller can fall back to its read-cache, not get a
-  // "write blocked" message.
-  if (!url.includes('/rest/v1/')) return false
-  if (url.includes('/rest/v1/rpc/')) return false
+  // Guard PostgREST *table* writes and Storage uploads. Auth (/auth/v1/)
+  // and realtime are left alone. RPC (/rest/v1/rpc/) is excluded because an
+  // RPC POST can be a READ (e.g. get_visible_progress_items) — those should
+  // fail naturally offline so the caller can fall back to its read-cache,
+  // not get a "write blocked" message.
+  const isRest = url.includes('/rest/v1/') && !url.includes('/rest/v1/rpc/')
+  const isStorage = url.includes('/storage/v1/') // object uploads/removes
+  if (!isRest && !isStorage) return false
   const method = (
     init?.method ?? (input instanceof Request ? input.method : 'GET')
   ).toUpperCase()
@@ -83,10 +85,11 @@ const fetchWithTimeout: typeof fetch = (input, init) => {
 //     and don't cross-talk. Session also stays per-tab.
 //   - Native (Capacitor) single webview keeps a stable shared key in
 //     localStorage so cold-launch session restoration still works.
-const isNativeApp =
-  typeof window !== 'undefined' &&
-  // @ts-expect-error Capacitor adds this global at runtime
-  typeof window.Capacitor !== 'undefined'
+// MUST use isNativePlatform() — `typeof window.Capacitor !== 'undefined'`
+// is truthy on Capacitor's WEB runtime too (getPlatform() === 'web'), which
+// would make web pick the shared native auth key and defeat the per-tab
+// tab-bleed fix on the only platform that has tabs.
+const isNativeApp = Capacitor.isNativePlatform()
 
 function getOrCreateTabId(): string {
   if (typeof window === 'undefined') return 'ssr'

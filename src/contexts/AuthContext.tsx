@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { supabase } from '../lib/supabase'
 import { phoneToEmail, normalizePhone } from '../lib/phone'
 import { pushLoginUser, pushLogoutUser, consumePendingDeepLink } from '../lib/push'
-import { cacheGet, cacheSet, cacheClearAll } from '../lib/offline'
+import { cacheGet, cacheSet, cacheClearAll, getOnline } from '../lib/offline'
 import type { UserProfile, GlobalRole, SubRole } from '../types'
 
 interface AuthContextType {
@@ -38,14 +38,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq('id', userId)
       .single()
     if (error) {
-      // Offline (or transient) fetch failure: fall back to the last-synced
-      // profile so a logged-in user opening the app offline keeps their
-      // role/identity instead of being bounced from gated routes.
-      const cached = cacheGet<UserProfile>(`profile:${userId}`)
-      if (cached && cached.data.id === userId) {
-        console.warn('Profile fetch failed — using cached profile:', error.message)
-        setProfile(cached.data)
-        return
+      // Only trust the cached profile when actually OFFLINE — so a logged-in
+      // user opening the app offline keeps their role/identity instead of
+      // being bounced from gated routes. When online, a failed fetch (e.g.
+      // an admin revoked the role, expired token) must NOT re-pin a stale
+      // role: fall through to setProfile(null).
+      if (!getOnline()) {
+        const cached = cacheGet<UserProfile>(`profile:${userId}`)
+        if (cached && cached.data.id === userId) {
+          console.warn('Offline — using cached profile:', error.message)
+          setProfile(cached.data)
+          return
+        }
       }
       console.error('Failed to load profile:', error)
       setProfile(null)

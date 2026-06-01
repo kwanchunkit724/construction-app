@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, ReactNode 
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { useProjects } from './ProjectsContext'
-import { cacheGet, cacheSet } from '../lib/offline'
+import { cacheGet, cacheSet, getOnline, subscribeOnline } from '../lib/offline'
 import { deriveStatus, floorsToProgress } from '../types'
 import type { ProgressItem, ProgressStatus, TrackingMode, ProgressHistoryEntry } from '../types'
 
@@ -90,11 +90,16 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
   const canEdit = canManageStructure
 
   const refetch = useCallback(async () => {
+    // Fast path: known offline → serve last-synced items, skip the network.
+    if (!getOnline()) {
+      const cached = cacheGet<ProgressItem[]>(`progress:${projectId}`)
+      if (cached) { setItems(cached.data); setFetchError(null); return }
+    }
     const { data, error } = await supabase.rpc('get_visible_progress_items', { p_project_id: projectId })
     if (error) {
       console.error('progress_items fetch error:', error)
-      // Offline fallback: render last-synced items instead of an error.
-      const cached = cacheGet<ProgressItem[]>(`progress:${projectId}`)
+      // Only fall back to cache when offline — don't mask a real online error.
+      const cached = !getOnline() ? cacheGet<ProgressItem[]>(`progress:${projectId}`) : null
       if (cached) {
         setItems(cached.data)
         setFetchError(null)
@@ -125,6 +130,9 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
 
     return () => { supabase.removeChannel(channel) }
   }, [projectId, refetch])
+
+  // Re-sync on reconnect: realtime doesn't replay events missed while offline.
+  useEffect(() => subscribeOnline(online => { if (online) void refetch() }), [refetch])
 
   async function addItem(input: AddItemInput) {
     if (!profile) return { error: '未登入' }

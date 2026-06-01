@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
-import { cacheGet, cacheSet } from '../lib/offline'
+import { cacheGet, cacheSet, getOnline, subscribeOnline } from '../lib/offline'
 import type { Project, ProjectMember, ProjectRole, Zone } from '../types'
 
 interface ProjectsContextType {
@@ -32,16 +32,27 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   const refetch = useCallback(async () => {
     if (!session) return
+    const uid = session.user_id
+    // Fast path: when we KNOW we're offline, serve last-synced data straight
+    // from cache and skip the network — avoids postgrest-js retrying the
+    // doomed request for several seconds before failing.
+    if (!getOnline()) {
+      const cp = cacheGet<Project[]>(`projects:${uid}`)
+      const cm = cacheGet<ProjectMember[]>(`memberships:${uid}`)
+      if (cp) setProjects(cp.data)
+      if (cm) setMemberships(cm.data)
+      if (cp || cm) { setFetchError(null); return }
+    }
     const [projRes, memRes] = await Promise.all([
       supabase.from('projects').select('*').order('created_at', { ascending: false }),
       supabase.from('project_members').select('*').order('applied_at', { ascending: false }),
     ])
     const errors: string[] = []
-    const uid = session.user_id
     if (projRes.error) {
       console.error('projects fetch error:', projRes.error)
-      // Offline fallback: show last-synced projects instead of an error.
-      const cached = cacheGet<Project[]>(`projects:${uid}`)
+      // Only fall back to cache when offline — never mask a real online
+      // error (RLS/permission/expired token) as a stale cache hit.
+      const cached = !getOnline() ? cacheGet<Project[]>(`projects:${uid}`) : null
       if (cached) setProjects(cached.data)
       else errors.push(`projects: ${projRes.error.message}`)
     } else {
@@ -50,7 +61,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     }
     if (memRes.error) {
       console.error('memberships fetch error:', memRes.error)
-      const cached = cacheGet<ProjectMember[]>(`memberships:${uid}`)
+      const cached = !getOnline() ? cacheGet<ProjectMember[]>(`memberships:${uid}`) : null
       if (cached) setMemberships(cached.data)
       else errors.push(`memberships: ${memRes.error.message}`)
     } else {
@@ -77,6 +88,13 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
+  }, [session, refetch])
+
+  // Re-sync when connectivity returns: realtime doesn't replay events missed
+  // while offline, so a reconnect must trigger a fresh fetch.
+  useEffect(() => {
+    if (!session) return
+    return subscribeOnline(online => { if (online) void refetch() })
   }, [session, refetch])
 
   async function createProject(name: string, zones: Zone[]) {

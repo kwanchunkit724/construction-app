@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, ReactNode 
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { useProjects } from './ProjectsContext'
-import { cacheGet, cacheSet } from '../lib/offline'
+import { cacheGet, cacheSet, getOnline, subscribeOnline } from '../lib/offline'
 import { getInitialHandler, getNextHandler } from '../types'
 import type { Issue, IssueComment, IssueHandlerRole, GlobalRole } from '../types'
 
@@ -43,6 +43,11 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
   })()
 
   const refetch = useCallback(async () => {
+    // Fast path: known offline → serve last-synced issues, skip the network.
+    if (!getOnline()) {
+      const cached = cacheGet<Issue[]>(`issues:${projectId}`)
+      if (cached) { setIssues(cached.data); setFetchError(null); return }
+    }
     const { data, error } = await supabase
       .from('issues')
       .select('*')
@@ -50,8 +55,8 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
       .order('created_at', { ascending: false })
     if (error) {
       console.error('issues fetch error:', error)
-      // Offline fallback: render last-synced issues instead of an error.
-      const cached = cacheGet<Issue[]>(`issues:${projectId}`)
+      // Only fall back to cache when offline — don't mask a real online error.
+      const cached = !getOnline() ? cacheGet<Issue[]>(`issues:${projectId}`) : null
       if (cached) {
         setIssues(cached.data)
         setFetchError(null)
@@ -80,6 +85,9 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
 
     return () => { supabase.removeChannel(channel) }
   }, [projectId, refetch])
+
+  // Re-sync on reconnect: realtime doesn't replay events missed while offline.
+  useEffect(() => subscribeOnline(online => { if (online) void refetch() }), [refetch])
 
   async function createIssue(title: string, description: string, photos: string[]) {
     if (!profile) return { error: '未登入' }
