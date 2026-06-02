@@ -755,7 +755,9 @@ function KitTab() {
     '06': '06-PRICING-PACKAGES.md', '07': '07-OBJECTION-HANDLERS.md', '08': '08-FOLLOWUP-FRAMEWORK.md',
     '09': '09-30-DAY-LAUNCH-PLAN.md',
   }
-  const pptxUrl = 'https://github.com/kwanchunkit724/construction-app/blob/main/.planning/sales-kit/ck-pitch-deck.pptx'
+  // Use /raw/ (not /blob/) — GitHub's blob page can't preview .pptx and looks
+  // empty; the raw URL serves the actual binary so the link downloads it.
+  const pptxUrl = 'https://github.com/kwanchunkit724/construction-app/raw/main/.planning/sales-kit/ck-pitch-deck.pptx'
 
   return (
     <div className="space-y-4">
