@@ -128,10 +128,13 @@ function Hero() {
             <span className="w-1.5 h-1.5 rounded-full bg-safety-400 animate-pulse" />
             iOS App Store 已上架 · Android 測試中
           </div>
-          <h1 className="font-heading font-extrabold tracking-tight leading-[1.02] text-[2.6rem] sm:text-6xl">
-            <span className="block text-white">取代地盤嘅</span>
-            <span className="block mt-1 text-safety-500" style={{ textWrap: 'balance' } as React.CSSProperties}>
-              WhatsApp<span className="text-site-600">+</span>Excel<span className="text-site-600">+</span>紙簿
+          <h1 className="font-heading font-extrabold tracking-tight leading-[1.05]">
+            <span className="block text-white text-[2.1rem] sm:text-5xl">取代地盤嘅</span>
+            {/* One non-breaking unit so "紙簿" never splits mid-word; capped at 5xl to fit the column. */}
+            <span className="block mt-1.5 text-safety-500 text-[2.1rem] sm:text-5xl">
+              <span className="inline-block whitespace-nowrap">
+                WhatsApp<span className="text-site-700 mx-1">+</span>Excel<span className="text-site-700 mx-1">+</span>紙簿
+              </span>
             </span>
           </h1>
           <p className="mt-7 text-base md:text-lg text-site-300 leading-relaxed max-w-xl">
