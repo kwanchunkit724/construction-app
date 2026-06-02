@@ -129,9 +129,10 @@ function Hero() {
             iOS App Store 已上架 · Android 測試中
           </div>
           <h1 className="font-heading font-extrabold tracking-tight leading-[1.05]">
-            <span className="block text-white text-[2.1rem] sm:text-5xl">取代地盤嘅</span>
-            {/* One non-breaking unit so "紙簿" never splits mid-word; capped at 5xl to fit the column. */}
-            <span className="block mt-1.5 text-safety-500 text-[2.1rem] sm:text-5xl">
+            <span className="block text-white text-[1.85rem] sm:text-5xl">取代地盤嘅</span>
+            {/* One non-breaking unit so "紙簿" never splits mid-word; mobile size kept
+                small enough that the nowrap phrase can't overflow a 360px viewport. */}
+            <span className="block mt-1.5 text-safety-500 text-[1.85rem] sm:text-5xl">
               <span className="inline-block whitespace-nowrap">
                 WhatsApp<span className="text-site-700 mx-1">+</span>Excel<span className="text-site-700 mx-1">+</span>紙簿
               </span>
