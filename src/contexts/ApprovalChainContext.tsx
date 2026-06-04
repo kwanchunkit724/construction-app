@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
+import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import { useAuth } from './AuthContext'
 import type { ChainStep, GlobalRole } from '../types'
 
@@ -59,11 +60,12 @@ export function ApprovalChainProvider({ projectId, children }: { projectId: stri
 
   useEffect(() => {
     refetch()
+    const onChange = debounce(() => void refetch(), REFETCH_DEBOUNCE_MS)
     const ch = supabase
       .channel(`chains-${projectId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_chain_steps', filter: `project_id=eq.${projectId}` }, () => refetch())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_chain_steps', filter: `project_id=eq.${projectId}` }, onChange)
       .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    return () => { onChange.cancel(); supabase.removeChannel(ch) }
   }, [projectId, refetch])
 
   const canEdit = !!profile && (profile.global_role === 'admin' || assignedPmIds.includes(profile.id))

@@ -7,6 +7,7 @@ import {
   ReactNode,
 } from 'react'
 import { supabase } from '../lib/supabase'
+import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import { useAuth } from './AuthContext'
 import {
   drawingsPathFor,
@@ -165,6 +166,7 @@ export function DrawingsProvider({
 
     // Realtime: project-scoped drawings + all version changes (filtered client-side
     // by drawing_id ∈ current drawings). Single channel name per project.
+    const onChange = debounce(() => void refetch(), REFETCH_DEBOUNCE_MS)
     const channel = supabase
       .channel(`drawings-${projectId}`)
       .on(
@@ -175,16 +177,17 @@ export function DrawingsProvider({
           table: 'drawings',
           filter: `project_id=eq.${projectId}`,
         },
-        () => refetch(),
+        onChange,
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'drawing_versions' },
-        () => refetch(),
+        onChange,
       )
       .subscribe()
 
     return () => {
+      onChange.cancel()
       supabase.removeChannel(channel)
     }
   }, [projectId, refetch])

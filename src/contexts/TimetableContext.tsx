@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback, ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
+import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 
 // Inline types — re-exported from src/types-timetable.ts for orchestrator use.
 export type TimetableSource = 'material' | 'completion' | 'event'
@@ -105,25 +106,26 @@ export function TimetableProvider({ projectId, children }: { projectId: string; 
   // trigger a refresh. We don't try to be clever — the RPC is cheap and the
   // realtime payload doesn't tell us which entries it would affect.
   useEffect(() => {
+    const onChange = debounce(() => void refresh(), REFETCH_DEBOUNCE_MS)
     const ch = supabase
       .channel(`timetable-${projectId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'events', filter: `project_id=eq.${projectId}` },
-        () => refresh(),
+        onChange,
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'materials', filter: `project_id=eq.${projectId}` },
-        () => refresh(),
+        onChange,
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'progress_items', filter: `project_id=eq.${projectId}` },
-        () => refresh(),
+        onChange,
       )
       .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    return () => { onChange.cancel(); supabase.removeChannel(ch) }
   }, [projectId, refresh])
 
   const value: TimetableContextValue = {

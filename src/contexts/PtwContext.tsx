@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, useCallback, ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
+import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import type {
   PTW, PtwVersion, PermitWorker, PermitSignoff, PermitScan, Approval, PtwPayload,
 } from '../types'
@@ -87,15 +88,16 @@ export function PtwProvider({ projectId, children }: { projectId: string; childr
 
   useEffect(() => {
     refetch()
+    const onChange = debounce(() => void refetch(), REFETCH_DEBOUNCE_MS)
     const ch = supabase
       .channel(`ptw-${projectId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'permits_to_work', filter: `project_id=eq.${projectId}` }, () => refetch())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'permit_versions' }, () => refetch())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'permit_workers' }, () => refetch())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'permit_signoffs' }, () => refetch())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'approvals', filter: 'doc_type=eq.ptw' }, () => refetch())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'permits_to_work', filter: `project_id=eq.${projectId}` }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'permit_versions' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'permit_workers' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'permit_signoffs' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'approvals', filter: 'doc_type=eq.ptw' }, onChange)
       .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    return () => { onChange.cancel(); supabase.removeChannel(ch) }
   }, [projectId, refetch])
 
   const createDraft = useCallback(async (ptwType: PTW['ptw_type']) => {

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
+import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import { useAuth } from './AuthContext'
 
 // Per-project contact directory (v1.3 / Plan 11).
@@ -94,15 +95,16 @@ export function ContactsProvider({ projectId, children }: { projectId: string; c
   useEffect(() => { void refresh() }, [refresh, projectId])
 
   useEffect(() => {
+    const onChange = debounce(() => void refresh(), REFETCH_DEBOUNCE_MS)
     const channel = supabase
       .channel(`contacts-${projectId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'contacts', filter: `project_id=eq.${projectId}` },
-        () => { void refresh() },
+        onChange,
       )
       .subscribe()
-    return () => { void supabase.removeChannel(channel) }
+    return () => { onChange.cancel(); void supabase.removeChannel(channel) }
   }, [projectId, refresh])
 
   const createContact = useCallback(async (input: ContactInput) => {

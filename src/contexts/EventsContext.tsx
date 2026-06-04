@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
+import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import { useAuth } from './AuthContext'
 
 // Inline types — see CLAUDE.md "Where new features fit": new milestone tables
@@ -90,15 +91,16 @@ export function EventsProvider({ projectId, children }: { projectId: string; chi
     // TimetableContext currently displays. Consumers can call refresh(from,to)
     // to scope later.
     refresh()
+    const onChange = debounce(() => refresh(rangeFrom ?? undefined, rangeTo ?? undefined), REFETCH_DEBOUNCE_MS)
     const ch = supabase
       .channel(`events-${projectId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'events', filter: `project_id=eq.${projectId}` },
-        () => refresh(rangeFrom ?? undefined, rangeTo ?? undefined),
+        onChange,
       )
       .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    return () => { onChange.cancel(); supabase.removeChannel(ch) }
     // rangeFrom/rangeTo intentionally excluded — we read latest values at
     // callback time via closure recreation through refresh dep, while still
     // keeping the channel tied to projectId only.

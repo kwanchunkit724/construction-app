@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
+import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import { useAuth } from './AuthContext'
 import type { Delegation } from '../types'
 
@@ -40,11 +41,12 @@ export function DelegationsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refetch()
     if (!profile) return
+    const onChange = debounce(() => void refetch(), REFETCH_DEBOUNCE_MS)
     const ch = supabase
       .channel(`delegations-${profile.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'delegations' }, () => refetch())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'delegations' }, onChange)
       .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    return () => { onChange.cancel(); supabase.removeChannel(ch) }
   }, [profile, refetch])
 
   const addDelegation = useCallback(async (delegate_to: string, valid_from: string, valid_until: string) => {

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, useCallback, ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
+import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import type { SI, SIVersion, ProtestComment, Approval, SiPayload } from '../types'
 
 interface SiContextValue {
@@ -77,14 +78,15 @@ export function SiProvider({ projectId, children }: { projectId: string; childre
   useEffect(() => {
     refetch()
     // Realtime channel scoped to this project (D-26).
+    const onChange = debounce(() => void refetch(), REFETCH_DEBOUNCE_MS)
     const ch = supabase
       .channel(`si-${projectId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'site_instructions', filter: `project_id=eq.${projectId}` }, () => refetch())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'si_versions' }, () => refetch())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'approvals', filter: 'doc_type=eq.si' }, () => refetch())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'protest_comments' }, () => refetch())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'site_instructions', filter: `project_id=eq.${projectId}` }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'si_versions' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'approvals', filter: 'doc_type=eq.si' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'protest_comments' }, onChange)
       .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    return () => { onChange.cancel(); supabase.removeChannel(ch) }
   }, [projectId, refetch])
 
   const createDraftSi = useCallback(async () => {

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, useCallback, ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
+import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import type { VO, VOVersion, Approval, VoPayload } from '../types'
 
 interface VoContextValue {
@@ -69,13 +70,14 @@ export function VoProvider({ projectId, children }: { projectId: string; childre
   useEffect(() => {
     refetch()
     // Realtime channel scoped to this project (D-26).
+    const onChange = debounce(() => void refetch(), REFETCH_DEBOUNCE_MS)
     const ch = supabase
       .channel(`vo-${projectId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'variation_orders', filter: `project_id=eq.${projectId}` }, () => refetch())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'vo_versions' }, () => refetch())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'approvals', filter: 'doc_type=eq.vo' }, () => refetch())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'variation_orders', filter: `project_id=eq.${projectId}` }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vo_versions' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'approvals', filter: 'doc_type=eq.vo' }, onChange)
       .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    return () => { onChange.cancel(); supabase.removeChannel(ch) }
   }, [projectId, refetch])
 
   const createDraftVo = useCallback(async (siId: string) => {
