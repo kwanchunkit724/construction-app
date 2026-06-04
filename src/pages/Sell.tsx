@@ -499,6 +499,10 @@ function LeadCapture() {
             <span className="font-mono text-xs font-semibold uppercase tracking-[0.2em] text-site-400">1 個月免費試用</span>
           </div>
           <h2 className="font-heading text-3xl md:text-4xl font-extrabold tracking-tight">留低聯絡，我哋當日搵你</h2>
+          <p className="mt-4 inline-block rounded-full bg-safety-500/10 ring-1 ring-safety-500/30 text-safety-300 text-sm px-4 py-2 font-mono">
+            預約即享 <span className="text-white font-bold">1 個月免費試用</span> · 我哋幫你 set 好一個 zone
+          </p>
+          <p className="mt-3 text-xs text-site-400">6 月 30 號前簽，鎖創始價 HK$2,850/月（Standard 慳 25%）</p>
         </div>
 
         {done ? (
