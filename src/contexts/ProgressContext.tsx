@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { useProjects } from './ProjectsContext'
 import { cacheGet, cacheSet, getOnline, subscribeOnline } from '../lib/offline'
+import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import { deriveStatus, floorsToProgress } from '../types'
 import type { ProgressItem, ProgressStatus, TrackingMode, ProgressHistoryEntry } from '../types'
 
@@ -119,16 +120,17 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     setLoading(true)
     refetch().finally(() => setLoading(false))
 
+    const onChange = debounce(() => void refetch(), REFETCH_DEBOUNCE_MS)
     const channel = supabase
       .channel(`progress-${projectId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'progress_items', filter: `project_id=eq.${projectId}` },
-        () => refetch()
+        onChange
       )
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
+    return () => { onChange.cancel(); supabase.removeChannel(channel) }
   }, [projectId, refetch])
 
   // Re-sync on reconnect: realtime doesn't replay events missed while offline.

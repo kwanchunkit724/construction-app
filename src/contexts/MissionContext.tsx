@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import type { ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
+import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 
 // Mission control panel backing store (v22 migration).
 // Public read; admin write enforced at DB-RLS level.
@@ -130,14 +131,15 @@ export function MissionProvider({ children }: { children: ReactNode }) {
 
   // Realtime: any change to any of the 3 tables → refetch all
   useEffect(() => {
+    const onChange = debounce(() => void refresh(), REFETCH_DEBOUNCE_MS)
     const channel = supabase
       .channel('mission-control')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'mission_tasks' }, () => { void refresh() })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'mission_log' }, () => { void refresh() })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'mission_metrics' }, () => { void refresh() })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => { void refresh() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mission_tasks' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mission_log' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mission_metrics' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, onChange)
       .subscribe()
-    return () => { void supabase.removeChannel(channel) }
+    return () => { onChange.cancel(); void supabase.removeChannel(channel) }
   }, [refresh])
 
   const createTask = useCallback(async (input: NewMissionTask) => {

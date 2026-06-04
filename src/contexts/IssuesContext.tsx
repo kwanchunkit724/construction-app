@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { useProjects } from './ProjectsContext'
 import { cacheGet, cacheSet, getOnline, subscribeOnline } from '../lib/offline'
+import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import { getInitialHandler, getNextHandler } from '../types'
 import type { Issue, IssueComment, IssueHandlerRole, GlobalRole } from '../types'
 
@@ -76,14 +77,15 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
 
     // Subscribe to issue changes for this project only.
     // Comments don't affect the issue list; IssueDetail subscribes per-issue.
+    const onChange = debounce(() => void refetch(), REFETCH_DEBOUNCE_MS)
     const channel = supabase
       .channel(`issues-${projectId}`)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'issues', filter: `project_id=eq.${projectId}` },
-        () => refetch())
+        onChange)
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
+    return () => { onChange.cancel(); supabase.removeChannel(channel) }
   }, [projectId, refetch])
 
   // Re-sync on reconnect: realtime doesn't replay events missed while offline.

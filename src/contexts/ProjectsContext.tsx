@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, ReactNode 
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { cacheGet, cacheSet, getOnline, subscribeOnline } from '../lib/offline'
+import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import type { Project, ProjectMember, ProjectRole, Zone } from '../types'
 
 interface ProjectsContextType {
@@ -81,13 +82,15 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     refetch().finally(() => setLoading(false))
 
+    // Coalesce bursts of change events into one refetch (see lib/realtime).
+    const onChange = debounce(() => void refetch(), REFETCH_DEBOUNCE_MS)
     const channel = supabase
       .channel('phase2-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => refetch())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_members' }, () => refetch())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_members' }, onChange)
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
+    return () => { onChange.cancel(); supabase.removeChannel(channel) }
   }, [session, refetch])
 
   // Re-sync when connectivity returns: realtime doesn't replay events missed

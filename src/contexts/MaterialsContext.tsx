@@ -8,6 +8,7 @@ import {
   ReactNode,
 } from 'react'
 import { supabase } from '../lib/supabase'
+import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import { useAuth } from './AuthContext'
 import { useProjects } from './ProjectsContext'
 
@@ -137,15 +138,16 @@ export function MaterialsProvider({
   useEffect(() => {
     setLoading(true)
     refresh().finally(() => setLoading(false))
+    const onChange = debounce(() => void refresh(), REFETCH_DEBOUNCE_MS)
     const ch = supabase
       .channel(`materials-${projectId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'materials', filter: `project_id=eq.${projectId}` },
-        () => refresh(),
+        onChange,
       )
       .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    return () => { onChange.cancel(); supabase.removeChannel(ch) }
   }, [projectId, refresh])
 
   const createMaterial = useCallback(

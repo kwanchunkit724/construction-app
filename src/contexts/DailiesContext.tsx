@@ -8,6 +8,7 @@ import {
   ReactNode,
 } from 'react'
 import { supabase } from '../lib/supabase'
+import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import { useAuth } from './AuthContext'
 
 // ── Inline types (re-exported via src/types-daily.ts for the orchestrator) ──
@@ -88,6 +89,7 @@ export function DailiesProvider({
     refresh()
     // Realtime channel scoped to this project; we filter on date client-side
     // in refresh() to avoid juggling multiple channels when the user pages dates.
+    const onChange = debounce(() => void refresh(), REFETCH_DEBOUNCE_MS)
     const ch = supabase
       .channel(`dailies-${projectId}`)
       .on(
@@ -98,10 +100,11 @@ export function DailiesProvider({
           table: 'dailies',
           filter: `project_id=eq.${projectId}`,
         },
-        () => refresh(),
+        onChange,
       )
       .subscribe()
     return () => {
+      onChange.cancel()
       supabase.removeChannel(ch)
     }
   }, [projectId, refresh])
