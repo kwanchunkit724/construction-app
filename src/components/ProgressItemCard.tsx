@@ -19,6 +19,14 @@ function useDrawingsOptional() {
   return useContext(DrawingsContext)
 }
 
+// arr — defensive: DB can deliver null for nominally-array columns
+// (nullable col / row predating a default). A bare [...null] spread throws
+// "not iterable", and with no error boundary one bad row blanks the WHOLE
+// progress list. Normalise every array access through this.
+function arr<T>(v: T[] | null | undefined): T[] {
+  return Array.isArray(v) ? v : []
+}
+
 const STATUS_STYLE: Record<ProgressStatus, string> = {
   'not-started': 'bg-site-100 text-site-500',
   'in-progress': 'bg-blue-100 text-blue-700',
@@ -120,7 +128,9 @@ export function ProgressItemCard({
   const cardBg = item.level === 1 ? 'bg-safety-50/40' : 'bg-white'
 
   const isFloors = item.tracking_mode === 'floors'
-  const assigneeIds = [...item.assigned_to, ...item.delegated_to]
+  const assignedTo = arr(item.assigned_to)
+  const delegatedTo = arr(item.delegated_to)
+  const assigneeIds = [...assignedTo, ...delegatedTo]
   const profiles = useProfiles(assigneeIds)
 
   // tapping the row body: parents toggle children, leaves toggle their detail.
@@ -161,7 +171,7 @@ export function ProgressItemCard({
               <span className={`font-semibold text-site-900 truncate ${item.level === 1 ? 'text-sm' : 'text-[13px]'}`}>{item.title}</span>
               {isFloors && isLeaf && (
                 <span className="inline-flex items-center gap-0.5 text-[9px] bg-purple-100 text-purple-700 px-1 rounded flex-shrink-0">
-                  <Layers size={8} />{item.floors_completed.length}/{item.floor_labels.length}
+                  <Layers size={8} />{arr(item.floors_completed).length}/{arr(item.floor_labels).length}
                 </span>
               )}
             </div>
@@ -237,14 +247,14 @@ export function ProgressItemCard({
         {isOpen && isLeaf && (
           <div className="px-3 pb-2.5 pt-1 border-t border-site-100 space-y-2">
             {item.notes && <p className="text-[11px] text-site-500 whitespace-pre-wrap">{item.notes}</p>}
-            {(item.assigned_to.length > 0 || item.delegated_to.length > 0) && (
+            {(assignedTo.length > 0 || delegatedTo.length > 0) && (
               <div className="flex flex-wrap gap-1">
-                {item.assigned_to.map(id => (
+                {assignedTo.map(id => (
                   <span key={`o-${id}`} className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">
                     <Users size={9} />{profiles[id]?.name ?? '...'}
                   </span>
                 ))}
-                {item.delegated_to.map(id => (
+                {delegatedTo.map(id => (
                   <span key={`d-${id}`} className="inline-flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">
                     <UserPlus size={9} />{profiles[id]?.name ?? '...'}
                   </span>

@@ -145,10 +145,18 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
       <Sidebar />
 
       <div className="flex-1 flex flex-col md:pl-60 lg:pl-64">
-      <header
-        className="sticky top-0 z-30 bg-white border-b border-site-200"
+      {/* Sticky top bar: header + tabs pinned together as ONE unit. Previously
+          they were two separate sticky elements and the tabs used a hardcoded
+          top-[44px] offset that did NOT match the real header height (~61px,
+          taller with iOS safe-area / browser zoom / large fonts). The mismatch
+          let the higher-z header overlap the tabs and, on taller headers, the
+          list — "project bar blocks the list". One sticky wrapper = no magic
+          offset to drift, bar can never cover the list. */}
+      <div
+        className="sticky top-0 z-30 bg-white"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
+      <header className="bg-white border-b border-site-200">
         <div className="max-w-2xl md:max-w-7xl mx-auto px-2 md:px-4 py-2 flex items-center gap-1">
           <button onClick={() => navigate('/home')} className="text-site-700 hover:text-site-900 p-2" aria-label="返回">
             <ChevronLeft size={22} />
@@ -178,14 +186,15 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
         </div>
       </header>
 
-      {/* Tabs */}
-      <div className="bg-white border-b border-site-200 sticky top-[calc(env(safe-area-inset-top)+44px)] z-20">
+      {/* Tabs — inside the sticky wrapper above (no own sticky offset) */}
+      <div className="bg-white border-b border-site-200">
         <div className="max-w-2xl md:max-w-7xl mx-auto flex">
           <TabButton active={tab === 'progress'} onClick={() => setTab('progress')} icon={ListChecks} label="進度" />
           <TabButton active={tab === 'issues'} onClick={() => setTab('issues')} icon={AlertCircle} label="問題" badge={openIssueCount} />
           <TabButton active={tab === 'si-vo'} onClick={() => setTab('si-vo')} icon={FileCheck2} label="簽核" />
           <TabButton active={tab === 'tools'} onClick={() => setTab('tools')} icon={Wrench} label="工具" />
         </div>
+      </div>
       </div>
 
       <main className="flex-1 max-w-2xl md:max-w-7xl w-full mx-auto px-4 md:px-6 py-4 md:py-6 pb-24 md:pb-10">
