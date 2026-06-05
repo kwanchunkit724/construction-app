@@ -151,7 +151,11 @@ export function ProgressItemCard({
 
   return (
     <div style={{ marginLeft: `${indentRem}rem` }}>
-      <div className={`rounded-lg border border-site-200 mb-1 overflow-hidden ${levelBorder} ${cardBg}`}>
+      {/* No overflow-hidden — the kebab dropdown is absolute/top-full
+          and on short (non-leaf) rows it overflows the card box; clipping it
+          here hid the menu behind the next item. Inner content is padded so
+          the rounded corners still read clean without clipping. */}
+      <div className={`rounded-lg border border-site-200 mb-1 ${levelBorder} ${cardBg}`}>
         {/* compact row */}
         <div className="flex items-center gap-1.5 pl-1.5 pr-1.5 py-1.5">
           {/* chevron — parents reveal children, leaves reveal detail */}
