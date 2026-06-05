@@ -21,6 +21,7 @@ import { AssignmentModal } from '../components/AssignmentModal'
 import { HistoryModal } from '../components/HistoryModal'
 import { IssueCard } from '../components/IssueCard'
 import { CreateIssueModal } from '../components/CreateIssueModal'
+import { ExportProgressModal } from '../components/ExportProgressModal'
 import { ProgressProvider, useProgress } from '../contexts/ProgressContext'
 import { IssuesProvider, useIssues } from '../contexts/IssuesContext'
 import { DrawingsProvider } from '../contexts/DrawingsContext'
@@ -85,6 +86,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const [historyItem, setHistoryItem] = useState<ProgressItem | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [createIssueOpen, setCreateIssueOpen] = useState(false)
+  const [showExport, setShowExport] = useState(false)
 
   const openIssueCount = issues.filter(i => i.status === 'open').length
 
@@ -157,16 +159,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
           </div>
           <ExportMenu
             tab={tab}
-            onExportProgressXlsx={async () => {
-              if (!project) return
-              const { exportProgressToExcel } = await import('../lib/export')
-              await exportProgressToExcel(project, items)
-            }}
-            onExportProgressPdf={async () => {
-              if (!project) return
-              const { exportProgressToPDF } = await import('../lib/export')
-              await exportProgressToPDF(project, items)
-            }}
+            onExportProgress={() => setShowExport(true)}
             onExportIssuesXlsx={async () => {
               if (!project) return
               const ids = Array.from(new Set(issues.flatMap(i => [i.reporter_id, i.resolved_by].filter(Boolean) as string[])))
@@ -291,6 +284,9 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
         onClose={() => setCreateIssueOpen(false)}
         projectId={projectId}
       />
+      {showExport && (
+        <ExportProgressModal project={project} items={items} onClose={() => setShowExport(false)} />
+      )}
     </div>
   )
 }
@@ -591,11 +587,10 @@ function Stat({ label, count, color }: { label: string; count: number; color: st
 }
 
 function ExportMenu({
-  tab, onExportProgressXlsx, onExportProgressPdf, onExportIssuesXlsx,
+  tab, onExportProgress, onExportIssuesXlsx,
 }: {
   tab: Tab
-  onExportProgressXlsx: () => void
-  onExportProgressPdf: () => void
+  onExportProgress: () => void
   onExportIssuesXlsx: () => void | Promise<void>
 }) {
   const [open, setOpen] = useState(false)
@@ -613,10 +608,7 @@ function ExportMenu({
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-full mt-1 bg-white rounded-xl border border-site-200 shadow-card-md py-1 min-w-[160px] z-40">
             {tab === 'progress' && (
-              <>
-                <MenuItem label="匯出 Excel" onClick={() => { onExportProgressXlsx(); setOpen(false) }} />
-                <MenuItem label="匯出 PDF" onClick={() => { onExportProgressPdf(); setOpen(false) }} />
-              </>
+              <MenuItem label="匯出進度報告…" onClick={() => { onExportProgress(); setOpen(false) }} />
             )}
             {tab === 'issues' && (
               <MenuItem label="匯出 Excel" onClick={() => { void onExportIssuesXlsx(); setOpen(false) }} />

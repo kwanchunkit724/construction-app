@@ -17,7 +17,7 @@ import {
   LINE_ITEM_CATEGORY_ZH,
 } from '../types'
 import type {
-  Project, ProgressItem, Issue, UserProfile,
+  Project, ProgressItem, Issue, UserProfile, ProgressStatus,
   VO, VOVersion, DrawingVersion,
 } from '../types'
 import { formatHKD } from './currency'
@@ -65,200 +65,341 @@ function dateStr() {
 }
 
 // ── Progress export ──────────────────────────────────────────
+// Driven by ExportProgressOptions (see the ExportProgressModal picker).
+// Reports group by 分區 with per-zone roll-up subtotals + a top KPI
+// summary. Level (大項/中項/細項) uses NEUTRAL blue-grey bands; red/amber/
+// green are reserved for STATUS (in construction reports red = "出事"),
+// per the multi-persona review (.planning/export-report/IMPROVEMENT-SPEC.md).
 
-interface ProgressRow {
-  分區: string
-  編號: string
-  名稱: string
-  層級: number
-  追蹤模式: string
-  計劃進度: string
-  實際進度: string
-  狀態: string
-  計劃開始: string
-  計劃完成: string
-  備注: string
-  最後更新: string
+export type ReportDepth = 1 | 2 | 3
+
+export interface ExportProgressOptions {
+  zoneIds: string[]            // project.zones ids to include
+  includeUnzoned: boolean      // include items with no/unknown zone
+  depth: ReportDepth           // max level to display (rollups always use real leaves)
+  statuses: ProgressStatus[]   // statuses to include
+  onlyBehind: boolean          // only items behind plan by > 10%
+  groupByZone: boolean         // sectioned by zone with subtotals
+  showSummary: boolean         // top KPI block
+  showGap: boolean             // 差距 (實際−計劃) column
+  reportPeriod: string         // e.g. 2026-W23 (free text, optional)
 }
 
-function buildProgressRows(
-  project: Project,
-  items: ProgressItem[],
-): { rows: ProgressRow[]; outlineLevels: number[] } {
-  // Group items by parent_id to walk the tree depth-first, preserving the
-  // visual nesting that the UI shows. Output order: roots → children →
-  // grandchildren, each level sorted by `code`.
-  const byParent = new Map<string | null, ProgressItem[]>()
-  for (const i of items) {
-    const k = i.parent_id ?? null
-    if (!byParent.has(k)) byParent.set(k, [])
-    byParent.get(k)!.push(i)
+export const ALL_STATUSES: ProgressStatus[] = ['not-started', 'in-progress', 'completed', 'delayed', 'blocked']
+
+export function exportPreset(p: 'internal' | 'owner' | 'exception', project: Project): ExportProgressOptions {
+  const zoneIds = project.zones.map(z => z.id)
+  if (p === 'owner') {
+    return { zoneIds, includeUnzoned: true, depth: 2, statuses: [...ALL_STATUSES], onlyBehind: false, groupByZone: true, showSummary: true, showGap: true, reportPeriod: '' }
   }
-  for (const arr of byParent.values()) arr.sort((a, b) => a.code.localeCompare(b.code))
+  if (p === 'exception') {
+    return { zoneIds, includeUnzoned: true, depth: 2, statuses: ['delayed', 'blocked'], onlyBehind: true, groupByZone: true, showSummary: true, showGap: true, reportPeriod: '' }
+  }
+  return { zoneIds, includeUnzoned: true, depth: 3, statuses: [...ALL_STATUSES], onlyBehind: false, groupByZone: true, showSummary: true, showGap: true, reportPeriod: '' }
+}
 
-  const rows: ProgressRow[] = []
-  const outlineLevels: number[] = []
+const UNZONED = '__unzoned__'
 
-  function dfs(parentId: string | null, depth: number) {
-    for (const item of byParent.get(parentId) ?? []) {
-      const isLeaf = !items.some(i => i.parent_id === item.id)
-      const zoneName = project.zones.find(z => z.id === item.zone_id)?.name ?? item.zone_id ?? ''
-      const actual = isLeaf ? item.actual_progress : computeRollup(getDescendantLeaves(items, item.id)).actual
-      const planned = isLeaf ? item.planned_progress : computeRollup(getDescendantLeaves(items, item.id)).planned
-      const status = isLeaf ? item.status : computeRollup(getDescendantLeaves(items, item.id)).status
-      // Full-width space indent (U+3000) renders evenly with CJK headers
-      // and stays visible on both Excel and PDF without breaking column
-      // alignment.
-      const indent = '　'.repeat(depth)
-      rows.push({
-        分區: zoneName,
-        編號: item.code,
-        名稱: indent + item.title,
-        層級: item.level,
-        追蹤模式: item.tracking_mode === 'floors' ? `樓層 (${item.floors_completed.length}/${item.floor_labels.length})` : '百分比',
-        計劃進度: `${planned}%`,
-        實際進度: `${actual}%`,
-        狀態: PROGRESS_STATUS_ZH[status],
-        計劃開始: item.planned_start ?? '',
-        計劃完成: item.planned_end ?? '',
-        備注: isLeaf ? item.notes : '',
-        最後更新: new Date(item.last_updated_at).toLocaleString('zh-HK'),
-      })
-      outlineLevels.push(depth)
-      dfs(item.id, depth + 1)
+interface Eff { actual: number; planned: number; status: ProgressStatus; gap: number }
+interface ItemRow {
+  zoneKey: string; zoneName: string
+  code: string; title: string; level: number; depth: number
+  tracking: string; eff: Eff; start: string; end: string; notes: string; updated: string
+}
+interface ZoneAgg { actual: number; planned: number; gap: number; status: ProgressStatus; count: number; behind: number }
+interface ReportModel {
+  summary: { actual: number; planned: number; gap: number; total: number; behind: number; counts: Record<ProgressStatus, number> }
+  zones: Array<{ key: string; name: string; agg: ZoneAgg; rows: ItemRow[] }>
+  opts: ExportProgressOptions
+}
+
+export function buildReportModel(project: Project, items: ProgressItem[], opts: ExportProgressOptions): ReportModel {
+  const isLeaf = (it: ProgressItem) => !items.some(i => i.parent_id === it.id)
+  const effOf = (it: ProgressItem): Eff => {
+    if (isLeaf(it)) return { actual: it.actual_progress, planned: it.planned_progress, status: it.status, gap: it.actual_progress - it.planned_progress }
+    const r = computeRollup(getDescendantLeaves(items, it.id))
+    return { actual: r.actual, planned: r.planned, status: r.status, gap: r.actual - r.planned }
+  }
+  const zoneKeyOf = (it: ProgressItem): string => {
+    if (it.zone_id && project.zones.some(z => z.id === it.zone_id)) return it.zone_id
+    return UNZONED
+  }
+  const zoneNameOf = (key: string) => key === UNZONED ? '未分區 / 共用' : (project.zones.find(z => z.id === key)?.name ?? key)
+
+  const zoneSel = new Set(opts.zoneIds)
+  const inScope = (it: ProgressItem) => {
+    const k = zoneKeyOf(it)
+    return k === UNZONED ? opts.includeUnzoned : zoneSel.has(k)
+  }
+  const scopeItems = items.filter(inScope)
+
+  // qualify test (status + behind) on each scope item's effective status.
+  const statusSel = new Set(opts.statuses)
+  const qualifies = (it: ProgressItem) => {
+    const e = effOf(it)
+    if (!statusSel.has(e.status)) return false
+    if (opts.onlyBehind && e.gap >= -10) return false
+    return true
+  }
+  // keep qualified items + their ancestor chain (to preserve tree context).
+  const byId = new Map(items.map(i => [i.id, i]))
+  const keep = new Set<string>()
+  for (const it of scopeItems) {
+    if (!qualifies(it)) continue
+    keep.add(it.id)
+    let p = it.parent_id ? byId.get(it.parent_id) : undefined
+    while (p && inScope(p)) { keep.add(p.id); p = p.parent_id ? byId.get(p.parent_id) : undefined }
+  }
+  const display = scopeItems.filter(it => keep.has(it.id) && it.level <= opts.depth)
+
+  // group + DFS per zone (tree order, sorted by code, depth for indent).
+  const zoneOrder: string[] = [...project.zones.map(z => z.id)]
+  if (opts.includeUnzoned) zoneOrder.push(UNZONED)
+  const displayByZone = new Map<string, ProgressItem[]>()
+  for (const it of display) {
+    const k = zoneKeyOf(it)
+    if (!displayByZone.has(k)) displayByZone.set(k, [])
+    displayByZone.get(k)!.push(it)
+  }
+  const zones: ReportModel['zones'] = []
+  for (const key of zoneOrder) {
+    const zItems = displayByZone.get(key)
+    if (!zItems || zItems.length === 0) continue
+    const zSet = new Set(zItems.map(i => i.id))
+    const byParent = new Map<string | null, ProgressItem[]>()
+    for (const it of zItems) {
+      const pk = it.parent_id && zSet.has(it.parent_id) ? it.parent_id : null
+      if (!byParent.has(pk)) byParent.set(pk, [])
+      byParent.get(pk)!.push(it)
     }
+    for (const arr of byParent.values()) arr.sort((a, b) => a.code.localeCompare(b.code))
+    const rows: ItemRow[] = []
+    const dfs = (pid: string | null, d: number) => {
+      for (const it of byParent.get(pid) ?? []) {
+        const e = effOf(it)
+        rows.push({
+          zoneKey: key, zoneName: zoneNameOf(key),
+          code: it.code, title: it.title, level: it.level, depth: d,
+          tracking: it.tracking_mode === 'floors' ? `樓層 (${it.floors_completed.length}/${it.floor_labels.length})` : '百分比',
+          eff: e,
+          start: it.planned_start ?? '', end: it.planned_end ?? '',
+          notes: isLeaf(it) ? it.notes : '', updated: new Date(it.last_updated_at).toLocaleString('zh-HK'),
+        })
+        dfs(it.id, d + 1)
+      }
+    }
+    dfs(null, 0)
+    // zone agg from ALL leaves in that zone within scope (true progress).
+    const zoneLeaves = scopeItems.filter(i => isLeaf(i) && zoneKeyOf(i) === key)
+    const r = computeRollup(zoneLeaves)
+    const behind = zoneLeaves.filter(l => (l.actual_progress - l.planned_progress) < -10).length
+    zones.push({ key, name: zoneNameOf(key), agg: { actual: r.actual, planned: r.planned, gap: r.actual - r.planned, status: r.status, count: zoneLeaves.length, behind }, rows })
   }
-  dfs(null, 0)
-  return { rows, outlineLevels }
+
+  // overall summary from all in-scope leaves.
+  const scopeLeaves = scopeItems.filter(isLeaf)
+  const sr = computeRollup(scopeLeaves)
+  const counts = { 'not-started': 0, 'in-progress': 0, 'completed': 0, 'delayed': 0, 'blocked': 0 } as Record<ProgressStatus, number>
+  for (const l of scopeLeaves) counts[l.status]++
+  const behind = scopeLeaves.filter(l => (l.actual_progress - l.planned_progress) < -10).length
+
+  return { summary: { actual: sr.actual, planned: sr.planned, gap: sr.actual - sr.planned, total: scopeLeaves.length, behind, counts }, zones, opts }
 }
 
-export async function exportProgressToExcel(project: Project, items: ProgressItem[]) {
-  const { rows, outlineLevels } = buildProgressRows(project, items)
-  const ws = XLSX.utils.json_to_sheet(rows)
-  ws['!cols'] = [
-    { wch: 12 }, { wch: 12 }, { wch: 36 }, { wch: 6 }, { wch: 14 },
-    { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 18 },
-  ]
-  // Excel outline rows: index 0 is the header row, then one entry per data
-  // row carrying its tree depth. Excel renders +/− grouping controls on the
-  // left gutter so users can collapse subtrees.
-  ws['!rows'] = [{}, ...outlineLevels.map(lv => ({ level: lv }))]
+// Status colours (red/amber/green) — reserved for STATUS, not level.
+const STATUS_PILL: Record<ProgressStatus, { bg: string; fg: string; bar: string; mark: string }> = {
+  'delayed': { bg: '#fee2e2', fg: '#b91c1c', bar: '#dc2626', mark: '⚠ ' },
+  'blocked': { bg: '#fef3c7', fg: '#92400e', bar: '#d97706', mark: '■ ' },
+  'in-progress': { bg: '#dbeafe', fg: '#1d4ed8', bar: '#3b82f6', mark: '' },
+  'completed': { bg: '#dcfce7', fg: '#15803d', bar: '#22c55e', mark: '✓ ' },
+  'not-started': { bg: '#f1f5f9', fg: '#64748b', bar: '#cbd5e1', mark: '' },
+}
+// Level (structure) — neutral blue-grey bands.
+const LEVEL_BG: Record<number, string> = { 1: '#dbe3ec', 2: '#eef2f6', 3: '#ffffff' }
+const gapColour = (g: number) => g < 0 ? '#b91c1c' : g > 0 ? '#15803d' : '#64748b'
+const fileTag = (opts: ExportProgressOptions) => opts.reportPeriod ? safeName(opts.reportPeriod) : dateStr()
+
+// ── Excel ────────────────────────────────────────────────────
+export async function exportProgressToExcel(project: Project, items: ProgressItem[], opts: ExportProgressOptions) {
+  const model = buildReportModel(project, items, opts)
+  const pct = (n: number) => n // numeric; format applied via cell.z
+  const aoa: (string | number | null)[][] = []
+  const numCells: Array<{ r: number; c: number }> = []
+  const outline: Array<number | null> = [] // per data row: outline level (null = no row meta)
+
+  const pushRow = (cells: (string | number | null)[], lvl: number | null) => { aoa.push(cells); outline.push(lvl) }
+  const markNums = (rowIdx: number, cols: number[]) => cols.forEach(c => numCells.push({ r: rowIdx, c }))
+
+  if (model.summary && opts.showSummary) {
+    pushRow([`${project.name} — 進度報告`], null)
+    pushRow([`產生：${new Date().toLocaleString('zh-HK')}${opts.reportPeriod ? `   期數：${opts.reportPeriod}` : ''}`], null)
+    pushRow([`整體：計劃 ${model.summary.planned}% / 實際 ${model.summary.actual}% / 差距 ${model.summary.gap}%   ·   落後 ${model.summary.behind} 項 / 共 ${model.summary.total} 項`], null)
+    pushRow([`延誤 ${model.summary.counts.delayed} · 阻塞 ${model.summary.counts.blocked} · 進行中 ${model.summary.counts['in-progress']} · 已完成 ${model.summary.counts.completed} · 未開始 ${model.summary.counts['not-started']}`], null)
+    pushRow([], null)
+  }
+
+  // header
+  const header = ['分區', '編號', '名稱', '層級', '追蹤模式', '計劃%', '實際%']
+  if (opts.showGap) header.push('差距')
+  header.push('狀態', '計劃開始', '計劃完成', '備注')
+  const headerRowIdx = aoa.length
+  pushRow(header, null)
+
+  const colIndex = { plan: 5, act: 6, gap: opts.showGap ? 7 : -1 }
+  const statusCol = opts.showGap ? 8 : 7
+  const startCol = statusCol + 1, endCol = statusCol + 2, notesCol = statusCol + 3
+
+  for (const z of model.zones) {
+    if (opts.groupByZone) {
+      const r = aoa.length
+      pushRow([`▌ ${z.name}`], 0)
+      // subtotal row
+      const sub: (string | number | null)[] = []
+      sub[0] = '　小計'; sub[2] = `${z.agg.count} 項 · 落後 ${z.agg.behind}`
+      sub[colIndex.plan] = z.agg.planned; sub[colIndex.act] = z.agg.actual
+      if (opts.showGap) sub[colIndex.gap] = z.agg.gap
+      sub[statusCol] = PROGRESS_STATUS_ZH[z.agg.status]
+      const subIdx = aoa.length
+      pushRow(sub, 0)
+      const sCols = [colIndex.plan, colIndex.act, ...(opts.showGap ? [colIndex.gap] : [])]
+      markNums(subIdx, sCols)
+      void r
+    }
+    for (const it of z.rows) {
+      const cells: (string | number | null)[] = []
+      cells[0] = opts.groupByZone ? '' : z.name
+      cells[1] = it.code
+      cells[2] = '　'.repeat(it.depth) + it.title
+      cells[3] = it.level
+      cells[4] = it.tracking
+      cells[colIndex.plan] = pct(it.eff.planned)
+      cells[colIndex.act] = pct(it.eff.actual)
+      if (opts.showGap) cells[colIndex.gap] = it.eff.gap
+      cells[statusCol] = STATUS_PILL[it.eff.status].mark + PROGRESS_STATUS_ZH[it.eff.status]
+      cells[startCol] = it.start
+      cells[endCol] = it.end
+      cells[notesCol] = it.notes
+      const idx = aoa.length
+      pushRow(cells, opts.groupByZone ? it.depth + 1 : it.depth)
+      markNums(idx, [colIndex.plan, colIndex.act, ...(opts.showGap ? [colIndex.gap] : [])])
+    }
+    if (opts.groupByZone) pushRow([], 0)
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa)
+  // numeric % cells: real numbers with "0%" display so they SUM/AVG.
+  for (const { r, c } of numCells) {
+    const addr = XLSX.utils.encode_cell({ r, c })
+    const cell = ws[addr]
+    if (cell && typeof cell.v === 'number') cell.z = '0"%"'
+  }
+  ws['!cols'] = header.map((h, i) => ({ wch: i === 2 ? 40 : (h.length > 4 ? 12 : 9) }))
+  ws['!rows'] = aoa.map((_, i) => i === headerRowIdx ? {} : (outline[i] != null ? { level: outline[i] as number } : {}))
+  ws['!freeze'] = { xSplit: 0, ySplit: headerRowIdx + 1 }
   const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, '進度追蹤')
+  XLSX.utils.book_append_sheet(wb, ws, '進度報告')
   const blob = new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
-  await downloadBlob(blob, `${safeName(project.name)}_進度_${dateStr()}.xlsx`)
+  await downloadBlob(blob, `${safeName(project.name)}_進度_${fileTag(opts)}.xlsx`)
 }
 
-export async function exportProgressToPDF(project: Project, items: ProgressItem[]) {
-  // Strategy: render an offscreen HTML table with the browser's own CJK
-  // fallback chain, snapshot via html2canvas, then paginate the resulting
-  // bitmap into A4 landscape pages. The previous jsPDF-autoTable path
-  // depended on `public/fonts/noto-sans-hk-subset.ttf` which was built for
-  // the VO export's fixed vocabulary (Plan 02-06, ~186 KB) and lacked
-  // glyphs for arbitrary project zone names + item titles — every uncovered
-  // character collapsed to the `.notdef` glyph, producing the garbled
-  // output users saw. html2canvas hands the work back to the browser font
-  // stack (Microsoft JhengHei / PingFang HK / etc. per tailwind.config.js
-  // `font-sans`), so any CJK string the user can type is rendered.
+// ── PDF (html2canvas — full colour + any CJK glyph) ──────────
+export async function exportProgressToPDF(project: Project, items: ProgressItem[], opts: ExportProgressOptions) {
+  const model = buildReportModel(project, items, opts)
+  const html2canvas = (await import('html2canvas')).default
 
-  const { rows } = buildProgressRows(project, items)
-  const html2canvasMod = await import('html2canvas')
-  const html2canvas = html2canvasMod.default
-
-  // Build the offscreen table. position:fixed + left:-10000 keeps it off
-  // the visible viewport but still attached to the document (html2canvas
-  // refuses detached nodes). Width is sized for A4 landscape at scale=2
-  // so the snapshot maps cleanly into the page.
   const container = document.createElement('div')
   container.style.cssText = [
-    'position: fixed',
-    'top: 0',
-    'left: -10000px',
-    'width: 1100px',
-    'padding: 24px',
+    'position: fixed', 'top: 0', 'left: -10000px', 'width: 1100px', 'padding: 24px',
     'background: #ffffff',
     'font-family: Inter, "Microsoft JhengHei", "PingFang HK", "Heiti TC", "Noto Sans CJK TC", sans-serif',
-    'font-size: 11px',
-    'color: #0f172a',
+    'font-size: 11px', 'color: #0f172a',
   ].join('; ')
 
-  const statusBg: Record<string, string> = {
-    '未開始': '#f1f5f9',
-    '進行中': '#dbeafe',
-    '已完工': '#dcfce7',
-    '延誤': '#fee2e2',
-    '阻塞': '#fef3c7',
-  }
+  const colCount = 8 + (opts.showGap ? 1 : 0)
+  const pillStyle = (s: ProgressStatus) => `background:${STATUS_PILL[s].bg}; color:${STATUS_PILL[s].fg}; padding:2px 8px; border-radius:8px; font-size:10px; font-weight:600;`
 
-  // Hand-rolled HTML to control colors + indent precisely. Title row +
-  // generated-at line above the table, orange header band, alternating
-  // row backgrounds for readability.
+  const summaryHtml = opts.showSummary && model.summary ? `
+    <div style="display:flex; gap:10px; margin:0 0 14px 0;">
+      <div style="flex:1; border:1px solid #e2e8f0; border-radius:10px; padding:10px 14px;">
+        <div style="font-size:10px; color:#64748b;">整體進度</div>
+        <div style="font-size:22px; font-weight:800; color:#0f172a;">${model.summary.actual}<span style="font-size:13px; color:#94a3b8;">% / 計劃 ${model.summary.planned}%</span></div>
+        <div style="font-size:11px; color:${gapColour(model.summary.gap)}; font-weight:700;">${model.summary.gap >= 0 ? '+' : ''}${model.summary.gap}% 差距</div>
+      </div>
+      <div style="flex:1; border:1px solid #e2e8f0; border-radius:10px; padding:10px 14px;">
+        <div style="font-size:10px; color:#64748b;">需要關注</div>
+        <div style="font-size:22px; font-weight:800; color:#b91c1c;">${model.summary.behind}<span style="font-size:13px; color:#94a3b8;"> 項落後 / 共 ${model.summary.total}</span></div>
+        <div style="font-size:11px; color:#475569;">延誤 ${model.summary.counts.delayed} · 阻塞 ${model.summary.counts.blocked}</div>
+      </div>
+      <div style="flex:1; border:1px solid #e2e8f0; border-radius:10px; padding:10px 14px;">
+        <div style="font-size:10px; color:#64748b;">狀態分佈</div>
+        <div style="font-size:11px; color:#475569; line-height:1.5;">進行中 ${model.summary.counts['in-progress']} · 已完成 ${model.summary.counts.completed} · 未開始 ${model.summary.counts['not-started']}</div>
+      </div>
+    </div>` : ''
+
+  const headCells = ['分區', '編號', '名稱', '層級', '追蹤', '計劃%', '實際%']
+    .concat(opts.showGap ? ['差距'] : [])
+    .concat(['狀態', '計劃開始', '計劃完成'])
+  const th = (t: string, align = 'left', w = '') => `<th style="padding:7px 6px; text-align:${align}; ${w}">${escapeHtml(t)}</th>`
+
+  const zoneSections = model.zones.map(z => {
+    const bandRollup = `整體 ${z.agg.actual}%（計劃 ${z.agg.planned}%，${z.agg.gap < 0 ? `落後 ${-z.agg.gap}%` : `差 ${z.agg.gap}%`}${z.agg.behind ? `，落後 ${z.agg.behind} 項` : ''}）`
+    const bandRow = opts.groupByZone ? `
+      <tr><td colspan="${colCount}" style="background:#1e3a5f; color:#fff; padding:8px 10px; font-weight:700; font-size:12px;">
+        ${escapeHtml(z.name)} <span style="font-weight:500; color:#cbd5e1; font-size:11px;">— ${escapeHtml(bandRollup)}</span>
+      </td></tr>` : ''
+    const itemRows = z.rows.map(it => {
+      const sp = STATUS_PILL[it.eff.status]
+      const lvlBg = LEVEL_BG[it.level] ?? '#ffffff'
+      const weight = it.level === 1 ? 700 : it.level === 2 ? 600 : 400
+      const indent = it.depth * 16
+      return `
+      <tr style="background:${lvlBg}; border-bottom:1px solid #e2e8f0; border-left:4px solid ${sp.bar};">
+        <td style="padding:5px 6px;">${opts.groupByZone ? '' : escapeHtml(z.name)}</td>
+        <td style="padding:5px 6px; font-family:Consolas,monospace; color:#475569;">${escapeHtml(it.code)}</td>
+        <td style="padding:5px 6px; padding-left:${6 + indent}px; font-weight:${weight}; color:${it.level === 3 ? '#334155' : '#0f172a'};">${escapeHtml(it.title)}</td>
+        <td style="padding:5px 6px; text-align:center; color:#64748b;">${it.level}</td>
+        <td style="padding:5px 6px; color:#64748b;">${escapeHtml(it.tracking)}</td>
+        <td style="padding:5px 6px; text-align:right; color:#64748b;">${it.eff.planned}%</td>
+        <td style="padding:5px 6px; text-align:right; font-weight:700;">${it.eff.actual}%</td>
+        ${opts.showGap ? `<td style="padding:5px 6px; text-align:right; font-weight:700; color:${gapColour(it.eff.gap)};">${it.eff.gap >= 0 ? '+' : ''}${it.eff.gap}%</td>` : ''}
+        <td style="padding:5px 6px; text-align:center;"><span style="${pillStyle(it.eff.status)}">${escapeHtml(sp.mark + PROGRESS_STATUS_ZH[it.eff.status])}</span></td>
+        <td style="padding:5px 6px; color:#64748b;">${escapeHtml(it.start)}</td>
+        <td style="padding:5px 6px; color:#64748b;">${escapeHtml(it.end)}</td>
+      </tr>`
+    }).join('')
+    const subtotal = opts.groupByZone ? `
+      <tr style="background:#f1f5f9; border-bottom:2px solid #cbd5e1; font-weight:700;">
+        <td style="padding:6px;" colspan="5">　${escapeHtml(z.name)} 小計（${z.agg.count} 項）</td>
+        <td style="padding:6px; text-align:right;">${z.agg.planned}%</td>
+        <td style="padding:6px; text-align:right;">${z.agg.actual}%</td>
+        ${opts.showGap ? `<td style="padding:6px; text-align:right; color:${gapColour(z.agg.gap)};">${z.agg.gap >= 0 ? '+' : ''}${z.agg.gap}%</td>` : ''}
+        <td colspan="3"></td>
+      </tr>` : ''
+    return bandRow + itemRows + subtotal
+  }).join('')
+
   container.innerHTML = `
-    <h1 style="margin:0 0 4px 0; font-size:20px; font-weight:700; color:#0f172a;">
-      ${escapeHtml(project.name)} — 進度報告
-    </h1>
-    <div style="margin:0 0 12px 0; font-size:11px; color:#64748b;">
-      產生時間：${new Date().toLocaleString('zh-HK')}
-    </div>
+    <h1 style="margin:0 0 2px 0; font-size:20px; font-weight:800; color:#0f172a;">${escapeHtml(project.name)} — 進度報告</h1>
+    <div style="margin:0 0 12px 0; font-size:11px; color:#64748b;">產生時間：${new Date().toLocaleString('zh-HK')}${opts.reportPeriod ? `　·　期數：${escapeHtml(opts.reportPeriod)}` : ''}</div>
+    ${summaryHtml}
     <table style="width:100%; border-collapse:collapse; font-size:11px;">
-      <thead>
-        <tr style="background:#f97316; color:#ffffff;">
-          <th style="padding:8px 6px; text-align:left; width:70px;">分區</th>
-          <th style="padding:8px 6px; text-align:left; width:90px;">編號</th>
-          <th style="padding:8px 6px; text-align:left;">名稱</th>
-          <th style="padding:8px 6px; text-align:center; width:40px;">層級</th>
-          <th style="padding:8px 6px; text-align:left; width:110px;">追蹤模式</th>
-          <th style="padding:8px 6px; text-align:right; width:60px;">計劃%</th>
-          <th style="padding:8px 6px; text-align:right; width:60px;">實際%</th>
-          <th style="padding:8px 6px; text-align:center; width:70px;">狀態</th>
-          <th style="padding:8px 6px; text-align:left; width:90px;">計劃開始</th>
-          <th style="padding:8px 6px; text-align:left; width:90px;">計劃完成</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rows.map((r, i) => `
-          <tr style="background:${i % 2 === 0 ? '#ffffff' : '#f8fafc'}; border-bottom:1px solid #e2e8f0;">
-            <td style="padding:6px;">${escapeHtml(r.分區)}</td>
-            <td style="padding:6px; font-family:Consolas,monospace;">${escapeHtml(r.編號)}</td>
-            <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(r.名稱)}</td>
-            <td style="padding:6px; text-align:center;">${r.層級}</td>
-            <td style="padding:6px;">${escapeHtml(r.追蹤模式)}</td>
-            <td style="padding:6px; text-align:right;">${escapeHtml(r.計劃進度)}</td>
-            <td style="padding:6px; text-align:right; font-weight:600;">${escapeHtml(r.實際進度)}</td>
-            <td style="padding:6px; text-align:center;">
-              <span style="background:${statusBg[r.狀態] ?? '#f1f5f9'}; padding:2px 8px; border-radius:8px; font-size:10px;">
-                ${escapeHtml(r.狀態)}
-              </span>
-            </td>
-            <td style="padding:6px;">${escapeHtml(r.計劃開始)}</td>
-            <td style="padding:6px;">${escapeHtml(r.計劃完成)}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  `
+      <thead><tr style="background:#f97316; color:#fff;">
+        ${th('分區', 'left', 'width:64px;')}${th('編號', 'left', 'width:84px;')}${th('名稱')}${th('層', 'center', 'width:34px;')}${th('追蹤', 'left', 'width:96px;')}${th('計劃%', 'right', 'width:54px;')}${th('實際%', 'right', 'width:54px;')}${opts.showGap ? th('差距', 'right', 'width:54px;') : ''}${th('狀態', 'center', 'width:78px;')}${th('計劃開始', 'left', 'width:84px;')}${th('計劃完成', 'left', 'width:84px;')}
+      </tr></thead>
+      <tbody>${zoneSections}</tbody>
+    </table>`
 
   document.body.appendChild(container)
   try {
-    const canvas = await html2canvas(container, {
-      scale: 2,
-      backgroundColor: '#ffffff',
-      logging: false,
-    })
-
+    const canvas = await html2canvas(container, { scale: 2, backgroundColor: '#ffffff', logging: false })
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
     const pageW = doc.internal.pageSize.getWidth()
     const pageH = doc.internal.pageSize.getHeight()
-    // Maintain aspect ratio: scale canvas to page width, compute page-height
-    // in canvas pixels, then slice the bitmap into N pages.
     const imgW = pageW
-    const imgH = (canvas.height * imgW) / canvas.width
     const pageHCanvasPx = (pageH * canvas.width) / pageW
-
-    let yOffsetPx = 0
-    let isFirst = true
+    let yOffsetPx = 0, isFirst = true
     while (yOffsetPx < canvas.height) {
       const sliceH = Math.min(pageHCanvasPx, canvas.height - yOffsetPx)
       const sliceCanvas = document.createElement('canvas')
@@ -273,10 +414,8 @@ export async function exportProgressToPDF(project: Project, items: ProgressItem[
       yOffsetPx += pageHCanvasPx
       isFirst = false
     }
-    void imgH // silence ts-unused-warning safeguard
-
     const blob = doc.output('blob') as Blob
-    await downloadBlob(blob, `${safeName(project.name)}_progress_${dateStr()}.pdf`)
+    await downloadBlob(blob, `${safeName(project.name)}_進度_${fileTag(opts)}.pdf`)
   } finally {
     container.remove()
   }
