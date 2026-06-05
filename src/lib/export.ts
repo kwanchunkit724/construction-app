@@ -64,6 +64,41 @@ function dateStr() {
   return new Date().toISOString().slice(0, 10)
 }
 
+// Share-first delivery for shareable docs (PDF reports). The whole industry
+// runs on WhatsApp; saving to Documents on native means non-tech users can't
+// find the file. So: native → write to Cache + open the share sheet
+// (WhatsApp / email / …); web → Web Share API with the file (mobile), else
+// fall back to a normal download.
+async function shareOrDownloadBlob(blob: Blob, filename: string, title: string) {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const b64 = await blobToBase64(blob)
+      await Filesystem.writeFile({ path: filename, data: b64, directory: Directory.Cache, recursive: true })
+      const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Cache })
+      const { Share } = await import('@capacitor/share')
+      await Share.share({ title, text: title, url: uri, dialogTitle: '分享報告' })
+      return
+    } catch (e) {
+      console.warn('native share failed — saving to Documents instead:', e)
+      await downloadBlob(blob, filename)
+      return
+    }
+  }
+  // Web: Web Share API with the file (mobile browsers). Must run within the
+  // user gesture; if the gesture lapsed or files aren't supported, download.
+  try {
+    const file = new File([blob], filename, { type: blob.type })
+    const navAny = navigator as unknown as { canShare?: (d: unknown) => boolean; share?: (d: unknown) => Promise<void> }
+    if (navAny.canShare && navAny.canShare({ files: [file] }) && navAny.share) {
+      await navAny.share({ files: [file], title })
+      return
+    }
+  } catch {
+    // cancelled / unsupported → fall through to download
+  }
+  await downloadBlob(blob, filename)
+}
+
 // ── Progress export ──────────────────────────────────────────
 // Driven by ExportProgressOptions (see the ExportProgressModal picker).
 // Reports group by 分區 with per-zone roll-up subtotals + a top KPI
@@ -415,7 +450,7 @@ export async function exportProgressToPDF(project: Project, items: ProgressItem[
       isFirst = false
     }
     const blob = doc.output('blob') as Blob
-    await downloadBlob(blob, `${safeName(project.name)}_進度_${fileTag(opts)}.pdf`)
+    await shareOrDownloadBlob(blob, `${safeName(project.name)}_進度_${fileTag(opts)}.pdf`, `${project.name} 進度報告`)
   } finally {
     container.remove()
   }
