@@ -1,6 +1,6 @@
-import { useContext, useEffect, useMemo, useState } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ChevronRight, ChevronDown, Plus, Trash2, Edit3,
+  ChevronRight, ChevronDown, Plus, Trash2, Edit3, MoreVertical,
   CheckCircle2, AlertTriangle, Clock, Minus,
   Layers, Users, UserPlus, History, Image as ImageIcon,
 } from 'lucide-react'
@@ -14,10 +14,7 @@ import type { ProgressItem, ProgressStatus, UserProfile } from '../types'
 import { supabase } from '../lib/supabase'
 import { useProjects } from '../contexts/ProjectsContext'
 
-// useDrawingsOptional — returns null when no DrawingsProvider is mounted in the tree.
-// Lets ProgressItemCard render safely outside ProjectDetail (e.g., dashboard previews)
-// where the drawings UI gracefully hides instead of crashing. (Plan 05 guarantees the
-// raw DrawingsContext named export — no fallback path required for the import itself.)
+// useDrawingsOptional — null when no DrawingsProvider mounted (e.g. dashboard preview).
 function useDrawingsOptional() {
   return useContext(DrawingsContext)
 }
@@ -90,45 +87,35 @@ export function ProgressItemCard({
   const { items, canEdit, canUpdateItem } = useProgress()
   const { projects } = useProjects()
   const canUpdateThis = canUpdateItem(item)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [confirmDel, setConfirmDel] = useState(false)
   const [drawingsOpen, setDrawingsOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
 
-  // Zone label prefix — e.g. "[1座]" or "[A]" — to disambiguate items
-  // when supervisors view the full 4-zone tree. Computed once per item.
   const zoneLabel = useMemo(() => {
     if (!item.zone_id) return null
     const project = projects.find(p => p.id === item.project_id)
-    const zone = project?.zones.find(z => z.id === item.zone_id)
-    return zone?.name ?? null
+    return project?.zones.find(z => z.id === item.zone_id)?.name ?? null
   }, [projects, item.project_id, item.zone_id])
 
   const children = items.filter(i => i.parent_id === item.id)
   const isLeaf = children.length === 0
   const isOpen = expanded.has(item.id)
 
-  // Drawings (optional — null when used outside DrawingsProvider, e.g. dashboard preview)
   const drawingsCtx = useDrawingsOptional()
   const drawingCount = useMemo(
-    () =>
-      drawingsCtx
-        ? drawingsCtx.drawings.filter(d => d.leaf_item_id === item.id).length
-        : 0,
+    () => drawingsCtx ? drawingsCtx.drawings.filter(d => d.leaf_item_id === item.id).length : 0,
     [drawingsCtx, item.id],
   )
 
-  const displayActual = isLeaf
-    ? item.actual_progress
-    : computeRollup(getDescendantLeaves(items, item.id)).actual
-  const displayPlanned = isLeaf
-    ? item.planned_progress
-    : computeRollup(getDescendantLeaves(items, item.id)).planned
-  const displayStatus: ProgressStatus = isLeaf
-    ? item.status
-    : computeRollup(getDescendantLeaves(items, item.id)).status
+  const rollup = isLeaf ? null : computeRollup(getDescendantLeaves(items, item.id))
+  const displayActual = isLeaf ? item.actual_progress : rollup!.actual
+  const displayPlanned = isLeaf ? item.planned_progress : rollup!.planned
+  const displayStatus: ProgressStatus = isLeaf ? item.status : rollup!.status
 
   const StatusIcon = STATUS_ICON[displayStatus] ?? Minus
   const diff = displayActual - displayPlanned
-  const indentRem = (item.level - 1) * 1
+  const indentRem = (item.level - 1) * 0.85
   const levelBorder = LEVEL_BORDER[item.level] ?? 'border-l-4 border-l-site-200'
   const cardBg = item.level === 1 ? 'bg-safety-50/40' : 'bg-white'
 
@@ -136,165 +123,138 @@ export function ProgressItemCard({
   const assigneeIds = [...item.assigned_to, ...item.delegated_to]
   const profiles = useProfiles(assigneeIds)
 
+  // tapping the row body: parents toggle children, leaves toggle their detail.
+  const toggleRow = () => onToggle(item.id)
+
+  // close kebab on outside click
+  useEffect(() => {
+    if (!menuOpen) return
+    const h = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) { setMenuOpen(false); setConfirmDel(false) } }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [menuOpen])
+
+  const hasMenuActions = canEdit || (isLeaf && !!drawingsCtx)
+  // Every row is expandable: parents → children, leaves → detail (notes /
+  // assignees / drawings / 需用物料). Leaves always expandable so linked
+  // materials stay reachable even when the row has no notes/assignees.
+
   return (
     <div style={{ marginLeft: `${indentRem}rem` }}>
-      <div className={`rounded-xl border border-site-200 shadow-card mb-1.5 overflow-hidden ${levelBorder} ${cardBg}`}>
-        <div className="p-3">
-          <div className="flex items-start gap-2">
-            <button
-              onClick={() => !isLeaf && onToggle(item.id)}
-              className={`flex-shrink-0 mt-0.5 ${!isLeaf ? 'text-site-500 hover:text-site-800' : 'text-transparent cursor-default'}`}
-              aria-label={isOpen ? '收起' : '展開'}
-            >
-              {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-            </button>
+      <div className={`rounded-lg border border-site-200 mb-1 overflow-hidden ${levelBorder} ${cardBg}`}>
+        {/* compact row */}
+        <div className="flex items-center gap-1.5 pl-1.5 pr-1.5 py-1.5">
+          {/* chevron — parents reveal children, leaves reveal detail */}
+          <button
+            onClick={toggleRow}
+            className="flex-shrink-0 w-6 h-6 grid place-items-center text-site-400 hover:text-site-700"
+            aria-label={isOpen ? '收起' : '展開'}
+          >
+            {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+          </button>
 
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="font-mono text-[11px] text-site-400 flex-shrink-0">{item.code}</span>
-                    {zoneLabel && (
-                      <span className="text-[10px] font-semibold bg-site-100 text-site-600 px-1.5 py-0.5 rounded-full flex-shrink-0">
-                        {zoneLabel}
-                      </span>
-                    )}
-                    <span className={`font-semibold text-site-900 ${item.level === 1 ? 'text-sm' : 'text-xs'} leading-snug`}>
-                      {item.title}
-                    </span>
-                    {!isLeaf && (
-                      <span className="text-[9px] bg-site-100 text-site-500 px-1.5 py-0.5 rounded-full font-medium">
-                        自動匯總
-                      </span>
-                    )}
-                    {isLeaf && isFloors && (
-                      <span className="inline-flex items-center gap-0.5 text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium">
-                        <Layers size={9} />{item.floors_completed.length}/{item.floor_labels.length}層
-                      </span>
-                    )}
-                  </div>
-                  {item.notes && isLeaf && (
-                    <p className="text-[10px] text-site-400 mt-0.5 line-clamp-2">{item.notes}</p>
-                  )}
-                </div>
-                <span className={`flex-shrink-0 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_STYLE[displayStatus]}`}>
-                  <StatusIcon size={9} />
-                  {PROGRESS_STATUS_ZH[displayStatus]}
+          {/* title + meta + progress (tap to expand) */}
+          <button onClick={toggleRow} className="flex-1 min-w-0 text-left">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="font-mono text-[10px] text-site-400 flex-shrink-0">{item.code}</span>
+              {zoneLabel && <span className="text-[9px] font-semibold bg-site-100 text-site-600 px-1 rounded flex-shrink-0">{zoneLabel}</span>}
+              <span className={`font-semibold text-site-900 truncate ${item.level === 1 ? 'text-sm' : 'text-[13px]'}`}>{item.title}</span>
+              {isFloors && isLeaf && (
+                <span className="inline-flex items-center gap-0.5 text-[9px] bg-purple-100 text-purple-700 px-1 rounded flex-shrink-0">
+                  <Layers size={8} />{item.floors_completed.length}/{item.floor_labels.length}
                 </span>
-              </div>
-
-              <div className="flex items-center gap-2 mt-2">
-                <ProgressBar
-                  value={displayActual}
-                  planned={displayPlanned}
-                  status={displayStatus}
-                  className="flex-1"
-                />
-                <span className={`text-xs font-bold flex-shrink-0 ${displayStatus === 'delayed' ? 'text-red-600' : 'text-site-700'}`}>
-                  {displayActual}%
-                </span>
-                <span className={`text-[11px] font-semibold flex-shrink-0 ${diff < -5 ? 'text-red-500' : diff >= 0 ? 'text-green-600' : 'text-site-400'}`}>
-                  ({diff >= 0 ? '+' : ''}{diff}%)
-                </span>
-              </div>
-
-              {/* Assignee chips (leaf only — assignment lives at leaf level) */}
-              {isLeaf && (item.assigned_to.length > 0 || item.delegated_to.length > 0) && (
-                <div className="flex flex-wrap gap-1 mt-1.5">
-                  {item.assigned_to.map(id => (
-                    <span key={`o-${id}`} className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">
-                      <Users size={9} />{profiles[id]?.name ?? '...'}
-                    </span>
-                  ))}
-                  {item.delegated_to.map(id => (
-                    <span key={`d-${id}`} className="inline-flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">
-                      <UserPlus size={9} />{profiles[id]?.name ?? '...'}
-                    </span>
-                  ))}
-                </div>
               )}
+            </div>
+            <div className="flex items-center gap-1.5 mt-1">
+              <ProgressBar value={displayActual} planned={displayPlanned} status={displayStatus} className="flex-1 h-1.5" />
+              <span className={`text-[11px] font-bold flex-shrink-0 ${displayStatus === 'delayed' ? 'text-red-600' : 'text-site-700'}`}>{displayActual}%</span>
+              <span className={`text-[10px] font-semibold flex-shrink-0 w-9 text-right ${diff < -5 ? 'text-red-500' : diff >= 0 ? 'text-green-600' : 'text-site-400'}`}>
+                {diff >= 0 ? '+' : ''}{diff}%
+              </span>
+            </div>
+          </button>
 
-              {(canEdit || canUpdateThis || (isLeaf && drawingsCtx)) && (
-                <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-site-100">
+          {/* status pill */}
+          <span className={`flex-shrink-0 inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full font-medium ${STATUS_STYLE[displayStatus]}`}>
+            <StatusIcon size={8} />
+            <span className="hidden sm:inline">{PROGRESS_STATUS_ZH[displayStatus]}</span>
+          </span>
+
+          {/* primary inline action: 更新 (the one foremen tap all day) */}
+          {canUpdateThis && isLeaf && (
+            <button
+              onClick={() => onUpdate(item)}
+              className="flex-shrink-0 w-11 h-9 grid place-items-center bg-safety-500 hover:bg-safety-600 text-white rounded-lg"
+              aria-label="更新"
+            >
+              <Edit3 size={16} />
+            </button>
+          )}
+
+          {/* overflow kebab: everything else */}
+          {hasMenuActions && (
+            <div className="relative flex-shrink-0" ref={menuRef}>
+              <button
+                onClick={() => setMenuOpen(o => !o)}
+                className="w-9 h-9 grid place-items-center text-site-500 hover:text-site-900 hover:bg-site-100 rounded-lg"
+                aria-label="更多"
+              >
+                <MoreVertical size={18} />
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 top-full mt-1 z-30 bg-white rounded-xl border border-site-200 shadow-card-md py-1 min-w-[150px]">
                   {isLeaf && drawingsCtx && (
-                    <button
-                      onClick={() => setDrawingsOpen(o => !o)}
-                      className="text-sm bg-site-100 hover:bg-site-200 text-site-700 px-3 py-2 rounded-lg flex items-center gap-1.5 min-h-[44px] font-medium"
-                    >
-                      <ImageIcon size={16} /> 🖼 圖則 ({drawingCount})
-                    </button>
-                  )}
-                  {canUpdateThis && isLeaf && (
-                    <button
-                      onClick={() => onUpdate(item)}
-                      className="text-sm bg-safety-500 hover:bg-safety-600 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 min-h-[44px] font-medium"
-                    >
-                      <Edit3 size={16} /> 更新
-                    </button>
+                    <MenuRow icon={<ImageIcon size={15} />} label={`圖則 (${drawingCount})`} onClick={() => { setDrawingsOpen(o => !o); if (!isOpen) onToggle(item.id); setMenuOpen(false) }} />
                   )}
                   {canEdit && isLeaf && (
-                    <button
-                      onClick={() => onAssign(item)}
-                      className="text-sm bg-site-700 hover:bg-site-800 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 min-h-[44px] font-medium"
-                    >
-                      <Users size={16} /> 指派
-                    </button>
+                    <MenuRow icon={<Users size={15} />} label="指派" onClick={() => { onAssign(item); setMenuOpen(false) }} />
                   )}
                   {canEdit && isLeaf && (
-                    <button
-                      onClick={() => onHistory(item)}
-                      className="text-sm border border-site-200 text-site-600 hover:bg-site-50 px-3 py-2 rounded-lg flex items-center gap-1.5 min-h-[44px] font-medium"
-                    >
-                      <History size={16} /> 歷史
-                    </button>
+                    <MenuRow icon={<History size={15} />} label="歷史" onClick={() => { onHistory(item); setMenuOpen(false) }} />
                   )}
                   {canEdit && (
-                    <button
-                      onClick={() => onAddChild(item)}
-                      className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 min-h-[44px] font-medium"
-                    >
-                      <Plus size={16} /> 細項
-                    </button>
+                    <MenuRow icon={<Plus size={15} />} label="加細項" onClick={() => { onAddChild(item); setMenuOpen(false) }} />
                   )}
                   {canEdit && !confirmDel && (
-                    <button
-                      onClick={() => setConfirmDel(true)}
-                      className="text-sm bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 px-3 py-2 rounded-lg flex items-center gap-1.5 min-h-[44px] font-medium"
-                    >
-                      <Trash2 size={16} /> 刪除
-                    </button>
+                    <MenuRow icon={<Trash2 size={15} />} label="刪除" danger onClick={() => setConfirmDel(true)} />
                   )}
                   {canEdit && confirmDel && (
-                    <span className="flex items-center gap-2">
-                      <span className="text-sm text-red-600 font-semibold">確認?</span>
-                      <button
-                        onClick={() => { onDelete(item); setConfirmDel(false) }}
-                        className="text-sm bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg min-h-[44px] font-medium"
-                      >
-                        刪除
-                      </button>
-                      <button
-                        onClick={() => setConfirmDel(false)}
-                        className="text-sm border border-site-200 text-site-500 px-3 py-2 rounded-lg min-h-[44px] font-medium"
-                      >
-                        取消
-                      </button>
-                    </span>
+                    <div className="px-3 py-2 flex items-center justify-between gap-2 bg-red-50">
+                      <span className="text-xs text-red-600 font-semibold">確認刪除?</span>
+                      <div className="flex gap-1">
+                        <button onClick={() => { onDelete(item); setMenuOpen(false); setConfirmDel(false) }} className="text-xs bg-red-600 text-white px-2 py-1 rounded">刪</button>
+                        <button onClick={() => setConfirmDel(false)} className="text-xs text-site-500 px-2 py-1">取消</button>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
-
-              {isLeaf && drawingsOpen && drawingsCtx && (
-                <DrawingsSection leafItemId={item.id} />
-              )}
-
-              {/* Linked materials panel — only renders when this leaf has
-                  materials linked via materials.item_ids. Silent no-op when
-                  outside <MaterialsProvider> (e.g., dashboard preview). */}
-              {isLeaf && <MaterialItemsPanel itemId={item.id} title="需用物料" />}
             </div>
-          </div>
+          )}
         </div>
+
+        {/* expanded detail (leaf only): notes, assignees, drawings, materials */}
+        {isOpen && isLeaf && (
+          <div className="px-3 pb-2.5 pt-1 border-t border-site-100 space-y-2">
+            {item.notes && <p className="text-[11px] text-site-500 whitespace-pre-wrap">{item.notes}</p>}
+            {(item.assigned_to.length > 0 || item.delegated_to.length > 0) && (
+              <div className="flex flex-wrap gap-1">
+                {item.assigned_to.map(id => (
+                  <span key={`o-${id}`} className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">
+                    <Users size={9} />{profiles[id]?.name ?? '...'}
+                  </span>
+                ))}
+                {item.delegated_to.map(id => (
+                  <span key={`d-${id}`} className="inline-flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">
+                    <UserPlus size={9} />{profiles[id]?.name ?? '...'}
+                  </span>
+                ))}
+              </div>
+            )}
+            {drawingsOpen && drawingsCtx && <DrawingsSection leafItemId={item.id} />}
+            <MaterialItemsPanel itemId={item.id} title="需用物料" />
+          </div>
+        )}
       </div>
 
       {isOpen && children.map(child => (
@@ -311,5 +271,16 @@ export function ProgressItemCard({
         />
       ))}
     </div>
+  )
+}
+
+function MenuRow({ icon, label, onClick, danger }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 hover:bg-site-50 ${danger ? 'text-red-600' : 'text-site-700'}`}
+    >
+      {icon} {label}
+    </button>
   )
 }
