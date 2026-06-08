@@ -1,0 +1,237 @@
+{
+  "captureList": [
+    {
+      "featureKey": "progress-tree",
+      "route": "#/project/:projectId (進度 tab)",
+      "role": "工地主任 (general_foreman) — has edit rights and sees full tree, so the 4-stat header + roll-up bars render with the 加入大項 affordance visible",
+      "viewport": "390x844 phone",
+      "whatToShow": "進度 tab open. Top 4-stat row (已完成 9 / 進行中 14 / 落後 3 / 未開始 5). Below it, zone cards expanded showing 【A 結構工程】roll-up bar (actual vs planned, ~71%), with 【A 結構工程】mid/leaf rows visible: A3 中層結構 52% blue '進行中', and the red 'B 外牆工程 → 外牆防水 25% 落後' card with the dual-tone planned-vs-actual ProgressBar clearly showing the gap. At least one red 落後 row must be on screen to sell the planned-vs-actual story.",
+      "fileName": "shot-progress-tree.png"
+    },
+    {
+      "featureKey": "dashboard",
+      "route": "#/dashboard",
+      "role": "PM (assigned to project) or admin — Dashboard only renders for admin/assigned PM",
+      "viewport": "390x844 phone",
+      "whatToShow": "Hero counts row (工地總數 1 / 進度正常 / 進度落後 1 / 處理中問題 3). The per-site progress overview row for 「日出康城 L1座」showing overall 51% vs 計劃 54% with a 落後 status pill. Below, the live activity feed with 2-3 recent entries: a progress update by 陳師傅, an issue raised (鋁窗未到貨), a membership approval — each with relative timestamp and attributed name.",
+      "fileName": "shot-dashboard.png"
+    },
+    {
+      "featureKey": "issues",
+      "route": "#/project/:projectId (問題 tab)",
+      "role": "工地主任 (general_foreman) — sees all issues and the report button",
+      "viewport": "390x844 phone",
+      "whatToShow": "問題 tab with tab badge showing 3. 處理中 section header with count 3, listing issue cards: 「12樓鋁窗未到貨,安裝停工」(handler 主承建商, photo thumb), 「3樓外牆防水位置滲水」(handler 總承建商), 「中層紮鐵鋼筋擺位與圖則不符」(handler PM). Each card shows current-handler pill + status. Below, 已解決 section with 1 item (B2積水). The escalation-chain handler pill must be legible.",
+      "fileName": "shot-issues.png"
+    },
+    {
+      "featureKey": "si",
+      "route": "#/project/:projectId/si/:siId (詳情 / 版本歷史 tab)",
+      "role": "PM or main_contractor — approver-side view shows the chain + locked state",
+      "viewport": "390x844 phone",
+      "whatToShow": "SI-2026-014 detail. Header: 「地庫B2機房開口尺寸修改」with status badge 已批准/已鎖定 (locked). The approval-chain snapshot bar showing 3 signed steps 工程師→總承建商→PM (each with a check + name). Pinned drawing reference chip 「S-118 Rev D」, the description text (1200x800→1500x1000mm), and the 詳情/版本歷史/簽核紀錄 tab strip. A photo thumbnail and the GPS map tile should be partially visible to convey photo+GPS stamping.",
+      "fileName": "shot-si.png"
+    },
+    {
+      "featureKey": "vo",
+      "route": "#/project/:projectId/vo/:voId (詳情 tab)",
+      "role": "main_contractor or PM — submitter/approver view with line items + grand total",
+      "viewport": "390x844 phone",
+      "whatToShow": "VO-2026-007 detail. Title 「會所平台加建無障礙斜道」linked to parent SI chip. The itemised line-item table: 人工/物料/前期費用 rows each with qty × unit price → per-row subtotal (e.g. 不鏽鋼扶手 24米 × HKD 880). Bold grand total 「經系統核算總額 HK$184,500」prominent at the bottom. The 3-step approval chain 總承建商→PM→業主 with status 審批中 visible. formatHKD formatting must be clean.",
+      "fileName": "shot-vo.png"
+    },
+    {
+      "featureKey": "ptw",
+      "route": "#/project/:projectId/ptw/:ptwId",
+      "role": "safety_officer or 工地主任 — shows signed checklist + active QR + fire-watch",
+      "viewport": "390x844 phone",
+      "whatToShow": "PTW-2026-031 (動火/hot_work) detail, status 生效中 (active). The safety checklist with green ticks (滅火筒已就位✓ 防火布已鋪✓ 火險監察員已安排✓ 周師傅). Worker roster (阿明、阿強). The active QR verification card. The 30-min 火警監察 countdown element for hot work. Safety-officer signature block showing signed. Type pill 動火 and expiry time (今日 18:00) visible.",
+      "fileName": "shot-ptw.png"
+    },
+    {
+      "featureKey": "daily-log",
+      "route": "#/project/:projectId/daily/edit",
+      "role": "工地主任 (general_foreman, foreman sub-role) — author of the diary",
+      "viewport": "390x844 phone",
+      "whatToShow": "DailyEdit for 2026-06-08 (星期一). Weather chip 「雨」selected. The multi-select list of today's worked-on progress items with several checked (24樓結構柱紮鐵, 15樓樓板落石屎, 5樓砌磚, 會所平台鋪磚). Free-form rows 「黑雨警告 09:15-11:40 停戶外工兩小時」「鋁窗供應商未到貨」. Notes field with 出勤 line. The 30-second-friendly chip+checkbox UI is the hero.",
+      "fileName": "shot-daily.png"
+    },
+    {
+      "featureKey": "materials",
+      "route": "#/project/:projectId/materials",
+      "role": "判頭 (subcontractor) or 工地主任 — sees order list with urgent + overdue badges",
+      "viewport": "390x844 phone",
+      "whatToShow": "Material list, filter chips row (全部/已申請/部分到貨/已齊料/逾期). Urgent-first sort puts 鋁窗(12樓) at top with red ⚠急件 badge + red 逾期 badge (planned 06-08 passed), showing 0/48 樘 and note '供應商物流延誤,改期06-11'. Below: 混凝土 C45 部分到貨 80/120 m³, 螺紋鋼筋 已齊料 25/25. The X/Y unit counts and overdue red styling must be visible.",
+      "fileName": "shot-materials.png"
+    },
+    {
+      "featureKey": "export-progress",
+      "route": "#/project/:projectId (進度 tab → 匯出 menu / ExportProgressModal open)",
+      "role": "PM or 工地主任 — both can export",
+      "viewport": "390x844 phone",
+      "whatToShow": "ExportProgressModal open over the 進度 tab. The audience-split options visible: 「業主版一頁紙」、「內部版詳細」、「例外版（只睇落後）」radio/segmented choices, the PDF/Excel format toggle, and the live scope preview text ('將軍澳日出康城第十一期 L1座 · 整體 51% · 落後 3 項'). The one-tap share row (WhatsApp/email) at the bottom. Modal chrome + project name confirm same project.",
+      "fileName": "shot-export.png"
+    },
+    {
+      "featureKey": "timetable",
+      "route": "#/project/:projectId/timetable",
+      "role": "工地主任 / PM — week view with merged sources",
+      "viewport": "390x844 phone",
+      "whatToShow": "Week view (本週) calendar. Entries colour-coded by source across days: blue 物料到貨 (混凝土 06-09, 牆磚 06-10), green 進度完工 milestone (30樓封頂 06-20 if in range, else a 進度 entry), purple 事件 (每週地盤協調會 06-09 09:00, 屋宇署消防巡查 06-11, VO業主審批會 06-12). The week-range picker (上週/本週/下週) and the three-colour legend must be visible.",
+      "fileName": "shot-timetable.png"
+    },
+    {
+      "featureKey": "contacts",
+      "route": "#/project/:projectId/contacts",
+      "role": "判頭 / 工地主任 — uses the directory",
+      "viewport": "390x844 phone",
+      "whatToShow": "Contact list with trade filter chips (紮鐵/泥水/防水/機電/吊運/鋁窗...). Rows showing 陳國強·紮鐵·9123 4567, 黃志明·泥水, 李家輝·防水 (備註 正處理3樓滲水), 林志偉·鋁窗 (待料中), each with a one-tap 致電 (tel:) call button. Search bar at top. The one-tap call affordance is the hero element.",
+      "fileName": "shot-contacts.png"
+    }
+  ],
+  "data": {
+    "projectProfile": {
+      "nameZh": "將軍澳日出康城第十一期住宅項目 — L1座",
+      "zonesZh": [
+        "L1座 地庫及平台 (B2-平台層)",
+        "L1座 低層 (1-15樓)",
+        "L1座 中層 (16-30樓)",
+        "L1座 高層 (31-45樓)",
+        "會所及園境平台"
+      ],
+      "vocabulary": [
+        "紮鐵",
+        "落石屎 (混凝土澆灌)",
+        "搭棚",
+        "拆模",
+        "砌磚",
+        "批盪",
+        "防水",
+        "鋪磚",
+        "油漆",
+        "髹漆",
+        "水喉鋪設",
+        "電線槽",
+        "鋁窗安裝",
+        "石膏批盪",
+        "天花批盪",
+        "外牆批盪",
+        "防水試水",
+        "結構柱",
+        "樓板",
+        "剪力牆",
+        "排水渠"
+      ],
+      "overallStory": "這是一個45層高的私人住宅地盤，總承建商為俊建工程，業主為發展商代表。整體進度大致符合預期：地庫及低層結構已封頂並進入裝修，中層結構紮鐵落石屎進行中(略為超前)，高層仍在搭棚紮鐵。有幾項落後並附真實原因：3樓外牆防水因連日天雨(黑色暴雨警告)停工兩日落後；12樓鋁窗因供應商到貨延遲(待料)落後；會所平台鋪磚因判頭人手不足(判頭未到)落後一週。同時有一張SI要求修改地庫機房開口尺寸、一張VO報價加建會所無障礙斜道(HKD 約十八萬)、兩張PTW(高層動火燒焊、中層吊運預製組件)。整體呈現一個真實運作中、有快有慢、有爭議有審批的活躍地盤。"
+    },
+    "perFeatureData": [
+      {
+        "featureKey": "progress",
+        "records": "進度表(大項→中項→細項三層樹狀)。大項範例:【A 結構工程】【B 外牆工程】【C 室內裝修】【D 機電工程】【E 會所及園境】。\n\n【A 結構工程】\n  A1 地庫結構 — 已完成 100% (中項,roll-up)\n    A1-1 B2 樓板落石屎 (細項) 100% 已完成\n    A1-2 B1 剪力牆紮鐵 100% 已完成\n  A2 低層結構(1-15樓) — 進行中 88% (中項)\n    A2-1 結構柱紮鐵 (floors模式, 樓層標籤 1F-15F, 已完成 1F-15F) 100%\n    A2-2 樓板落石屎 (floors, 已完成 1F-14F, 15F進行中) 93%\n  A3 中層結構(16-30樓) — 進行中 52% 略為超前 (planned 45%, actual 52%)\n    A3-1 結構柱紮鐵 (floors 16F-30F, 已完成 16F-24F) 60%\n    A3-2 樓板落石屎 (floors, 已完成 16F-22F) 47%\n  A4 高層結構(31-45樓) — 未開始 5% (搭棚中)\n    A4-1 搭棚 (細項) 15% 進行中\n\n【B 外牆工程】\n  B1 外牆批盪 — 進行中 40%\n  B2 外牆防水 — 落後 25% (planned 50%, status=delayed, notes:「3-5樓外牆防水因黑雨停工兩日,已通知判頭趕回」)\n\n【C 室內裝修】\n  C1 砌磚 (1-10樓) 進行中 65%\n  C2 批盪/天花 (1-8樓) 進行中 45%\n  C3 鋪磚 (1-5樓) 進行中 30%\n  C4 油漆 未開始 0%\n\n【D 機電工程】\n  D1 水喉鋪設 (1-12樓) 進行中 55%\n  D2 電線槽 (1-12樓) 進行中 48%\n\n【E 會所及園境】\n  E1 會所平台鋪磚 — 落後 35% (planned 60%, notes:「判頭人手不足,落後約一週,已要求加派」)\n  E2 園境綠化 未開始 0%\n\n每個細項顯示 planned_progress vs actual_progress、負責人(assigned_to)、最後更新時間(如「陳師傅 更新於 今日 14:32」)。整體 roll-up 約 51%。"
+      },
+      {
+        "featureKey": "issues",
+        "records": "問題(issues)清單,含真實原因與上呈鏈(judatou→總承建商→PM)。\n\n1. 標題:「12樓鋁窗未到貨,安裝停工」描述:「鋁窗供應商原定週一到貨,至今未到,12樓鋁窗安裝停工。已致電供應商,稱物流延誤,改期週四。」reporter:管工(陳師傅)→ current_handler:判頭 → 已上呈 主承建商。status:處理中。附現場照片2張。留言串:判頭回覆「已催供應商,週四晨早到」。\n\n2. 標題:「3樓外牆防水位置滲水」描述:「昨日黑雨後,3樓東面外牆防水層發現滲水,懷疑防水搭接不足。需重新試水。」reporter:判頭 → handler:總承建商。status:處理中。留言:總承建商要求「拍片記錄滲水位置,安排明日重做防水」。\n\n3. 標題:「地庫B2積水未有排走」描述:「連日大雨,B2機房積水約5cm,水泵未開。」reporter:管工 → 判頭。status:已解決。解決留言:「已開臨時水泵,水位回落,加裝防水閘門。」\n\n4. 標題:「中層紮鐵鋼筋擺位與圖則不符」描述:「24樓結構柱主筋間距與最新結構圖S-204(Rev C)不符,需工程師確認。」reporter:總承建商 → PM(終點)。status:處理中。留言:PM「已轉介結構工程師現場核對,暫停該柱落石屎」。"
+      },
+      {
+        "featureKey": "si",
+        "records": "工地指令 SI。\n\nSI 編號:SI-2026-014。標題:「地庫B2機房開口尺寸修改」。描述:「因應屋宇署消防意見,B2發電機房通風開口由 1200x800mm 改為 1500x1000mm,並調整上方過樑配筋。請紮鐵判頭按附圖S-118 Rev D 施工。」狀態:已批准(approved)。審批鏈快照:工程師→總承建商→PM(3步)。附圖則版本連結(S-118 Rev D)、現場照片2張、GPS座標(將軍澳日出康城)。建立人:工程師(李工)。submitted_at 約3日前,locked_at 約1日前。版本歷史:v1草稿→v2批准並修改(PM加註「須於兩週內完成」)。"
+      },
+      {
+        "featureKey": "vo",
+        "records": "變更指令 VO(HKD)。\n\nVO 編號:VO-2026-007。關聯 SI:SI-2026-009(會所無障礙要求)。描述:「按業主要求,於會所平台加建無障礙混凝土斜道及不鏽鋼扶手,連防滑面層及排水。」狀態:待批准(submitted)/審批中。\n總額:HKD 184,500。\nline_items 報價明細:\n  • 人工(labour) — 紮鐵及落石屎斜道結構,8工日 × HKD 2,800/工 = HKD 22,400\n  • 物料(material) — 混凝土 6m³ × HKD 1,150 = HKD 6,900\n  • 物料(material) — 不鏽鋼扶手 24米 × HKD 880 = HKD 21,120\n  • 物料(material) — 防滑磚 45m² × HKD 320 = HKD 14,400\n  • 人工(labour) — 防水及鋪磚,6工日 × HKD 2,500 = HKD 15,000\n  • 前期費用(preliminaries) — 搭棚及臨時通道 = HKD 8,500\n  • 暫定(contingency) — 不可預見項目 10% = HKD 16,180\n  (其餘為現場雜項及管理費,湊成總額 HKD 184,500)\n審批鏈:總承建商→PM→業主。建立人:總承建商(黃經理)。"
+      },
+      {
+        "featureKey": "ptw",
+        "records": "工作許可證 PTW(只用 v1 三類:動火/高空/吊運)。\n\nPTW 1 — 編號 PTW-2026-031,類型:動火(hot_work)。描述:「38樓高空鋼構燒焊接駁,需動火許可。」狀態:生效中(active)。checklist:滅火筒已就位✓、防火布已鋪✓、火險監察員已安排✓(看火人:周師傅)、附近易燃物已移除✓。PPE照片2張、現場照片1張。worker名單:阿明、阿強。生效時間至今日 18:00 到期。安全主任已簽核(signature)。\n\nPTW 2 — 編號 PTW-2026-033,類型:吊運(lifting)。描述:「以塔吊吊運28樓預製樓梯組件,單件重約2.1噸。」狀態:已批准(approved),待生效。checklist:吊機操作員證件有效✓、吊索具已檢查✓、起重區已圍封✓、風速≤其限制✓。worker:吊機手 林師傅、指揮員 蔡師傅。\n\nPTW 3 — 編號 PTW-2026-029,類型:高空(work_at_height),狀態:已完工(closed_out),作為歷史記錄(42樓外牆搭棚檢查)。"
+      },
+      {
+        "featureKey": "daily",
+        "records": "每日日誌(每日一份,含天氣+完成項目+備註)。\n\n今日(2026-06-08,星期一):天氣「雨」。完成/進行項目:24樓結構柱紮鐵、15樓樓板落石屎、5樓砌磚、會所平台鋪磚。freeform備註項:「黑雨警告 09:15-11:40 停戶外工兩小時」「鋁窗供應商未到貨,12樓停工」。notes:「下午雨勢轉緩,恢復吊運。出勤:紮鐵18人、泥水12人、機電8人。」\n\n上週五(2026-06-05):天氣「晴」。項目:23樓紮鐵、14樓落石屎、4樓批盪。notes:「進度正常,SI-2026-014機房開口已開始施工。」\n\n上週四(2026-06-04):天氣「暴雨」。notes:「黑色暴雨警告全日,戶外工程停工,只進行室內砌磚批盪。B2出現積水,已開水泵。」"
+      },
+      {
+        "featureKey": "material",
+        "records": "物料(含到貨日期、狀態、緊急標記)。\n\n1. 鋁窗(12樓單位)— 需求 48 樘,已到 0 樘。狀態:已申請(requested)。緊急⚠。planned_arrival:原定 2026-06-08(已逾期,顯示落後紅色),備註「供應商物流延誤,改期06-11」。申請人:管工陳師傅。\n2. 螺紋鋼筋 T16 — 需求 25 噸,已到 25 噸。狀態:已齊料(arrived)。arrived_at:2026-06-06。用於中層結構紮鐵。\n3. 混凝土 C45 — 需求 120 m³,已到 80 m³。狀態:部分到貨(partial)。planned_arrival:2026-06-09(餘下40m³)。備註「分兩車到,配合落石屎進度」。\n4. 防水塗料(雙組份)— 需求 60 桶,已到 60 桶。狀態:已齊料。arrived_at:2026-06-03。\n5. 牆磚 300x600 — 需求 800 m²,已到 500 m²。狀態:部分到貨。planned_arrival:2026-06-10。\n6. 不鏽鋼扶手(會所斜道)— 需求 24 米,已到 0。狀態:已申請。備註「待VO-2026-007批准後落單」。"
+      },
+      {
+        "featureKey": "timetable",
+        "records": "行事曆/活動(會議/巡查/里程碑/其他)。\n\n1. 類型:會議。標題「每週地盤協調會」。時間:2026-06-09(週二)09:00-10:00。地點:地盤辦公室會議室。描述:「總承建商、各判頭、PM出席,檢討上週進度及鋁窗到貨問題。」\n2. 類型:巡查。標題「屋宇署消防裝置中期巡查」。時間:2026-06-11(週四)14:00。地點:B2機房及低層。描述:「配合SI-2026-014機房開口修改,屋宇署及消防處到場。」\n3. 類型:里程碑。標題「中層結構(30樓)封頂」。時間:2026-06-20。描述:「目標30樓樓板落石屎完成,結構封頂一半。」\n4. 類型:巡查。標題「獨立安全審核(吊運作業)」。時間:2026-06-10 11:00。地點:塔吊區。描述:「配合PTW-2026-033預製樓梯吊運。」\n5. 類型:會議。標題「VO-2026-007業主審批會」。時間:2026-06-12 15:00。地點:發展商辦公室。"
+      },
+      {
+        "featureKey": "contact",
+        "records": "聯絡人(判頭名+工種+電話,可一鍵致電)。\n\n1. 陳國強 — 工種:紮鐵 — 電話 9123 4567 — 備註「中高層結構紮鐵判頭,負責16-45樓」\n2. 黃志明 — 工種:泥水 — 9876 5432 — 「砌磚批盪鋪磚,1-10樓」\n3. 李家輝 — 工種:防水 — 6234 7890 — 「外牆及天台防水,正處理3樓滲水」\n4. 周文彬 — 工種:機電 — 9555 8888 — 「水喉電線槽機電判頭」\n5. 蔡偉雄 — 工種:吊運 — 6111 2233 — 「塔吊及吊運,持牌操作」\n6. 林志偉 — 工種:鋁窗 — 9700 3344 — 「鋁窗玻璃供應及安裝(待料中)」\n7. 何美玲 — 工種:工程顧問 — 2890 1122 — 「結構工程師,核對紮鐵圖則」\n8. 羅永добре省略;改為 羅永生 — 工種:棚架 — 9333 6677 — 「棚架判頭,高層搭棚」\n9. 麥成業 — 工種:消防 — 6788 9900 — 「消防裝置,配合屋宇署巡查」"
+      },
+      {
+        "featureKey": "drawings",
+        "records": "圖則(掛於進度細項,含版本/狀態)。\n\n1. 結構圖 S-204「中層結構柱配筋詳圖」— 現行版本 Rev C(現行)。先前 Rev B(已取代)。掛於 A3-1 中層紮鐵。mime:application/pdf。備註與issue#4(24樓主筋間距不符)關聯。\n2. 結構圖 S-118「B2機房通風開口及過樑」— Rev D(現行,配合 SI-2026-014)。Rev C 已取代。\n3. 建築圖 A-501「會所平台無障礙斜道」— Rev A(現行,配合 VO-2026-007)。\n4. 機電圖 M-302「低層水喉佈置(1-12樓)」— Rev B(現行)。\n5. 外牆圖 F-110「外牆防水大樣」— Rev A(現行,3樓滲水參照)。\n每張圖顯示:版本號、修訂標籤、狀態徽章(現行/已取代/已撤回)、上載人及時間。"
+      },
+      {
+        "featureKey": "export",
+        "records": "進度報告匯出 + 儀表板。\n\n儀表板(Dashboard)數據:整體進度 51%(planned 54%,落後3%)。各大項進度條:結構 71%、外牆 33%、室內裝修 35%、機電 52%、會所園境 18%。狀態統計:進行中 14項、已完成 9項、落後 3項(B2外牆防水、E1會所鋪磚、隱含鋁窗)、未開始 5項。處理中問題 3宗、已解決 1宗。待批文件:SI 0待批(1已批)、VO 1待批、PTW 1生效中+1待生效。\n\n進度報告(PDF/Excel匯出)封面:「將軍澳日出康城第十一期 L1座 — 進度報告」、報告日期 2026-06-08、總承建商 俊建工程、整體進度 51%。表格列出每個大項/中項 planned vs actual、狀態、落後原因註腳(天雨/待料/判頭人手)。底部:本週完成項目摘要、未解決問題清單、未來兩週里程碑(30樓封頂 06-20)。一頁式業主摘要(owner one-pager)突出:進度51%、落後3項及原因、待業主批 VO HKD 184,500。"
+      }
+    ]
+  },
+  "sales": {
+    "sectionHeadingZh": "一個地盤，一個 app — 由開盤睇到完盤",
+    "sectionIntroZh": "以下每一張截圖，全部嚟自同一個真實地盤「DC2026 油塘住宅」。由判頭叫料、工程師寫日誌、工地主任追進度、到 PM 出報告畀業主 —— 你會見到成個地盤點樣喺一個系統入面運作，每一個動作都有時間戳同簽名，出 dispute 嗰時唔使再靠記性同翻 WhatsApp。",
+    "orderedFeatures": [
+      {
+        "key": "progress-tree",
+        "captionTitleZh": "成個地盤進度，一眼睇晒",
+        "captionBodyZh": "用大項／中項／細項分層管理每一區工程，最底層一打勾，上面自動匯總百分比同狀態。工地主任唔使再逐個 foreman 問「做到邊」，落後幾多、邊區紅咗，一打開就知。"
+      },
+      {
+        "key": "dashboard",
+        "captionTitleZh": "PM 唔使落地盤都知盤數",
+        "captionBodyZh": "儀表板即時顯示所有地盤嘅整體進度、落後工地同處理中問題，仲有實時動態 feed。老總同 PM 一眼掃晒幾個盤嘅健康狀況，唔使等到開會先發現甩漏。"
+      },
+      {
+        "key": "issues",
+        "captionTitleZh": "問題唔會再沉底，一層一層有人接",
+        "captionBodyZh": "報問題影相即傳，跟住固定上呈鏈：判頭工人→判頭→主判→PM，每一步邊個接、邊個解決全部記低。冇人「睇漏咗」，每個問題都有完整活動記錄可以追。"
+      },
+      {
+        "key": "si",
+        "captionTitleZh": "工地指令版本鎖死，改過咩一目了然",
+        "captionBodyZh": "SI 工地指令支援逐版簽核同版本對比，可以睇返每一次改咗咩、邊個簽。指令鎖定後即可一鍵轉做變更指令，出爭拗時憑紀錄講數，唔使翻舊 WhatsApp。"
+      },
+      {
+        "key": "vo",
+        "captionTitleZh": "變更指令金額，系統幫你計到一蚊都唔差",
+        "captionBodyZh": "VO 逐項填數量、單價、類別，總額由系統核算（HKD），唔靠人手 Excel 加數。批核完一鍵出 PDF，連圖則參照同簽核時間線，直接畀業主對數。"
+      },
+      {
+        "key": "ptw",
+        "captionTitleZh": "動火高空吊運，安全主任電子簽核",
+        "captionBodyZh": "PTW 工作許可證涵蓋動火、高空、吊運等高風險工序，附安全核對清單同工人名單，由安全主任逐步簽。動火仲有 30 分鐘火警監察計時，生效期間出 QR 碼俾人巡查掃描。"
+      },
+      {
+        "key": "daily-diary",
+        "captionTitleZh": "30 秒填好今日日誌，過咗今日就鎖",
+        "captionBodyZh": "管工／工程師揀天氣、剔返今日做咗嘅進度項目、寫低備註就交。日誌按香港時間鎖定，尋日嘅改唔到，自動成為穩固嘅每日工地記錄。"
+      },
+      {
+        "key": "materials",
+        "captionTitleZh": "叫料即通知老總，逾期自動標紅",
+        "captionBodyZh": "判頭喺手機落單叫料，撳「急件」即時推送畀工地主任。系統追預計到貨同入貨進度，過咗期未到自動標逾期，仲可以連結返對應嘅進度項目。"
+      },
+      {
+        "key": "export",
+        "captionTitleZh": "一鍵出報告，業主版／內部版自動分流",
+        "captionBodyZh": "揀「業主版一頁紙」畀老闆 10 秒睇明，或「內部版詳細」、「例外版（只睇落後）」畀自己用。出 PDF 或 Excel 前有即時範圍預覽，唔使再人手砌報告。"
+      },
+      {
+        "key": "timetable-contacts",
+        "captionTitleZh": "到貨完工會議共冠一個行事曆，行頭一鍵打通",
+        "captionBodyZh": "行事曆自動匯集物料到貨、進度完工同會議檢查，邊日有咩死線一覽無遺。聯絡人就係成個行頭嘅通訊錄，撳一下即刻打電話，唔使喺幾個群組揾人。"
+      }
+    ]
+  },
+  "design": {
+    "layoutConcept": "Section 10 between Trust and LeadCapture. Alternating phone-image + text rows (not a grid); each function gets a 3-line story: what / how / why. Phone reuses the existing PhoneMock bezel + orange header showing the project name, proving every shot is the same demo project for coherence. Order kickoff to completion: progress tree, issues + escalation, SI, VO in HKD, PTW e-sign, dashboard + one-tap PDF export. Leftover functions as a chip strip.</layoutConcept>\n<parameter name=\"layoutConcept\">DUPLICATE-SACRIFICIAL-IGNORE",
+    "presentation": "Device-frame mockups reusing PhoneMock. Portrait screenshot inside the bezel; orange header is JSX outside the image so the project label is identical on every frame. Caption beside the phone, never overlaid: bold what heading, how line, why line in a soft orange callout, mono drawing-number rule above. Orange glow behind the phone over the blueprint grid. Same-project pill in the header. Light section so orange chrome pops.",
+    "responsive": "Desktop md+: 2-col grid items-center, phone to edge, text max-w-md, alternate via md:[&>div:first-child]:order-2 on odd rows, phone ~260-280px. Mobile 390px: single column, phone on top then text, identical order (flip is md-only), phone ~240px centered, text full width. space-y-16 rhythm, px-5 gutters, no horizontal scroll since phones width-capped + object-cover fixed-aspect box.",
+    "tailwindNotes": "Reuse Section n=10 light tone (GRID_LIGHT, mono kicker, font-heading title, max-w-6xl, py-16 md:py-24). Bezel verbatim from PhoneMock: rounded-[2.4rem] border-[10px] border-site-800 bg-site-800 shadow-2xl ring-1 ring-white/10. Header bg-gradient-to-r from-safety-500 to-safety-600 + white CK chip. Shot wrapper bg-white aspect-[9/19] overflow-hidden, img object-cover object-top. Glow bg-safety-500/20 blur-2xl. Drawing no font-mono text-xs font-bold text-safety-500 tracking-widest + h-px w-8 bg-safety-500. Heading font-heading font-bold text-xl text-site-900, body text-sm text-site-600, why callout bg-safety-50 ring-1 ring-safety-100 text-safety-700. Pill/chips bg-safety-50 / bg-site-50 with rings. ASI, single quotes TS, double quotes JSX, lucide ListChecks AlertCircle FileText FileDiff ShieldCheck LayoutDashboard.",
+    "componentSketch": "function Screenshots() {\n  return (\n    <Section n=\"10\" kicker=\"睇真啲 · 同一個地盤\" title={<>一個 demo 地盤，由開工睇到完工</>}>\n      <SameProjectPill />\n      <div className=\"space-y-16 md:space-y-24\">\n        {SHOTS.map((s, i) => (\n          <div key={s.n} className={'grid md:grid-cols-2 gap-10 md:gap-12 items-center ' + (i % 2 ? 'md:[&>div:first-child]:order-2' : '')}>\n            <div className=\"flex justify-center md:justify-end\"><ShotPhone img={s.img} /></div>\n            <div className=\"max-w-md mx-auto md:mx-0\">\n              <DrawingNo n={s.n} icon={s.icon} />\n              <h3 className=\"font-heading font-bold text-xl md:text-2xl text-site-900\">{s.what}</h3>\n              <p className=\"mt-3 text-sm text-site-600 leading-relaxed\">{s.how}</p>\n              <div className=\"mt-3 rounded-lg bg-safety-50 ring-1 ring-safety-100 px-3 py-2 text-sm font-medium text-safety-700\">{s.why}</div>\n            </div>\n          </div>\n        ))}\n      </div>\n      <ChipStrip items={['每日日誌','物料叫料','圖則 PDF','行事曆','聯絡人']} />\n    </Section>\n  )\n}\n// ShotPhone = PhoneMock bezel + orange CK / DC2026 油塘住宅 header + aspect-[9/19] <img object-cover object-top>\n// SHOTS: [{n,icon,img,what,how,why}] in lifecycle order\n// DrawingNo = mono {n} + h-px w-8 rule + {icon}"
+  }
+}

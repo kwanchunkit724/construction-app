@@ -4,6 +4,8 @@ import {
   Smartphone, Globe, MessageSquareOff, FileWarning, FileSpreadsheet,
   HardHat, ClipboardCheck, LayoutDashboard, ShieldCheck, Check, X,
   ArrowRight, Mail, Loader2, Send, FileDown,
+  ListChecks, AlertCircle, Package, BookOpen, FileText, FileCheck2,
+  CalendarDays, Contact as ContactIcon, Image as ImageIcon,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
@@ -47,6 +49,7 @@ export default function SellPage() {
       <Pricing />
       <Roi />
       <Trust />
+      <Screenshots />
       <LeadCapture />
       <CloseCta />
       <Footer />
@@ -201,6 +204,72 @@ function PhoneMock() {
               <span className="text-xs text-site-700">接駁管 — 等緊批</span>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── SCREENSHOTS (product showcase, one consistent demo project) ──
+function Screenshots() {
+  const shots = [
+    { img: '/marketing/shot-progress.png', icon: <ListChecks size={16} />, t: '成個地盤進度，一眼睇晒', d: '大項／中項／細項分層管理，最底一打勾，上面自動匯總百分比同狀態。邊區紅咗、落後幾多，一打開就知。' },
+    { img: '/marketing/shot-issues.png', icon: <AlertCircle size={16} />, t: '問題唔會再沉底，一層一層有人接', d: '報問題影相即傳，跟住固定上呈鏈：判頭→主判→PM。每一步邊個接、邊個解決全部記低，有完整活動紀錄可以追。' },
+    { img: '/marketing/shot-materials.png', icon: <Package size={16} />, t: '叫料即通知老總，逾期自動標紅', d: '判頭喺手機落單叫料，撳「急件」即時推送。系統追預計到貨同入貨進度，過咗期未到自動標逾期，仲連結返對應進度。' },
+    { img: '/marketing/shot-dashboard.png', icon: <LayoutDashboard size={16} />, t: 'PM 唔使落地盤都知盤數', d: '儀表板即時顯示整體進度、落後工地同處理中問題，仲有實時動態。老總一眼掃晒幾個盤嘅健康狀況，唔使等開會先發現甩漏。' },
+    { img: '/marketing/shot-export.png', icon: <FileDown size={16} />, t: '一鍵出報告，業主版／內部版自動分流', d: '揀「業主版一頁紙」畀老闆 10 秒睇明，或「內部版詳細」「例外版」畀自己用。出 PDF 前有即時範圍預覽，唔使再人手砌報告。' },
+    { img: '/marketing/shot-contacts.png', icon: <ContactIcon size={16} />, t: '行頭通訊錄，撳一下即刻打電話', d: '聯絡人就係成個行頭嘅通訊錄，按工種分類、可搜尋，撳一下即刻致電。唔使再喺幾個 WhatsApp 群組揾邊個判頭。' },
+  ]
+  const more = [
+    { icon: <FileText size={14} />, t: '工地指令 SI' },
+    { icon: <FileCheck2 size={14} />, t: '變更指令 VO (HKD)' },
+    { icon: <ShieldCheck size={14} />, t: '工作許可證 PTW' },
+    { icon: <ImageIcon size={14} />, t: '圖則版本管理' },
+    { icon: <CalendarDays size={14} />, t: '統一行事曆' },
+    { icon: <BookOpen size={14} />, t: '每日工地日誌' },
+  ]
+  return (
+    <Section n="09" kicker="睇真啲 · 同一個地盤" title={<>一個 demo 地盤，<span className="text-safety-500">由開工睇到完工</span></>}>
+      <p className="-mt-6 mb-12 max-w-2xl text-base text-site-600 leading-relaxed">
+        以下每一張截圖，全部嚟自同一個地盤「<span className="font-semibold text-site-800">油塘灣住宅發展項目</span>」。由判頭叫料、管工寫日誌、工地主任追進度、到 PM 出報告畀業主 —— 你會見到成個地盤點樣喺一個系統入面運作，每個動作都有時間戳同簽名。
+      </p>
+      <div className="space-y-16 md:space-y-24">
+        {shots.map((s, i) => (
+          <div key={s.t} className={`grid md:grid-cols-2 gap-10 md:gap-14 items-center ${i % 2 ? 'md:[&>div:first-child]:order-2' : ''}`}>
+            <div className="flex justify-center"><ShotPhone img={s.img} /></div>
+            <div className="max-w-md mx-auto md:mx-0">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="font-mono text-xs font-bold text-safety-500 tracking-widest">{String(i + 1).padStart(2, '0')}</span>
+                <span className="h-px w-8 bg-safety-500" />
+                <span className="text-safety-600">{s.icon}</span>
+              </div>
+              <h3 className="font-heading font-bold text-xl md:text-2xl text-site-900" style={{ textWrap: 'balance' } as React.CSSProperties}>{s.t}</h3>
+              <p className="mt-3 text-sm md:text-base text-site-600 leading-relaxed">{s.d}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-16 rounded-2xl border border-site-200 bg-site-50/60 p-6 md:p-8">
+        <div className="font-mono text-xs uppercase tracking-widest text-site-400 mb-4">仲有 —— 同一個 app 入面</div>
+        <div className="flex flex-wrap gap-2.5">
+          {more.map(m => (
+            <div key={m.t} className="inline-flex items-center gap-2 rounded-full bg-white border border-site-200 px-4 py-2 text-sm font-medium text-site-700 shadow-sm">
+              <span className="text-safety-600">{m.icon}</span> {m.t}
+            </div>
+          ))}
+        </div>
+      </div>
+    </Section>
+  )
+}
+
+function ShotPhone({ img }: { img: string }) {
+  return (
+    <div className="relative">
+      <div className="absolute -inset-6 bg-safety-500/20 blur-2xl rounded-[3rem] pointer-events-none" />
+      <div className="relative w-[256px] md:w-[268px] rounded-[2.4rem] border-[10px] border-site-800 bg-site-800 shadow-2xl overflow-hidden ring-1 ring-white/10">
+        <div className="bg-white aspect-[390/800] overflow-hidden">
+          <img src={img} alt="" className="w-full h-full object-cover object-top" loading="lazy" />
         </div>
       </div>
     </div>
@@ -494,7 +563,7 @@ function LeadCapture() {
       <div className="relative max-w-xl mx-auto px-5 md:px-8">
         <div className="text-center mb-10">
           <div className="flex items-center gap-2 justify-center mb-3">
-            <span className="font-mono text-xs font-bold text-safety-500 tracking-widest">09</span>
+            <span className="font-mono text-xs font-bold text-safety-500 tracking-widest">10</span>
             <span className="h-px w-8 bg-safety-500" />
             <span className="font-mono text-xs font-semibold uppercase tracking-[0.2em] text-site-400">1 個月免費試用</span>
           </div>
