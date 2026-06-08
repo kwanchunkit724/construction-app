@@ -44,19 +44,31 @@ export function SiProvider({ projectId, children }: { projectId: string; childre
   const refetch = useCallback(async () => {
     setLoading(true)
     setFetchError(null)
-    const [siRes, verRes, apRes, cmRes] = await Promise.all([
-      supabase.from('site_instructions').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
-      supabase.from('si_versions').select('*, si:site_instructions!inner(project_id)').eq('si.project_id', projectId),
-      supabase.from('approvals').select('*').eq('doc_type', 'si'),
-      supabase.from('protest_comments').select('*'),
-    ])
+    const siRes = await supabase
+      .from('site_instructions').select('*')
+      .eq('project_id', projectId).order('created_at', { ascending: false })
     if (siRes.error) {
       console.error('site_instructions fetch error:', siRes.error)
       setFetchError(siRes.error.message)
       setLoading(false)
       return
     }
-    setSis((siRes.data || []) as SI[])
+    const sis = (siRes.data || []) as SI[]
+    setSis(sis)
+    const siIds = sis.map(s => s.id)
+    // Do NOT embed site_instructions on si_versions: si_versions has TWO FKs to
+    // it (si_id forward + the current_version_id back-reference), so a
+    // `site_instructions!inner` embed is AMBIGUOUS — PostgREST errors and every
+    // version silently drops, leaving the list title as "(未填寫標題)". Filter by
+    // the already-fetched SI ids instead.
+    const [verRes, apRes, cmRes] = await Promise.all([
+      siIds.length
+        ? supabase.from('si_versions').select('*').in('si_id', siIds)
+        : Promise.resolve({ data: [] as any[], error: null }),
+      supabase.from('approvals').select('*').eq('doc_type', 'si'),
+      supabase.from('protest_comments').select('*'),
+    ])
+    if (verRes.error) console.error('si_versions fetch error:', verRes.error)
     const vmap: Record<string, SIVersion[]> = {}
     ;(verRes.data || []).forEach((v: any) => {
       ;(vmap[v.si_id] ||= []).push(v as SIVersion)

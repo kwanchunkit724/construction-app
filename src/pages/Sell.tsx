@@ -219,11 +219,11 @@ function Screenshots() {
     { img: '/marketing/shot-dashboard.png', icon: <LayoutDashboard size={16} />, t: 'PM 唔使落地盤都知盤數', d: '儀表板即時顯示整體進度、落後工地同處理中問題，仲有實時動態。老總一眼掃晒幾個盤嘅健康狀況，唔使等開會先發現甩漏。' },
     { img: '/marketing/shot-export.png', icon: <FileDown size={16} />, t: '一鍵出報告，業主版／內部版自動分流', d: '揀「業主版一頁紙」畀老闆 10 秒睇明，或「內部版詳細」「例外版」畀自己用。出 PDF 前有即時範圍預覽，唔使再人手砌報告。' },
     { img: '/marketing/shot-contacts.png', icon: <ContactIcon size={16} />, t: '行頭通訊錄，撳一下即刻打電話', d: '聯絡人就係成個行頭嘅通訊錄，按工種分類、可搜尋，撳一下即刻致電。唔使再喺幾個 WhatsApp 群組揾邊個判頭。' },
+    { img: '/marketing/shot-si.png', icon: <FileText size={16} />, t: '工地指令版本鎖死，改過咩一目了然', d: 'SI 工地指令逐版簽核 + 版本對比，睇返每次改咗咩、邊個簽。指令鎖定後一鍵轉做變更指令，出爭拗憑紀錄講數，唔使翻舊 WhatsApp。' },
     { img: '/marketing/shot-vo.png', icon: <FileCheck2 size={16} />, t: '變更指令金額，系統幫你計到一蚊都唔差', d: 'VO 逐項填數量、單價、類別，總額由系統核算（HKD），唔靠人手 Excel 加數。批核完一鍵出 PDF，連圖則參照同簽核時間線，直接畀業主對數。' },
     { img: '/marketing/shot-ptw.png', icon: <ShieldCheck size={16} />, t: '動火高空吊運，安全主任電子簽核', d: 'PTW 工作許可證涵蓋動火、高空、吊運等高風險工序，附安全核對清單同工人名單，由安全主任逐步簽。動火仲有 30 分鐘火警監察計時，生效期間出 QR 碼俾人巡查掃描。' },
   ]
   const more = [
-    { icon: <FileText size={14} />, t: '工地指令 SI（版本簽核）' },
     { icon: <ImageIcon size={14} />, t: '圖則版本管理' },
     { icon: <CalendarDays size={14} />, t: '統一行事曆' },
     { icon: <BookOpen size={14} />, t: '每日工地日誌' },

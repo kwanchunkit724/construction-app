@@ -53,21 +53,32 @@ export function PtwProvider({ projectId, children }: { projectId: string; childr
   const refetch = useCallback(async () => {
     setLoading(true)
     setFetchError(null)
-    const [pRes, vRes, wRes, aRes, sRes, scRes] = await Promise.all([
-      supabase.from('permits_to_work').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
-      supabase.from('permit_versions').select('*, ptw:permits_to_work!inner(project_id)').eq('ptw.project_id', projectId),
-      supabase.from('permit_workers').select('*, ptw:permits_to_work!inner(project_id)').eq('ptw.project_id', projectId),
-      supabase.from('approvals').select('*').eq('doc_type', 'ptw'),
-      supabase.from('permit_signoffs').select('*, ptw:permits_to_work!inner(project_id)').eq('ptw.project_id', projectId),
-      supabase.from('permit_scans').select('*, ptw:permits_to_work!inner(project_id)').eq('ptw.project_id', projectId),
-    ])
+    const pRes = await supabase
+      .from('permits_to_work').select('*')
+      .eq('project_id', projectId).order('created_at', { ascending: false })
     if (pRes.error) {
       console.error('permits_to_work fetch error:', pRes.error)
       setFetchError(pRes.error.message)
       setLoading(false)
       return
     }
-    setPtws((pRes.data || []) as PTW[])
+    const ptws = (pRes.data || []) as PTW[]
+    setPtws(ptws)
+    const ptwIds = ptws.map(p => p.id)
+    // permit_versions must NOT embed permits_to_work: it has two FKs to it
+    // (ptw_id + current_version_id back-ref) → ambiguous embed errors and drops
+    // every version (empty checklist on the PTW detail). Filter by ids instead.
+    // permit_workers/signoffs/scans have a single FK so their embed is fine.
+    const [vRes, wRes, aRes, sRes, scRes] = await Promise.all([
+      ptwIds.length
+        ? supabase.from('permit_versions').select('*').in('ptw_id', ptwIds)
+        : Promise.resolve({ data: [] as any[], error: null }),
+      supabase.from('permit_workers').select('*, ptw:permits_to_work!inner(project_id)').eq('ptw.project_id', projectId),
+      supabase.from('approvals').select('*').eq('doc_type', 'ptw'),
+      supabase.from('permit_signoffs').select('*, ptw:permits_to_work!inner(project_id)').eq('ptw.project_id', projectId),
+      supabase.from('permit_scans').select('*, ptw:permits_to_work!inner(project_id)').eq('ptw.project_id', projectId),
+    ])
+    if (vRes.error) console.error('permit_versions fetch error:', vRes.error)
     const vmap: Record<string, PtwVersion[]> = {}
     ;(vRes.data || []).forEach((v: any) => { (vmap[v.ptw_id] ||= []).push(v as PtwVersion) })
     setVersionsByPtw(vmap)

@@ -42,18 +42,28 @@ export function VoProvider({ projectId, children }: { projectId: string; childre
   const refetch = useCallback(async () => {
     setLoading(true)
     setFetchError(null)
-    const [voRes, verRes, apRes] = await Promise.all([
-      supabase.from('variation_orders').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
-      supabase.from('vo_versions').select('*, vo:variation_orders!inner(project_id)').eq('vo.project_id', projectId),
-      supabase.from('approvals').select('*').eq('doc_type', 'vo'),
-    ])
+    const voRes = await supabase
+      .from('variation_orders').select('*')
+      .eq('project_id', projectId).order('created_at', { ascending: false })
     if (voRes.error) {
       console.error('variation_orders fetch error:', voRes.error)
       setFetchError(voRes.error.message)
       setLoading(false)
       return
     }
-    setVos((voRes.data || []) as VO[])
+    const vos = (voRes.data || []) as VO[]
+    setVos(vos)
+    const voIds = vos.map(v => v.id)
+    // Do NOT embed variation_orders: vo_versions has two FKs to it (vo_id +
+    // the current_version_id back-ref) → ambiguous embed errors and silently
+    // drops every version (empty line items on the VO detail). Filter by ids.
+    const [verRes, apRes] = await Promise.all([
+      voIds.length
+        ? supabase.from('vo_versions').select('*').in('vo_id', voIds)
+        : Promise.resolve({ data: [] as any[], error: null }),
+      supabase.from('approvals').select('*').eq('doc_type', 'vo'),
+    ])
+    if (verRes.error) console.error('vo_versions fetch error:', verRes.error)
     const vmap: Record<string, VOVersion[]> = {}
     ;(verRes.data || []).forEach((v: any) => {
       ;(vmap[v.vo_id] ||= []).push(v as VOVersion)
