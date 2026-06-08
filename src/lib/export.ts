@@ -107,6 +107,9 @@ async function shareOrDownloadBlob(blob: Blob, filename: string, title: string) 
 // per the multi-persona review (.planning/export-report/IMPROVEMENT-SPEC.md).
 
 export type ReportDepth = 1 | 2 | 3
+// audience drives the PDF render path: 'owner' → one glance-level page only;
+// 'internal' → that same one-pager + a detailed appendix table.
+export type ReportAudience = 'owner' | 'internal'
 
 export interface ExportProgressOptions {
   zoneIds: string[]            // project.zones ids to include
@@ -118,19 +121,23 @@ export interface ExportProgressOptions {
   showSummary: boolean         // top KPI block
   showGap: boolean             // 差距 (實際−計劃) column
   reportPeriod: string         // e.g. 2026-W23 (free text, optional)
+  audience: ReportAudience     // owner one-pager vs internal one-pager + appendix
 }
 
 export const ALL_STATUSES: ProgressStatus[] = ['not-started', 'in-progress', 'completed', 'delayed', 'blocked']
+// Default reports drop 未開始 — printing every not-started leaf is the wall of
+// '0% / 未開始' rows that buries the items that actually need attention.
+export const NO_NOTSTARTED: ProgressStatus[] = ALL_STATUSES.filter(s => s !== 'not-started')
 
 export function exportPreset(p: 'internal' | 'owner' | 'exception', project: Project): ExportProgressOptions {
   const zoneIds = project.zones.map(z => z.id)
   if (p === 'owner') {
-    return { zoneIds, includeUnzoned: true, depth: 2, statuses: [...ALL_STATUSES], onlyBehind: false, groupByZone: true, showSummary: true, showGap: true, reportPeriod: '' }
+    return { zoneIds, includeUnzoned: true, depth: 2, statuses: [...NO_NOTSTARTED], onlyBehind: false, groupByZone: true, showSummary: true, showGap: true, reportPeriod: '', audience: 'owner' }
   }
   if (p === 'exception') {
-    return { zoneIds, includeUnzoned: true, depth: 2, statuses: ['delayed', 'blocked'], onlyBehind: true, groupByZone: true, showSummary: true, showGap: true, reportPeriod: '' }
+    return { zoneIds, includeUnzoned: true, depth: 2, statuses: ['delayed', 'blocked'], onlyBehind: true, groupByZone: true, showSummary: true, showGap: true, reportPeriod: '', audience: 'internal' }
   }
-  return { zoneIds, includeUnzoned: true, depth: 3, statuses: [...ALL_STATUSES], onlyBehind: false, groupByZone: true, showSummary: true, showGap: true, reportPeriod: '' }
+  return { zoneIds, includeUnzoned: true, depth: 3, statuses: [...NO_NOTSTARTED], onlyBehind: false, groupByZone: true, showSummary: true, showGap: true, reportPeriod: '', audience: 'internal' }
 }
 
 const UNZONED = '__unzoned__'
@@ -142,9 +149,14 @@ interface ItemRow {
   tracking: string; eff: Eff; start: string; end: string; notes: string; updated: string
 }
 interface ZoneAgg { actual: number; planned: number; gap: number; status: ProgressStatus; count: number; behind: number }
+interface Verdict { tone: 'ok' | 'warn' | 'bad'; line: string }
 interface ReportModel {
-  summary: { actual: number; planned: number; gap: number; total: number; behind: number; counts: Record<ProgressStatus, number> }
+  summary: { actual: number; planned: number; gap: number; total: number; behind: number; notStarted: number; counts: Record<ProgressStatus, number>; verdict: Verdict }
+  // zones = filtered rows for the detail appendix; allZones = every zone's
+  // rollup bar for the owner one-pager (shown even if all-not-started so the
+  // owner sees the whole site, not just zones with started work).
   zones: Array<{ key: string; name: string; agg: ZoneAgg; rows: ItemRow[] }>
+  allZones: Array<{ key: string; name: string; agg: ZoneAgg }>
   opts: ExportProgressOptions
 }
 
@@ -215,7 +227,7 @@ export function buildReportModel(project: Project, items: ProgressItem[], opts: 
         rows.push({
           zoneKey: key, zoneName: zoneNameOf(key),
           code: it.code, title: it.title, level: it.level, depth: d,
-          tracking: it.tracking_mode === 'floors' ? `樓層 (${it.floors_completed.length}/${it.floor_labels.length})` : '百分比',
+          tracking: it.tracking_mode === 'floors' ? `${it.floors_completed.length}/${it.floor_labels.length}樓` : '',
           eff: e,
           start: it.planned_start ?? '', end: it.planned_end ?? '',
           notes: isLeaf(it) ? it.notes : '', updated: new Date(it.last_updated_at).toLocaleString('zh-HK'),
@@ -238,7 +250,24 @@ export function buildReportModel(project: Project, items: ProgressItem[], opts: 
   for (const l of scopeLeaves) counts[l.status]++
   const behind = scopeLeaves.filter(l => (l.actual_progress - l.planned_progress) < -10).length
 
-  return { summary: { actual: sr.actual, planned: sr.planned, gap: sr.actual - sr.planned, total: scopeLeaves.length, behind, counts }, zones, opts }
+  // every zone's rollup bar for the one-pager (incl. all-not-started zones)
+  const allZones = zoneOrder.flatMap(key => {
+    const zl = scopeItems.filter(i => isLeaf(i) && zoneKeyOf(i) === key)
+    if (zl.length === 0) return []
+    const r = computeRollup(zl)
+    const zbehind = zl.filter(l => (l.actual_progress - l.planned_progress) < -10).length
+    return [{ key, name: zoneNameOf(key), agg: { actual: r.actual, planned: r.planned, gap: r.actual - r.planned, status: r.status, count: zl.length, behind: zbehind } }]
+  })
+
+  const sgap = sr.actual - sr.planned
+  const tone: Verdict['tone'] = behind > 0 ? 'bad' : sgap < -3 ? 'warn' : 'ok'
+  const verdict: Verdict = {
+    tone,
+    line: `${project.name} — 整體 ${sr.actual}%，` +
+      (sgap < -3 ? `落後計劃 ${-sgap}%` : sgap > 3 ? `超前 ${sgap}%` : '貼近計劃') +
+      (behind > 0 ? `，${behind} 項要跟進` : ''),
+  }
+  return { summary: { actual: sr.actual, planned: sr.planned, gap: sgap, total: scopeLeaves.length, behind, notStarted: counts['not-started'], counts, verdict }, zones, allZones, opts }
 }
 
 // Status colours (red/amber/green) — reserved for STATUS, not level.
@@ -266,6 +295,7 @@ export async function exportProgressToExcel(project: Project, items: ProgressIte
   const markNums = (rowIdx: number, cols: number[]) => cols.forEach(c => numCells.push({ r: rowIdx, c }))
 
   if (model.summary && opts.showSummary) {
+    pushRow([model.summary.verdict.line], null)
     pushRow([`${project.name} — 進度報告`], null)
     pushRow([`產生：${new Date().toLocaleString('zh-HK')}${opts.reportPeriod ? `   期數：${opts.reportPeriod}` : ''}`], null)
     pushRow([`整體：計劃 ${model.summary.planned}% / 實際 ${model.summary.actual}% / 差距 ${model.summary.gap}%   ·   落後 ${model.summary.behind} 項 / 共 ${model.summary.total} 項`], null)
@@ -336,121 +366,174 @@ export async function exportProgressToExcel(project: Project, items: ProgressIte
   const blob = new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
-  await downloadBlob(blob, `${safeName(project.name)}_進度_${fileTag(opts)}.xlsx`)
+  // Unified delivery: same share-first path as the PDF (was downloadBlob, which
+  // silently hid the Excel in the Documents folder on native).
+  await shareOrDownloadBlob(blob, `${safeName(project.name)}_進度_${fileTag(opts)}.xlsx`, model.summary.verdict.line)
 }
 
-// ── PDF (html2canvas — full colour + any CJK glyph) ──────────
+// ── PDF — html2canvas (full CJK glyph support, any character) with
+// BLOCK-AWARE pagination: the tall render is cut ONLY at element boundaries
+// (`.pgblk`), never mid-row. This fixes the old raw-pixel slice that
+// guillotined rows, while keeping browser-font rendering so every Chinese
+// glyph shows (the embedded subset font can't cover arbitrary text).
+// Owner audience → a glance-level one-pager; internal → that one-pager + a
+// detailed table per zone.
+
+const toneHex = (t: Verdict['tone']) => t === 'bad' ? '#b91c1c' : t === 'warn' ? '#d97706' : '#16a34a'
+
+function reportHtml(project: Project, model: ReportModel, opts: ExportProgressOptions): string {
+  const s = model.summary
+  const card = (label: string, val: string, colour: string) => `
+    <div style="flex:1; border:1px solid #e2e8f0; border-radius:10px; padding:12px 16px;">
+      <div style="font-size:12px; color:#64748b;">${escapeHtml(label)}</div>
+      <div style="font-size:26px; font-weight:800; color:${colour}; line-height:1.1;">${escapeHtml(val)}</div>
+    </div>`
+
+  const zoneBars = model.allZones.map(z => {
+    const barHex = STATUS_PILL[z.agg.status].bar
+    const a = Math.max(0, Math.min(100, z.agg.actual))
+    const p = Math.max(0, Math.min(100, z.agg.planned))
+    return `
+    <div class="pgblk" style="display:flex; align-items:center; gap:12px; margin:7px 0;">
+      <div style="width:96px; font-weight:600; font-size:14px; color:#0f172a;">${escapeHtml(z.name)}</div>
+      <div style="flex:1; position:relative; height:14px; background:#f1f5f9; border-radius:5px;">
+        <div style="position:absolute; left:0; top:0; bottom:0; width:${a}%; background:${barHex}; border-radius:5px;"></div>
+        <div style="position:absolute; left:${p}%; top:-3px; bottom:-3px; width:2px; background:#475569;"></div>
+      </div>
+      <div style="width:172px; font-size:13px; color:#475569; text-align:right;">${z.agg.actual}% / 計劃 ${z.agg.planned}%${z.agg.behind ? `　<span style="color:#b91c1c;">⚠${z.agg.behind}</span>` : ''}</div>
+    </div>`
+  }).join('')
+
+  const attn: Array<{ zone: string; title: string; actual: number; gap: number; note: string; status: ProgressStatus }> = []
+  for (const z of model.zones) for (const r of z.rows) {
+    if (r.eff.status === 'delayed' || r.eff.status === 'blocked' || r.eff.gap < -10) {
+      attn.push({ zone: z.name, title: r.title, actual: r.eff.actual, gap: r.eff.gap, note: r.notes ?? '', status: r.eff.status })
+    }
+  }
+  attn.sort((x, y) => x.gap - y.gap)
+  const attnRows = attn.length === 0
+    ? `<div class="pgblk" style="font-size:14px; color:#15803d; margin:4px 0;">暫無落後 / 阻塞項目，全部按計劃。</div>`
+    : attn.slice(0, 12).map(a => {
+      const fg = STATUS_PILL[a.status].fg
+      return `<div class="pgblk" style="display:flex; justify-content:space-between; gap:12px; padding:5px 0; border-bottom:1px solid #f1f5f9;">
+        <div style="font-size:13px; color:${fg};">${escapeHtml(STATUS_PILL[a.status].mark + a.zone + ' · ' + a.title)}${a.note ? `<div style="font-size:12px; color:#94a3b8;">${escapeHtml(a.note)}</div>` : ''}</div>
+        <div style="font-size:13px; color:#475569; white-space:nowrap;">實際 ${a.actual}%（${a.gap >= 0 ? '+' : ''}${a.gap}%）</div>
+      </div>`
+    }).join('')
+  const moreAttn = attn.length > 12 ? `<div class="pgblk" style="font-size:12px; color:#64748b; margin-top:4px;">…另有 ${attn.length - 12} 項，詳見內部版附錄。</div>` : ''
+
+  const onePager = `
+    <div class="pgblk" style="font-size:13px; color:#64748b; margin-bottom:6px;">${escapeHtml(project.name)} — 進度報告</div>
+    <div class="pgblk" style="background:${toneHex(s.verdict.tone)}; color:#fff; border-radius:10px; padding:16px 18px; font-size:20px; font-weight:800; margin-bottom:16px;">${escapeHtml(s.verdict.line)}</div>
+    <div class="pgblk" style="display:flex; gap:12px; margin-bottom:18px;">
+      ${card('整體實際', `${s.actual}%`, '#0f172a')}
+      ${card('計劃', `${s.planned}%`, '#475569')}
+      ${card('差距', `${s.gap >= 0 ? '+' : ''}${s.gap}%`, s.gap < 0 ? '#b91c1c' : '#15803d')}
+    </div>
+    <div class="pgblk" style="font-size:15px; font-weight:700; color:#0f172a; margin:6px 0 4px;">各分區進度</div>
+    ${zoneBars}
+    <div class="pgblk" style="font-size:15px; font-weight:700; color:#0f172a; margin:16px 0 6px;">需要關注（${attn.length}）</div>
+    ${attnRows}${moreAttn}
+    <div class="pgblk" style="font-size:12px; color:#94a3b8; margin-top:10px;">未開始 ${s.notStarted} 項（未列入上表）</div>`
+
+  let appendix = ''
+  if (opts.audience === 'internal') {
+    appendix = model.zones.map(z => {
+      const rows = z.rows.map(r => {
+        const sp = STATUS_PILL[r.eff.status]
+        const w = r.level === 1 ? 700 : r.level === 2 ? 600 : 400
+        return `<tr class="pgblk" style="border-bottom:1px solid #e2e8f0; border-left:4px solid ${sp.bar};">
+          <td style="padding:5px 6px; font-family:Consolas,monospace; color:#64748b; font-size:11px;">${escapeHtml(r.code)}</td>
+          <td style="padding:5px 6px; padding-left:${6 + r.depth * 16}px; font-weight:${w};">${escapeHtml(r.title)}${r.tracking ? ` <span style="color:#7c3aed; font-size:11px;">${escapeHtml(r.tracking)}</span>` : ''}</td>
+          <td style="padding:5px 6px; text-align:right; font-weight:700;">${r.eff.actual}%</td>
+          <td style="padding:5px 6px; text-align:right; color:#64748b;">${r.eff.planned}%</td>
+          <td style="padding:5px 6px; text-align:right; font-weight:700; color:${gapColour(r.eff.gap)};">${r.eff.gap >= 0 ? '+' : ''}${r.eff.gap}%</td>
+          <td style="padding:5px 6px; text-align:center;"><span style="background:${sp.bg}; color:${sp.fg}; padding:2px 7px; border-radius:7px; font-size:11px;">${escapeHtml(sp.mark + PROGRESS_STATUS_ZH[r.eff.status])}</span></td>
+          <td style="padding:5px 6px; color:#475569; font-size:12px;">${escapeHtml(r.notes ?? '')}</td>
+          <td style="padding:5px 6px; color:#64748b; font-size:12px;">${escapeHtml(r.end ?? '')}</td>
+        </tr>`
+      }).join('')
+      return `
+        <div class="pgblk" style="margin-top:22px; font-size:15px; font-weight:700; color:#0f172a;">${escapeHtml(z.name)} — 詳細 <span style="font-weight:500; font-size:13px; color:#64748b;">整體 ${z.agg.actual}%（計劃 ${z.agg.planned}%）· ${z.agg.count} 項</span></div>
+        <table style="width:100%; border-collapse:collapse; font-size:12px; margin-top:6px;">
+          <thead><tr class="pgblk" style="background:#f97316; color:#fff; text-align:left;">
+            <th style="padding:6px;">編號</th><th style="padding:6px;">名稱</th><th style="padding:6px; text-align:right;">實際</th><th style="padding:6px; text-align:right;">計劃</th><th style="padding:6px; text-align:right;">差距</th><th style="padding:6px; text-align:center;">狀態</th><th style="padding:6px;">說明</th><th style="padding:6px;">計劃完成</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`
+    }).join('')
+  }
+
+  return onePager + appendix
+}
+
 export async function exportProgressToPDF(project: Project, items: ProgressItem[], opts: ExportProgressOptions) {
   const model = buildReportModel(project, items, opts)
   const html2canvas = (await import('html2canvas')).default
 
+  const W = 794 // A4 portrait @ ~96dpi
   const container = document.createElement('div')
   container.style.cssText = [
-    'position: fixed', 'top: 0', 'left: -10000px', 'width: 1100px', 'padding: 24px',
-    'background: #ffffff',
-    'font-family: Inter, "Microsoft JhengHei", "PingFang HK", "Heiti TC", "Noto Sans CJK TC", sans-serif',
-    'font-size: 11px', 'color: #0f172a',
+    'position:fixed', 'top:0', 'left:-10000px', `width:${W}px`, 'padding:28px',
+    'background:#ffffff',
+    'font-family:Inter,"Microsoft JhengHei","PingFang HK","Heiti TC","Noto Sans CJK TC",sans-serif',
+    'color:#0f172a',
   ].join('; ')
-
-  const colCount = 8 + (opts.showGap ? 1 : 0)
-  const pillStyle = (s: ProgressStatus) => `background:${STATUS_PILL[s].bg}; color:${STATUS_PILL[s].fg}; padding:2px 8px; border-radius:8px; font-size:10px; font-weight:600;`
-
-  const summaryHtml = opts.showSummary && model.summary ? `
-    <div style="display:flex; gap:10px; margin:0 0 14px 0;">
-      <div style="flex:1; border:1px solid #e2e8f0; border-radius:10px; padding:10px 14px;">
-        <div style="font-size:10px; color:#64748b;">整體進度</div>
-        <div style="font-size:22px; font-weight:800; color:#0f172a;">${model.summary.actual}<span style="font-size:13px; color:#94a3b8;">% / 計劃 ${model.summary.planned}%</span></div>
-        <div style="font-size:11px; color:${gapColour(model.summary.gap)}; font-weight:700;">${model.summary.gap >= 0 ? '+' : ''}${model.summary.gap}% 差距</div>
-      </div>
-      <div style="flex:1; border:1px solid #e2e8f0; border-radius:10px; padding:10px 14px;">
-        <div style="font-size:10px; color:#64748b;">需要關注</div>
-        <div style="font-size:22px; font-weight:800; color:#b91c1c;">${model.summary.behind}<span style="font-size:13px; color:#94a3b8;"> 項落後 / 共 ${model.summary.total}</span></div>
-        <div style="font-size:11px; color:#475569;">延誤 ${model.summary.counts.delayed} · 阻塞 ${model.summary.counts.blocked}</div>
-      </div>
-      <div style="flex:1; border:1px solid #e2e8f0; border-radius:10px; padding:10px 14px;">
-        <div style="font-size:10px; color:#64748b;">狀態分佈</div>
-        <div style="font-size:11px; color:#475569; line-height:1.5;">進行中 ${model.summary.counts['in-progress']} · 已完成 ${model.summary.counts.completed} · 未開始 ${model.summary.counts['not-started']}</div>
-      </div>
-    </div>` : ''
-
-  const headCells = ['分區', '編號', '名稱', '層級', '追蹤', '計劃%', '實際%']
-    .concat(opts.showGap ? ['差距'] : [])
-    .concat(['狀態', '計劃開始', '計劃完成'])
-  const th = (t: string, align = 'left', w = '') => `<th style="padding:7px 6px; text-align:${align}; ${w}">${escapeHtml(t)}</th>`
-
-  const zoneSections = model.zones.map(z => {
-    const bandRollup = `整體 ${z.agg.actual}%（計劃 ${z.agg.planned}%，${z.agg.gap < 0 ? `落後 ${-z.agg.gap}%` : `差 ${z.agg.gap}%`}${z.agg.behind ? `，落後 ${z.agg.behind} 項` : ''}）`
-    const bandRow = opts.groupByZone ? `
-      <tr><td colspan="${colCount}" style="background:#1e3a5f; color:#fff; padding:8px 10px; font-weight:700; font-size:12px;">
-        ${escapeHtml(z.name)} <span style="font-weight:500; color:#cbd5e1; font-size:11px;">— ${escapeHtml(bandRollup)}</span>
-      </td></tr>` : ''
-    const itemRows = z.rows.map(it => {
-      const sp = STATUS_PILL[it.eff.status]
-      const lvlBg = LEVEL_BG[it.level] ?? '#ffffff'
-      const weight = it.level === 1 ? 700 : it.level === 2 ? 600 : 400
-      const indent = it.depth * 16
-      return `
-      <tr style="background:${lvlBg}; border-bottom:1px solid #e2e8f0; border-left:4px solid ${sp.bar};">
-        <td style="padding:5px 6px;">${opts.groupByZone ? '' : escapeHtml(z.name)}</td>
-        <td style="padding:5px 6px; font-family:Consolas,monospace; color:#475569;">${escapeHtml(it.code)}</td>
-        <td style="padding:5px 6px; padding-left:${6 + indent}px; font-weight:${weight}; color:${it.level === 3 ? '#334155' : '#0f172a'};">${escapeHtml(it.title)}</td>
-        <td style="padding:5px 6px; text-align:center; color:#64748b;">${it.level}</td>
-        <td style="padding:5px 6px; color:#64748b;">${escapeHtml(it.tracking)}</td>
-        <td style="padding:5px 6px; text-align:right; color:#64748b;">${it.eff.planned}%</td>
-        <td style="padding:5px 6px; text-align:right; font-weight:700;">${it.eff.actual}%</td>
-        ${opts.showGap ? `<td style="padding:5px 6px; text-align:right; font-weight:700; color:${gapColour(it.eff.gap)};">${it.eff.gap >= 0 ? '+' : ''}${it.eff.gap}%</td>` : ''}
-        <td style="padding:5px 6px; text-align:center;"><span style="${pillStyle(it.eff.status)}">${escapeHtml(sp.mark + PROGRESS_STATUS_ZH[it.eff.status])}</span></td>
-        <td style="padding:5px 6px; color:#64748b;">${escapeHtml(it.start)}</td>
-        <td style="padding:5px 6px; color:#64748b;">${escapeHtml(it.end)}</td>
-      </tr>`
-    }).join('')
-    const subtotal = opts.groupByZone ? `
-      <tr style="background:#f1f5f9; border-bottom:2px solid #cbd5e1; font-weight:700;">
-        <td style="padding:6px;" colspan="5">　${escapeHtml(z.name)} 小計（${z.agg.count} 項）</td>
-        <td style="padding:6px; text-align:right;">${z.agg.planned}%</td>
-        <td style="padding:6px; text-align:right;">${z.agg.actual}%</td>
-        ${opts.showGap ? `<td style="padding:6px; text-align:right; color:${gapColour(z.agg.gap)};">${z.agg.gap >= 0 ? '+' : ''}${z.agg.gap}%</td>` : ''}
-        <td colspan="3"></td>
-      </tr>` : ''
-    return bandRow + itemRows + subtotal
-  }).join('')
-
-  container.innerHTML = `
-    <h1 style="margin:0 0 2px 0; font-size:20px; font-weight:800; color:#0f172a;">${escapeHtml(project.name)} — 進度報告</h1>
-    <div style="margin:0 0 12px 0; font-size:11px; color:#64748b;">產生時間：${new Date().toLocaleString('zh-HK')}${opts.reportPeriod ? `　·　期數：${escapeHtml(opts.reportPeriod)}` : ''}</div>
-    ${summaryHtml}
-    <table style="width:100%; border-collapse:collapse; font-size:11px;">
-      <thead><tr style="background:#f97316; color:#fff;">
-        ${th('分區', 'left', 'width:64px;')}${th('編號', 'left', 'width:84px;')}${th('名稱')}${th('層', 'center', 'width:34px;')}${th('追蹤', 'left', 'width:96px;')}${th('計劃%', 'right', 'width:54px;')}${th('實際%', 'right', 'width:54px;')}${opts.showGap ? th('差距', 'right', 'width:54px;') : ''}${th('狀態', 'center', 'width:78px;')}${th('計劃開始', 'left', 'width:84px;')}${th('計劃完成', 'left', 'width:84px;')}
-      </tr></thead>
-      <tbody>${zoneSections}</tbody>
-    </table>`
-
+  container.innerHTML = reportHtml(project, model, opts)
   document.body.appendChild(container)
+
   try {
+    const cTop = container.getBoundingClientRect().top
+    const blockBottoms = Array.from(container.querySelectorAll('.pgblk'))
+      .map(b => (b as HTMLElement).getBoundingClientRect().bottom - cTop)
     const canvas = await html2canvas(container, { scale: 2, backgroundColor: '#ffffff', logging: false })
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
-    const pageW = doc.internal.pageSize.getWidth()
-    const pageH = doc.internal.pageSize.getHeight()
-    const imgW = pageW
-    const pageHCanvasPx = (pageH * canvas.width) / pageW
-    let yOffsetPx = 0, isFirst = true
-    while (yOffsetPx < canvas.height) {
-      const sliceH = Math.min(pageHCanvasPx, canvas.height - yOffsetPx)
-      const sliceCanvas = document.createElement('canvas')
-      sliceCanvas.width = canvas.width
-      sliceCanvas.height = sliceH
-      const ctx = sliceCanvas.getContext('2d')!
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height)
-      ctx.drawImage(canvas, 0, -yOffsetPx)
-      if (!isFirst) doc.addPage()
-      doc.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', 0, 0, imgW, (sliceH * imgW) / canvas.width)
-      yOffsetPx += pageHCanvasPx
-      isFirst = false
+    const cssToCanvas = canvas.height / container.offsetHeight
+    const bounds = blockBottoms.map(b => b * cssToCanvas).sort((a, b) => a - b)
+
+    const doc: any = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
+    const pageWpt = doc.internal.pageSize.getWidth()
+    const pageHpt = doc.internal.pageSize.getHeight()
+    const footerPt = 24
+    const usableHpt = pageHpt - footerPt
+    const pageHcanvas = (usableHpt * canvas.width) / pageWpt
+
+    let startPx = 0, first = true
+    while (startPx < canvas.height - 1) {
+      let endPx = startPx + pageHcanvas
+      if (endPx < canvas.height) {
+        // snap the cut DOWN to the last block boundary that fits this page —
+        // never bisect a row. (If a single block is taller than a page, the
+        // fixed advance still guarantees progress.)
+        const cand = bounds.filter(b => b > startPx + 12 && b <= endPx)
+        if (cand.length) endPx = cand[cand.length - 1]
+      } else {
+        endPx = canvas.height
+      }
+      const sliceH = Math.max(1, Math.round(endPx - startPx))
+      const slice = document.createElement('canvas')
+      slice.width = canvas.width
+      slice.height = sliceH
+      const ctx = slice.getContext('2d')!
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, slice.width, sliceH)
+      ctx.drawImage(canvas, 0, -startPx)
+      if (!first) doc.addPage()
+      // JPEG (q0.92) not PNG — a full-page raster as PNG is multi-MB and chokes
+      // viewers / WhatsApp; JPEG of text-on-white stays crisp at a fraction of the size.
+      doc.addImage(slice.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageWpt, (sliceH * pageWpt) / canvas.width)
+      startPx = endPx; first = false
     }
+
+    // ASCII footer (jsPDF core font has no CJK glyphs — keep it Latin/digits).
+    const asOf = opts.reportPeriod || dateStr()
+    const n = doc.getNumberOfPages()
+    for (let i = 1; i <= n; i++) {
+      doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(148, 163, 184)
+      doc.text(`CK 工程 · ${asOf}`.replace(/[^\x00-\x7f]+/g, 'CK'), 40, pageHpt - 9)
+      doc.text(`P. ${i} / ${n}`, pageWpt - 70, pageHpt - 9)
+    }
+
     const blob = doc.output('blob') as Blob
-    await shareOrDownloadBlob(blob, `${safeName(project.name)}_進度_${fileTag(opts)}.pdf`, `${project.name} 進度報告`)
+    await shareOrDownloadBlob(blob, `${safeName(project.name)}_進度_${fileTag(opts)}.pdf`, model.summary.verdict.line)
   } finally {
     container.remove()
   }
