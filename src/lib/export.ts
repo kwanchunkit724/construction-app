@@ -21,6 +21,8 @@ import type {
   VO, VOVersion, DrawingVersion,
 } from '../types'
 import { formatHKD } from './currency'
+import { fetchPrevSnapshot, captureSnapshot } from './snapshots'
+import type { PrevSnapshot } from './snapshots'
 
 async function blobToBase64(blob: Blob): Promise<string> {
   const buf = await blob.arrayBuffer()
@@ -142,30 +144,49 @@ export function exportPreset(p: 'internal' | 'owner' | 'exception', project: Pro
 
 const UNZONED = '__unzoned__'
 
-interface Eff { actual: number; planned: number; status: ProgressStatus; gap: number }
+// delta = 本期 movement (actual − previous snapshot actual); null when no baseline.
+interface Eff { actual: number; planned: number; status: ProgressStatus; gap: number; delta: number | null }
 interface ItemRow {
   zoneKey: string; zoneName: string
   code: string; title: string; level: number; depth: number
   tracking: string; eff: Eff; start: string; end: string; notes: string; updated: string
 }
-interface ZoneAgg { actual: number; planned: number; gap: number; status: ProgressStatus; count: number; behind: number }
+interface ZoneAgg { actual: number; planned: number; gap: number; status: ProgressStatus; count: number; behind: number; delta: number | null }
 interface Verdict { tone: 'ok' | 'warn' | 'bad'; line: string }
 interface ReportModel {
-  summary: { actual: number; planned: number; gap: number; total: number; behind: number; notStarted: number; counts: Record<ProgressStatus, number>; verdict: Verdict }
+  summary: { actual: number; planned: number; gap: number; total: number; behind: number; notStarted: number; delta: number | null; counts: Record<ProgressStatus, number>; verdict: Verdict }
   // zones = filtered rows for the detail appendix; allZones = every zone's
   // rollup bar for the owner one-pager (shown even if all-not-started so the
   // owner sees the whole site, not just zones with started work).
   zones: Array<{ key: string; name: string; agg: ZoneAgg; rows: ItemRow[] }>
   allZones: Array<{ key: string; name: string; agg: ZoneAgg }>
+  prevPeriod: string | null   // baseline period for 本期 Δ, null if none
   opts: ExportProgressOptions
 }
 
-export function buildReportModel(project: Project, items: ProgressItem[], opts: ExportProgressOptions): ReportModel {
+export function buildReportModel(project: Project, items: ProgressItem[], opts: ExportProgressOptions, prev?: PrevSnapshot | null): ReportModel {
   const isLeaf = (it: ProgressItem) => !items.some(i => i.parent_id === it.id)
+  const pmap = prev?.map ?? null
+  // average prev% over a leaf set that has baseline data (leaves w/o a prior
+  // snapshot are skipped so a newly-added item doesn't skew the Δ).
+  const prevAvg = (leaves: ProgressItem[]): number | null => {
+    if (!pmap) return null
+    const vals = leaves.map(l => pmap[l.id]).filter((v): v is number => v !== undefined)
+    if (vals.length === 0) return null
+    return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)
+  }
+  const aggDelta = (leaves: ProgressItem[], actual: number): number | null => {
+    const pa = prevAvg(leaves)
+    return pa === null ? null : actual - pa
+  }
   const effOf = (it: ProgressItem): Eff => {
-    if (isLeaf(it)) return { actual: it.actual_progress, planned: it.planned_progress, status: it.status, gap: it.actual_progress - it.planned_progress }
+    if (isLeaf(it)) {
+      const actual = it.actual_progress
+      const pv = pmap ? pmap[it.id] : undefined
+      return { actual, planned: it.planned_progress, status: it.status, gap: actual - it.planned_progress, delta: pv === undefined ? null : actual - pv }
+    }
     const r = computeRollup(getDescendantLeaves(items, it.id))
-    return { actual: r.actual, planned: r.planned, status: r.status, gap: r.actual - r.planned }
+    return { actual: r.actual, planned: r.planned, status: r.status, gap: r.actual - r.planned, delta: aggDelta(getDescendantLeaves(items, it.id), r.actual) }
   }
   const zoneKeyOf = (it: ProgressItem): string => {
     if (it.zone_id && project.zones.some(z => z.id === it.zone_id)) return it.zone_id
@@ -240,7 +261,7 @@ export function buildReportModel(project: Project, items: ProgressItem[], opts: 
     const zoneLeaves = scopeItems.filter(i => isLeaf(i) && zoneKeyOf(i) === key)
     const r = computeRollup(zoneLeaves)
     const behind = zoneLeaves.filter(l => (l.actual_progress - l.planned_progress) < -10).length
-    zones.push({ key, name: zoneNameOf(key), agg: { actual: r.actual, planned: r.planned, gap: r.actual - r.planned, status: r.status, count: zoneLeaves.length, behind }, rows })
+    zones.push({ key, name: zoneNameOf(key), agg: { actual: r.actual, planned: r.planned, gap: r.actual - r.planned, status: r.status, count: zoneLeaves.length, behind, delta: aggDelta(zoneLeaves, r.actual) }, rows })
   }
 
   // overall summary from all in-scope leaves.
@@ -256,18 +277,20 @@ export function buildReportModel(project: Project, items: ProgressItem[], opts: 
     if (zl.length === 0) return []
     const r = computeRollup(zl)
     const zbehind = zl.filter(l => (l.actual_progress - l.planned_progress) < -10).length
-    return [{ key, name: zoneNameOf(key), agg: { actual: r.actual, planned: r.planned, gap: r.actual - r.planned, status: r.status, count: zl.length, behind: zbehind } }]
+    return [{ key, name: zoneNameOf(key), agg: { actual: r.actual, planned: r.planned, gap: r.actual - r.planned, status: r.status, count: zl.length, behind: zbehind, delta: aggDelta(zl, r.actual) } }]
   })
 
   const sgap = sr.actual - sr.planned
+  const sdelta = aggDelta(scopeLeaves, sr.actual)
   const tone: Verdict['tone'] = behind > 0 ? 'bad' : sgap < -3 ? 'warn' : 'ok'
   const verdict: Verdict = {
     tone,
     line: `${project.name} — 整體 ${sr.actual}%，` +
       (sgap < -3 ? `落後計劃 ${-sgap}%` : sgap > 3 ? `超前 ${sgap}%` : '貼近計劃') +
+      (sdelta !== null ? `，本期 ${sdelta >= 0 ? '+' : ''}${sdelta}%` : '') +
       (behind > 0 ? `，${behind} 項要跟進` : ''),
   }
-  return { summary: { actual: sr.actual, planned: sr.planned, gap: sgap, total: scopeLeaves.length, behind, notStarted: counts['not-started'], counts, verdict }, zones, allZones, opts }
+  return { summary: { actual: sr.actual, planned: sr.planned, gap: sgap, total: scopeLeaves.length, behind, notStarted: counts['not-started'], delta: sdelta, counts, verdict }, zones, allZones, prevPeriod: prev?.period ?? null, opts }
 }
 
 // Status colours (red/amber/green) — reserved for STATUS, not level.
@@ -285,7 +308,9 @@ const fileTag = (opts: ExportProgressOptions) => opts.reportPeriod ? safeName(op
 
 // ── Excel ────────────────────────────────────────────────────
 export async function exportProgressToExcel(project: Project, items: ProgressItem[], opts: ExportProgressOptions) {
-  const model = buildReportModel(project, items, opts)
+  const period = opts.reportPeriod || dateStr()
+  const prev = await fetchPrevSnapshot(project.id, period)
+  const model = buildReportModel(project, items, opts, prev)
   const pct = (n: number) => n // numeric; format applied via cell.z
   const aoa: (string | number | null)[][] = []
   const numCells: Array<{ r: number; c: number }> = []
@@ -369,6 +394,7 @@ export async function exportProgressToExcel(project: Project, items: ProgressIte
   // Unified delivery: same share-first path as the PDF (was downloadBlob, which
   // silently hid the Excel in the Documents folder on native).
   await shareOrDownloadBlob(blob, `${safeName(project.name)}_進度_${fileTag(opts)}.xlsx`, model.summary.verdict.line)
+  await captureSnapshot(project.id, items, period)
 }
 
 // ── PDF — html2canvas (full CJK glyph support, any character) with
@@ -383,6 +409,7 @@ const toneHex = (t: Verdict['tone']) => t === 'bad' ? '#b91c1c' : t === 'warn' ?
 
 function reportHtml(project: Project, model: ReportModel, opts: ExportProgressOptions): string {
   const s = model.summary
+  const hasDelta = model.prevPeriod !== null
   const card = (label: string, val: string, colour: string) => `
     <div style="flex:1; border:1px solid #e2e8f0; border-radius:10px; padding:12px 16px;">
       <div style="font-size:12px; color:#64748b;">${escapeHtml(label)}</div>
@@ -400,7 +427,7 @@ function reportHtml(project: Project, model: ReportModel, opts: ExportProgressOp
         <div style="position:absolute; left:0; top:0; bottom:0; width:${a}%; background:${barHex}; border-radius:5px;"></div>
         <div style="position:absolute; left:${p}%; top:-3px; bottom:-3px; width:2px; background:#475569;"></div>
       </div>
-      <div style="width:172px; font-size:13px; color:#475569; text-align:right;">${z.agg.actual}% / 計劃 ${z.agg.planned}%${z.agg.behind ? `　<span style="color:#b91c1c;">⚠${z.agg.behind}</span>` : ''}</div>
+      <div style="width:200px; font-size:13px; color:#475569; text-align:right;">${z.agg.actual}% / 計劃 ${z.agg.planned}%${z.agg.delta !== null ? `　<span style="color:${z.agg.delta >= 0 ? '#15803d' : '#b91c1c'};">本期 ${z.agg.delta >= 0 ? '+' : ''}${z.agg.delta}%</span>` : ''}${z.agg.behind ? `　<span style="color:#b91c1c;">⚠${z.agg.behind}</span>` : ''}</div>
     </div>`
   }).join('')
 
@@ -429,6 +456,7 @@ function reportHtml(project: Project, model: ReportModel, opts: ExportProgressOp
       ${card('整體實際', `${s.actual}%`, '#0f172a')}
       ${card('計劃', `${s.planned}%`, '#475569')}
       ${card('差距', `${s.gap >= 0 ? '+' : ''}${s.gap}%`, s.gap < 0 ? '#b91c1c' : '#15803d')}
+      ${s.delta !== null ? card(`本期${model.prevPeriod ? `（vs ${escapeHtml(model.prevPeriod)}）` : ''}`, `${s.delta >= 0 ? '+' : ''}${s.delta}%`, s.delta >= 0 ? '#15803d' : '#b91c1c') : ''}
     </div>
     <div class="pgblk" style="font-size:15px; font-weight:700; color:#0f172a; margin:6px 0 4px;">各分區進度</div>
     ${zoneBars}
@@ -448,6 +476,7 @@ function reportHtml(project: Project, model: ReportModel, opts: ExportProgressOp
           <td style="padding:5px 6px; text-align:right; font-weight:700;">${r.eff.actual}%</td>
           <td style="padding:5px 6px; text-align:right; color:#64748b;">${r.eff.planned}%</td>
           <td style="padding:5px 6px; text-align:right; font-weight:700; color:${gapColour(r.eff.gap)};">${r.eff.gap >= 0 ? '+' : ''}${r.eff.gap}%</td>
+          ${hasDelta ? `<td style="padding:5px 6px; text-align:right; font-weight:700; color:${r.eff.delta === null ? '#cbd5e1' : r.eff.delta >= 0 ? '#15803d' : '#b91c1c'};">${r.eff.delta === null ? '—' : `${r.eff.delta >= 0 ? '+' : ''}${r.eff.delta}%`}</td>` : ''}
           <td style="padding:5px 6px; text-align:center;"><span style="background:${sp.bg}; color:${sp.fg}; padding:2px 7px; border-radius:7px; font-size:11px;">${escapeHtml(sp.mark + PROGRESS_STATUS_ZH[r.eff.status])}</span></td>
           <td style="padding:5px 6px; color:#475569; font-size:12px;">${escapeHtml(r.notes ?? '')}</td>
           <td style="padding:5px 6px; color:#64748b; font-size:12px;">${escapeHtml(r.end ?? '')}</td>
@@ -457,7 +486,7 @@ function reportHtml(project: Project, model: ReportModel, opts: ExportProgressOp
         <div class="pgblk" style="margin-top:22px; font-size:15px; font-weight:700; color:#0f172a;">${escapeHtml(z.name)} — 詳細 <span style="font-weight:500; font-size:13px; color:#64748b;">整體 ${z.agg.actual}%（計劃 ${z.agg.planned}%）· ${z.agg.count} 項</span></div>
         <table style="width:100%; border-collapse:collapse; font-size:12px; margin-top:6px;">
           <thead><tr class="pgblk" style="background:#f97316; color:#fff; text-align:left;">
-            <th style="padding:6px;">編號</th><th style="padding:6px;">名稱</th><th style="padding:6px; text-align:right;">實際</th><th style="padding:6px; text-align:right;">計劃</th><th style="padding:6px; text-align:right;">差距</th><th style="padding:6px; text-align:center;">狀態</th><th style="padding:6px;">說明</th><th style="padding:6px;">計劃完成</th>
+            <th style="padding:6px;">編號</th><th style="padding:6px;">名稱</th><th style="padding:6px; text-align:right;">實際</th><th style="padding:6px; text-align:right;">計劃</th><th style="padding:6px; text-align:right;">差距</th>${hasDelta ? '<th style="padding:6px; text-align:right;">本期</th>' : ''}<th style="padding:6px; text-align:center;">狀態</th><th style="padding:6px;">說明</th><th style="padding:6px;">計劃完成</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>`
@@ -468,7 +497,10 @@ function reportHtml(project: Project, model: ReportModel, opts: ExportProgressOp
 }
 
 export async function exportProgressToPDF(project: Project, items: ProgressItem[], opts: ExportProgressOptions) {
-  const model = buildReportModel(project, items, opts)
+  // 本期 Δ baseline = latest prior snapshot; archive this run after generating.
+  const period = opts.reportPeriod || dateStr()
+  const prev = await fetchPrevSnapshot(project.id, period)
+  const model = buildReportModel(project, items, opts, prev)
   const html2canvas = (await import('html2canvas')).default
 
   const W = 794 // A4 portrait @ ~96dpi
@@ -534,6 +566,7 @@ export async function exportProgressToPDF(project: Project, items: ProgressItem[
 
     const blob = doc.output('blob') as Blob
     await shareOrDownloadBlob(blob, `${safeName(project.name)}_進度_${fileTag(opts)}.pdf`, model.summary.verdict.line)
+    await captureSnapshot(project.id, items, period)
   } finally {
     container.remove()
   }
