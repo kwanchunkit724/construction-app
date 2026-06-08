@@ -222,11 +222,11 @@ function Screenshots() {
     { img: '/marketing/shot-si.png', icon: <FileText size={16} />, t: '工地指令版本鎖死，改過咩一目了然', d: 'SI 工地指令逐版簽核 + 版本對比，睇返每次改咗咩、邊個簽。指令鎖定後一鍵轉做變更指令，出爭拗憑紀錄講數，唔使翻舊 WhatsApp。' },
     { img: '/marketing/shot-vo.png', icon: <FileCheck2 size={16} />, t: '變更指令金額，系統幫你計到一蚊都唔差', d: 'VO 逐項填數量、單價、類別，總額由系統核算（HKD），唔靠人手 Excel 加數。批核完一鍵出 PDF，連圖則參照同簽核時間線，直接畀業主對數。' },
     { img: '/marketing/shot-ptw.png', icon: <ShieldCheck size={16} />, t: '動火高空吊運，安全主任電子簽核', d: 'PTW 工作許可證涵蓋動火、高空、吊運等高風險工序，附安全核對清單同工人名單，由安全主任逐步簽。動火仲有 30 分鐘火警監察計時，生效期間出 QR 碼俾人巡查掃描。' },
+    { img: '/marketing/shot-timetable.png', icon: <CalendarDays size={16} />, t: '到貨、完工、會議，一個行事曆睇晒', d: '行事曆自動 merge 三樣嘢落同一條時間線：物料到貨、進度完工、會議檢查。邊日有咩死線一覽無遺，唔使再開幾個表去對。' },
+    { img: '/marketing/shot-daily.png', icon: <BookOpen size={16} />, t: '每日工地日誌，過咗今日就鎖死', d: '管工每日揀天氣、剔返今日做咗嘅進度項目、寫低備註同出勤。按香港時間鎖定，尋日嘅改唔到 —— 落雨停工、待料全部留底，做你 EOT／索償嘅 contemporaneous 證據。' },
   ]
   const more = [
-    { icon: <ImageIcon size={14} />, t: '圖則版本管理' },
-    { icon: <CalendarDays size={14} />, t: '統一行事曆' },
-    { icon: <BookOpen size={14} />, t: '每日工地日誌' },
+    { icon: <ImageIcon size={14} />, t: '圖則版本管理（掛喺每個工序，逐版追蹤）' },
   ]
   return (
     <Section n="09" kicker="睇真啲 · 同一個地盤" title={<>一個 demo 地盤，<span className="text-safety-500">由開工睇到完工</span></>}>
