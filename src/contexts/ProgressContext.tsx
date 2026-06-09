@@ -65,13 +65,13 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     if (profile.global_role === 'admin') return true
     const project = projects.find(p => p.id === projectId)
     if (project?.assigned_pm_ids.includes(profile.id)) return true
-    if (profile.global_role === 'pm' || profile.global_role === 'general_foreman') {
-      const myMembership = memberships.find(
-        m => m.user_id === profile.id && m.project_id === projectId && m.status === 'approved',
-      )
-      if (myMembership) return true
-    }
-    return false
+    // Per-project MEMBERSHIP role governs structural edit rights — mirrors the
+    // server can_manage_project_progress (v27), NOT the global account role.
+    // (A project's PM by membership may have a different global_role.)
+    const myMembership = memberships.find(
+      m => m.user_id === profile.id && m.project_id === projectId && m.status === 'approved',
+    )
+    return !!myMembership && ['pm', 'general_foreman', 'main_contractor'].includes(myMembership.role)
   })()
 
   // Per-row update gate. Supervisor passes through; contributors only

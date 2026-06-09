@@ -246,7 +246,7 @@ function EditRoleModal({
 
       <label className="label">全域角色</label>
       <div className="grid grid-cols-1 gap-2 mb-4">
-        {(['admin', 'pm', 'main_contractor', 'subcontractor', 'subcontractor_worker', 'owner'] as GlobalRole[]).map(r => (
+        {(['admin', 'pm', 'general_foreman', 'main_contractor', 'safety_officer', 'subcontractor', 'subcontractor_worker', 'owner'] as GlobalRole[]).map(r => (
           <button
             key={r}
             type="button"
