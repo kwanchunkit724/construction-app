@@ -2,6 +2,7 @@ import {
   LogIn, UserPlus, ClipboardCheck, Building2, ListChecks, CalendarClock,
   FileDown, AlertTriangle, ArrowUp, CheckCircle2, ClipboardList, FileText,
   Package, Calendar, Contact, UserCog, LayoutDashboard, Bell, WifiOff,
+  Rocket, UserX, GitBranch,
   HelpCircle, Eye, Users, Footprints, Lightbulb,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -12,6 +13,7 @@ const ICONS: Record<string, LucideIcon> = {
   LogIn, UserPlus, ClipboardCheck, Building2, ListChecks, CalendarClock,
   FileDown, AlertTriangle, ArrowUp, CheckCircle2, ClipboardList, FileText,
   Package, Calendar, Contact, UserCog, LayoutDashboard, Bell, WifiOff,
+  Rocket, UserX, GitBranch,
 }
 export function tutorialIcon(name: string): LucideIcon {
   return ICONS[name] ?? HelpCircle
