@@ -158,7 +158,7 @@ export function VoList({ sis, onOpen, onNew }: VoListProps) {
             <VoCard
               key={vo.id}
               vo={vo}
-              parentSiNumber={siById[vo.si_id]?.number}
+              parentSiNumber={vo.si_id ? siById[vo.si_id]?.number : undefined}
               onTap={onOpen}
             />
           ))}

@@ -486,7 +486,7 @@ export interface VoPayload {
 
 export interface VO {
   id: string
-  si_id: string
+  si_id: string | null
   project_id: string
   number: string
   current_version_id: string | null

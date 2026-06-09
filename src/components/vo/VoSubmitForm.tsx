@@ -9,7 +9,7 @@ const MAX_DESC = 4000
 
 export interface VoSubmitFormProps {
   projectId: string
-  parentSi: SI
+  parentSi?: SI
   progressItems?: ProgressItem[]
   onSubmitted: (voId: string, total: number) => void
   onCancel: () => void
@@ -34,7 +34,7 @@ export function VoSubmitForm({ projectId: _projectId, parentSi, progressItems, o
     setSubmitting(true)
     setError(null)
     try {
-      const { id: voId, error: e1 } = await createDraftVo(parentSi.id)
+      const { id: voId, error: e1 } = await createDraftVo(parentSi?.id ?? null)
       if (e1 || !voId) {
         setError(e1 ?? '建立草稿失敗')
         return
@@ -87,9 +87,11 @@ export function VoSubmitForm({ projectId: _projectId, parentSi, progressItems, o
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-site-100 bg-white rounded-t-2xl">
           <div>
-            <h3 className="font-bold text-site-900">提出變更指令</h3>
+            <h3 className="font-bold text-site-900">新增變更指令（變更工程估價）</h3>
             <p className="text-[11px] text-site-500 mt-0.5">
-              源於 工地指令 <span className="font-mono">{parentSi.number}</span>
+              {parentSi
+                ? <>引用工地指令 <span className="font-mono">{parentSi.number}</span></>
+                : '獨立變更（不引用工地指令）'}
             </p>
           </div>
           <button

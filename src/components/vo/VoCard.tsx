@@ -76,7 +76,7 @@ export function VoCard({ vo, parentSiNumber, creatorName, onTap }: VoCardProps) 
           </div>
           <div className="flex items-center gap-2 mt-1 flex-wrap text-[11px] text-site-500">
             {parentSiNumber && (
-              <span>源於 <span className="font-mono">{parentSiNumber}</span></span>
+              <span>引用 SI <span className="font-mono">{parentSiNumber}</span></span>
             )}
             {creatorName && <span>· 由 {creatorName} 提出</span>}
           </div>

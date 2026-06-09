@@ -12,7 +12,7 @@ interface VoContextValue {
   fetchError: string | null
   canSubmit: boolean
 
-  createDraftVo: (siId: string) => Promise<{ id: string | null; error: string | null }>
+  createDraftVo: (siId: string | null) => Promise<{ id: string | null; error: string | null }>
   saveVersion: (voId: string, payload: VoPayload) => Promise<{ versionNo: number | null; error: string | null }>
   submitVo: (voId: string) => Promise<{ error: string | null }>
   approve: (voId: string, edits?: VoPayload) => Promise<{ error: string | null }>
@@ -90,24 +90,22 @@ export function VoProvider({ projectId, children }: { projectId: string; childre
     return () => { onChange.cancel(); supabase.removeChannel(ch) }
   }, [projectId, refetch])
 
-  const createDraftVo = useCallback(async (siId: string) => {
+  // A VO is a priced variation to the contract. It MAY cite a locked SI, but
+  // can also stand alone (CVI / drawing revision / deemed variation). Many VOs
+  // per SI are allowed (server enforces via v28 RLS).
+  const createDraftVo = useCallback(async (siId: string | null) => {
     if (!profile) return { id: null, error: '未登入' }
-    // Client-side guards (server is authoritative via submit_vo + UNIQUE constraint).
-    const { data: parent, error: parentErr } = await supabase
-      .from('site_instructions')
-      .select('id, status, project_id')
-      .eq('id', siId)
-      .single()
-    if (parentErr || !parent) return { id: null, error: '找不到對應的工地指令' }
-    if (parent.status !== 'locked') return { id: null, error: '只可基於已鎖定的工地指令提出變更指令' }
-    if (parent.project_id !== projectId) return { id: null, error: '工地指令不屬於此項目' }
-
-    const { data: existing } = await supabase
-      .from('variation_orders')
-      .select('id')
-      .eq('si_id', siId)
-      .maybeSingle()
-    if (existing) return { id: null, error: '此工地指令已有變更指令' }
+    // Only validate the cited SI when one is provided.
+    if (siId) {
+      const { data: parent, error: parentErr } = await supabase
+        .from('site_instructions')
+        .select('id, status, project_id')
+        .eq('id', siId)
+        .single()
+      if (parentErr || !parent) return { id: null, error: '找不到所引用的工地指令' }
+      if (parent.status !== 'locked') return { id: null, error: '只可引用已鎖定的工地指令' }
+      if (parent.project_id !== projectId) return { id: null, error: '工地指令不屬於此項目' }
+    }
 
     const { data: numData, error: numErr } = await supabase.rpc('next_vo_number', { p_project_id: projectId })
     if (numErr) return { id: null, error: numErr.message }

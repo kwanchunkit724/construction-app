@@ -90,31 +90,27 @@ function VoDetailInner({ projectId, voId }: { projectId: string; voId: string })
   )
 
   async function handleExport() {
-    if (!vo || !current || !project || !parentSi) return
+    if (!vo || !current || !project) return
     setExporting(true)
     setExportError(null)
     try {
-      // Resolve drawing versions referenced by the parent SI.
-      const drawingVersionIds = parentSi
-        ? (versions[0]?.payload && []) || []
-        : []
-      void drawingVersionIds
-      // Fetch the SI's current version to read drawing_version_ids.
-      const { data: siVerRows } = await supabase
-        .from('si_versions')
-        .select('*')
-        .eq('si_id', parentSi.id)
-        .order('version_no', { ascending: false })
-        .limit(1)
-      const siDrawingIds: string[] = siVerRows?.[0]?.payload?.drawing_version_ids ?? []
-
+      // Resolve drawing versions referenced by the cited SI (if any).
       let drawings: DrawingVersion[] = []
-      if (siDrawingIds.length > 0) {
-        const { data: drwRows } = await supabase
-          .from('drawing_versions')
+      if (parentSi) {
+        const { data: siVerRows } = await supabase
+          .from('si_versions')
           .select('*')
-          .in('id', siDrawingIds)
-        drawings = (drwRows ?? []) as DrawingVersion[]
+          .eq('si_id', parentSi.id)
+          .order('version_no', { ascending: false })
+          .limit(1)
+        const siDrawingIds: string[] = siVerRows?.[0]?.payload?.drawing_version_ids ?? []
+        if (siDrawingIds.length > 0) {
+          const { data: drwRows } = await supabase
+            .from('drawing_versions')
+            .select('*')
+            .in('id', siDrawingIds)
+          drawings = (drwRows ?? []) as DrawingVersion[]
+        }
       }
 
       // Lazy import so jspdf + Noto Sans HK stay in lazy chunks.
@@ -179,7 +175,7 @@ function VoDetailInner({ projectId, voId }: { projectId: string; voId: string })
         </div>
         {parentSi && (
           <p className="text-xs text-site-500 mt-1">
-            源於 工地指令 <span className="font-mono">{parentSi.number}</span>
+            引用工地指令 <span className="font-mono">{parentSi.number}</span>
           </p>
         )}
 

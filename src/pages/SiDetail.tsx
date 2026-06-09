@@ -172,10 +172,11 @@ function SiDetailInner({ projectId, siId }: { projectId: string; siId: string })
           )}
         </div>
 
-        {/* VO entry point — only when SI is locked */}
+        {/* VO entry — a VO is a priced variation that CITES this locked SI
+            (not an edit of it); many VOs may cite the same SI. */}
         {si.status === 'locked' && (
-          <div className="mt-3">
-            {existingVo ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {existingVo && (
               <button
                 type="button"
                 onClick={() => navigate(`/project/${projectId}/vo/${existingVo.id}`)}
@@ -183,15 +184,16 @@ function SiDetailInner({ projectId, siId }: { projectId: string; siId: string })
               >
                 已有變更指令 <span className="font-mono">{existingVo.number}</span> →
               </button>
-            ) : canSubmitVO ? (
+            )}
+            {canSubmitVO && (
               <button
                 type="button"
                 onClick={() => setVoFormOpen(true)}
                 className="btn-primary inline-flex items-center gap-1"
               >
-                提出變更指令
+                就此工地指令提出變更指令
               </button>
-            ) : null}
+            )}
           </div>
         )}
       </div>

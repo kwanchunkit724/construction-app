@@ -21,11 +21,12 @@ function VoListInner({ projectId }: { projectId: string }) {
   const { items: progressItems } = useProgress()
   const { vos } = useVo()
   const [picking, setPicking] = useState(false)
+  const [formOpen, setFormOpen] = useState(false)
   const [parentSiId, setParentSiId] = useState<string | null>(null)
   const [confirmation, setConfirmation] = useState<PostSubmitInfo | null>(null)
 
+  // A VO can stand alone or cite ANY locked SI (many VOs per SI are allowed).
   const lockedSis = sis.filter(s => s.status === 'locked')
-  const siWithoutVo = lockedSis.filter(s => !vos.some(v => v.si_id === s.id))
   const parentSi = parentSiId ? sis.find(s => s.id === parentSiId) ?? null : null
 
   return (
@@ -36,7 +37,7 @@ function VoListInner({ projectId }: { projectId: string }) {
         onNew={() => setPicking(true)}
       />
 
-      {/* Parent-SI picker: VO must reference a locked SI without an existing VO. */}
+      {/* New-VO picker: stand alone, or cite a locked SI (optional). */}
       {picking && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center sm:p-4">
           <div
@@ -44,31 +45,35 @@ function VoListInner({ projectId }: { projectId: string }) {
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
             <div className="px-5 py-3 border-b border-site-100">
-              <h3 className="font-bold text-site-900">選擇來源工地指令</h3>
+              <h3 className="font-bold text-site-900">新增變更指令</h3>
               <p className="text-[11px] text-site-500 mt-0.5">
-                只可基於 <strong>已鎖定</strong> 而 <strong>未有變更指令</strong> 的工地指令提出。
+                變更指令係對合約的<strong>變更估價</strong>，可獨立提出，亦可引用一張已鎖定的工地指令。
               </p>
             </div>
             <div className="overflow-y-auto flex-1 p-3 space-y-1">
-              {siWithoutVo.length === 0 ? (
-                <p className="text-sm text-site-500 text-center py-6">
-                  目前未有符合條件的工地指令
-                </p>
-              ) : (
-                siWithoutVo.map(s => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => {
-                      setParentSiId(s.id)
-                      setPicking(false)
-                    }}
-                    className="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-site-50 flex items-center gap-2"
-                  >
-                    <span className="font-mono text-xs text-site-500">{s.number}</span>
-                  </button>
-                ))
+              <button
+                type="button"
+                onClick={() => { setParentSiId(null); setPicking(false); setFormOpen(true) }}
+                className="w-full text-left text-sm px-3 py-2.5 rounded-lg bg-safety-50 hover:bg-safety-100 text-safety-700 font-semibold"
+              >
+                ＋ 獨立變更指令（不引用工地指令）
+              </button>
+              {lockedSis.length > 0 && (
+                <p className="text-[11px] text-site-400 px-1 pt-2">或引用一張已鎖定工地指令：</p>
               )}
+              {lockedSis.map(s => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => { setParentSiId(s.id); setPicking(false); setFormOpen(true) }}
+                  className="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-site-50 flex items-center gap-2"
+                >
+                  <span className="font-mono text-xs text-site-500">{s.number}</span>
+                  {vos.some(v => v.si_id === s.id) && (
+                    <span className="text-[10px] text-site-400">· 已有變更指令</span>
+                  )}
+                </button>
+              ))}
             </div>
             <div className="px-5 py-3 border-t border-site-100">
               <button
@@ -83,10 +88,10 @@ function VoListInner({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      {parentSi && (
+      {formOpen && (
         <VoSubmitForm
           projectId={projectId}
-          parentSi={parentSi}
+          parentSi={parentSi ?? undefined}
           progressItems={progressItems}
           onSubmitted={(voId, serverTotal) => {
             const fresh = vos.find(v => v.id === voId)
@@ -95,9 +100,10 @@ function VoListInner({ projectId }: { projectId: string }) {
               serverTotal,
               voNumber: fresh?.number ?? '',
             })
+            setFormOpen(false)
             setParentSiId(null)
           }}
-          onCancel={() => setParentSiId(null)}
+          onCancel={() => { setFormOpen(false); setParentSiId(null) }}
         />
       )}
 
