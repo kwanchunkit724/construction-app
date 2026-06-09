@@ -27,7 +27,7 @@
 <body>
 
 <h1>私隱政策</h1>
-<p class="meta">最後更新：2026 年 5 月 3 日</p>
+<p class="meta">最後更新：2026 年 6 月 9 日</p>
 
 <p>
   關春傑工程有限公司（下稱「我們」）開發並營運「建築工程管理」流動應用程式（下稱「本 App」）。
@@ -39,31 +39,43 @@
 <h3>1.1 你直接提供嘅資料</h3>
 <ul>
   <li><strong>帳號資料</strong>：手機號碼（用作帳號識別碼）、姓名、所屬公司、職位／角色、密碼（加密儲存）。</li>
-  <li><strong>工地操作資料</strong>：你建立或更新嘅工地項目、進度、樓層完成情況、備注。</li>
+  <li><strong>工地操作資料</strong>：你建立或更新嘅工地項目、進度、樓層完成情況、備注、每日日誌、物料申請、行事曆事件。</li>
   <li><strong>問題報告</strong>：問題標題、描述、現場照片、留言。</li>
+  <li><strong>工地文件</strong>：你上載或建立嘅圖則（PDF／圖片）、工地指令（SI）、變更指令（VO，含 HKD 報價金額）、工作許可證（PTW）及相關照片、檔案與描述。</li>
+  <li><strong>相片及檔案</strong>：你喺問題、圖則、工地指令、許可證、每日日誌等功能主動拍攝或選擇上載嘅相片及文件。</li>
+  <li><strong>位置資料</strong>：當你<strong>主動</strong>為某張工地指令（SI）加上現場位置時，我們會記錄當時嘅 GPS 座標（經緯度及精確度），用以標示該指令發出嘅地點。唔加位置就唔會收集。</li>
+  <li><strong>錄音</strong>：當你喺工地指令<strong>主動</strong>錄製語音備忘時，我們會儲存該段錄音。</li>
+  <li><strong>電子簽名</strong>：當你喺工作許可證（PTW）或審批流程簽核時，我們會儲存你嘅手寫電子簽名圖像。</li>
+  <li><strong>項目通訊錄</strong>：你喺「聯絡人」功能<strong>手動輸入</strong>嘅工地聯絡人姓名、工種、電話。此為你自行輸入嘅資料，我們<u>不會</u>讀取你手機本身嘅通訊錄。</li>
   <li><strong>申請紀錄</strong>：你申請加入工地嘅角色、批准／拒絕嘅紀錄、時間戳記。</li>
 </ul>
 
 <h3>1.2 自動收集嘅資料</h3>
 <ul>
   <li><strong>裝置識別碼</strong>：用於推送通知（透過 Apple Push Notification service）。</li>
-  <li><strong>使用紀錄</strong>：登入時間、操作時間戳記，用作紀錄追溯。</li>
+  <li><strong>使用紀錄</strong>：登入時間、操作時間戳記，用作紀錄追溯及審計。</li>
 </ul>
 
 <h3>1.3 我們<u>不</u>收集嘅</h3>
 <ul>
-  <li>位置資料（GPS）</li>
-  <li>聯絡人</li>
+  <li>你手機本身嘅通訊錄（裝置聯絡人）</li>
   <li>瀏覽紀錄</li>
-  <li>除問題報告以外嘅相片或檔案</li>
+  <li>背景或持續嘅位置追蹤（位置只在你主動標示工地指令地點嗰一刻收集）</li>
   <li>付款／信用卡資料</li>
+  <li>第三方廣告或追蹤識別碼</li>
 </ul>
 
-<h2>2. 相機 / 相簿 權限</h2>
+<h2>2. 相機、相簿、麥克風、位置 權限</h2>
 <p>
-  本 App 喺報告問題時可能需要使用相機（拍攝現場狀況）或讀取相簿（選擇現有相片）。
-  我們<strong>只在你主動報告問題時</strong>才會調用相機／相簿，並只上傳你選擇嘅相片。
-  你可以隨時喺 iOS 設定 → 通知／相機／相片 中關閉相關權限。
+  本 App 喺以下情況可能要求使用相機、相簿、麥克風或位置權限，<strong>全部只在你主動使用相關功能時</strong>先會調用：
+</p>
+<ul>
+  <li><strong>相機／相簿</strong>：報告問題、上載圖則、工地指令、工作許可證、每日日誌時，拍攝或選擇相片及文件。我們只上傳你主動選擇嘅內容。</li>
+  <li><strong>麥克風</strong>：喺工地指令錄製語音備忘時。</li>
+  <li><strong>位置</strong>：喺你選擇為工地指令標示現場位置時，讀取一次當時嘅 GPS 座標；本 App 唔會喺背景持續追蹤你嘅位置。</li>
+</ul>
+<p>
+  你可以隨時喺 iOS 設定 → 私隱與安全性（相機／相片／麥克風／定位服務）或通知中，關閉個別權限。
 </p>
 
 <h2>3. 推送通知</h2>
@@ -74,6 +86,7 @@
   <li>新問題報告（給對應處理層人員）</li>
   <li>問題上呈（給下一層處理人員）</li>
   <li>問題已解決（給報告者）</li>
+  <li>工地指令、變更指令、工作許可證嘅簽核及狀態更新</li>
   <li>工地申請通過或拒絕（給申請者）</li>
   <li>被指派為 PM 或負責人</li>
 </ul>
@@ -87,12 +100,12 @@
 <ul>
   <li>
     <strong>Supabase</strong>（資料庫 + 檔案儲存）
-    — 服務器位於美國／歐洲。所有資料以 HTTPS 加密傳輸，密碼以 bcrypt 雜湊儲存。
+    — 所有資料以 HTTPS 加密傳輸，密碼以 bcrypt 雜湊儲存，相片、圖則、錄音、簽名等檔案儲存於受權限保護嘅儲存空間。
     隱私政策：<a href="https://supabase.com/privacy">https://supabase.com/privacy</a>
   </li>
   <li>
     <strong>OneSignal</strong>（推送通知路由）
-    — 接收用戶 ID 用作識別發送目標，<u>不</u>接收個人資料、相片或工地內容。
+    — 接收用戶 ID 用作識別發送目標，<u>不</u>接收個人資料、相片、位置、錄音或工地內容。
     隱私政策：<a href="https://onesignal.com/privacy_policy">https://onesignal.com/privacy_policy</a>
   </li>
   <li>
@@ -104,8 +117,8 @@
 <h2>5. 資料保留與刪除</h2>
 <ul>
   <li>帳號資料：保留至帳號被刪除為止。</li>
-  <li>工地相關資料（進度、問題、相片）：保留作工程紀錄用途，與工地壽命相符。</li>
-  <li>用戶可隨時聯絡我們要求刪除帳號及相關資料（見第 8 節聯絡方法）。</li>
+  <li>工地相關資料（進度、問題、圖則、指令、許可證、相片、錄音、簽名等）：保留作工程紀錄及審計用途，與工地壽命相符。</li>
+  <li>用戶可隨時喺 App 內（「個人」頁）刪除帳號，或聯絡我們要求刪除帳號及相關資料（見第 10 節）。</li>
   <li>系統日誌：保留 90 日後自動刪除。</li>
 </ul>
 
@@ -115,7 +128,7 @@
   我們僅在以下情況下分享資料：
 </p>
 <ul>
-  <li>同一工地內嘅成員可以見到該工地嘅進度、問題、申請紀錄（基於角色權限）。</li>
+  <li>同一工地內嘅成員可以見到該工地嘅進度、問題、文件、申請紀錄（基於角色權限）。</li>
   <li>系統管理員（Admin）可以見到所有用戶帳號資料（用於管理）。</li>
   <li>法律或政府部門合法要求時。</li>
 </ul>
@@ -125,7 +138,7 @@
   <li>所有 API 通訊使用 HTTPS / TLS 加密。</li>
   <li>密碼使用 bcrypt 雜湊儲存，<strong>絕不</strong>明文儲存。</li>
   <li>資料庫使用 Row-Level Security（行級安全）防止越權存取。</li>
-  <li>相片以隨機路徑儲存，需透過已驗證身份方可存取。</li>
+  <li>相片、圖則、錄音及簽名以受權限保護嘅路徑儲存，需透過已驗證身份方可存取。</li>
 </ul>
 
 <h2>8. 兒童隱私</h2>
@@ -139,7 +152,7 @@
   <li>查閱我們儲存嘅關於你嘅資料</li>
   <li>修改不正確嘅資料</li>
   <li>要求刪除你嘅帳號及資料</li>
-  <li>撤回對推送通知或相機／相簿嘅授權</li>
+  <li>撤回對推送通知、相機、相簿、麥克風或位置嘅授權</li>
 </ul>
 <p>請聯絡我們（見第 10 節）行使上述權利。</p>
 
@@ -159,7 +172,7 @@
 <hr />
 
 <h1 style="margin-top: 3rem;">Privacy Policy (English)</h1>
-<p class="meta">Last updated: 3 May 2026</p>
+<p class="meta">Last updated: 9 June 2026</p>
 
 <p>
   Kwan Chun Kit Construction Ltd. ("we", "us") develops and operates the "Construction Management"
@@ -172,8 +185,14 @@
 <h3>1.1 Information You Provide</h3>
 <ul>
   <li><strong>Account data</strong>: phone number (used as account identifier), name, company, role, password (stored encrypted).</li>
-  <li><strong>Project operation data</strong>: project items, progress updates, floor completion, notes.</li>
+  <li><strong>Project operation data</strong>: project items, progress updates, floor completion, notes, daily logs, material requests, calendar events.</li>
   <li><strong>Issue reports</strong>: issue title, description, on-site photos, comments.</li>
+  <li><strong>Site documents</strong>: drawings you upload (PDF/image), Site Instructions (SI), Variation Orders (VO, including HKD quotation amounts), Permits to Work (PTW), and their related photos, files and descriptions.</li>
+  <li><strong>Photos and files</strong>: photos and documents you actively capture or choose to upload across issues, drawings, site instructions, permits, daily logs and other features.</li>
+  <li><strong>Location data</strong>: when you <strong>choose</strong> to tag a Site Instruction (SI) with its on-site location, we record the GPS coordinates (latitude, longitude and accuracy) at that moment to mark where the instruction was issued. No location is collected unless you add one.</li>
+  <li><strong>Audio recordings</strong>: when you <strong>choose</strong> to record a voice memo on a Site Instruction, we store that recording.</li>
+  <li><strong>Electronic signatures</strong>: when you sign off a Permit to Work (PTW) or an approval step, we store the handwritten electronic signature image.</li>
+  <li><strong>Project contacts</strong>: names, trades and phone numbers you <strong>manually enter</strong> in the Contacts feature for the project. This is data you type in yourself; we do <u>not</u> read your phone's own address book.</li>
   <li><strong>Application records</strong>: roles applied for, approval/rejection records, timestamps.</li>
 </ul>
 
@@ -185,18 +204,26 @@
 
 <h3>1.3 We Do <u>Not</u> Collect</h3>
 <ul>
-  <li>GPS / location data</li>
-  <li>Contacts</li>
+  <li>Your phone's own address book (device contacts)</li>
   <li>Browsing history</li>
-  <li>Photos or files outside of issue reporting</li>
+  <li>Background or continuous location tracking (location is captured only at the moment you choose to tag a Site Instruction's location)</li>
   <li>Payment / credit card data</li>
+  <li>Third-party advertising or tracking identifiers</li>
 </ul>
 
-<h2>2. Camera / Photo Library Permissions</h2>
+<h2>2. Camera, Photos, Microphone &amp; Location Permissions</h2>
 <p>
-  The App may request camera or photo library access only when you actively choose to attach photos
-  to an issue report. We only upload photos you explicitly select. You can revoke these permissions
-  at any time in iOS Settings → Notifications / Camera / Photos.
+  The App may request camera, photo library, microphone or location access, in every case <strong>only when you
+  actively use the relevant feature</strong>:
+</p>
+<ul>
+  <li><strong>Camera / Photos</strong>: to capture or attach photos and documents when reporting issues, uploading drawings, or working on Site Instructions, Permits to Work and daily logs. We only upload what you actively select.</li>
+  <li><strong>Microphone</strong>: to record a voice memo on a Site Instruction.</li>
+  <li><strong>Location</strong>: read once, at the moment you choose to tag a Site Instruction's on-site location; the App does not track your location in the background.</li>
+</ul>
+<p>
+  You can revoke any of these permissions at any time in iOS Settings → Privacy &amp; Security
+  (Camera / Photos / Microphone / Location Services) or Notifications.
 </p>
 
 <h2>3. Push Notifications</h2>
@@ -205,6 +232,7 @@
   <li>New issue reported (to handler-level personnel)</li>
   <li>Issue escalated (to next-level handler)</li>
   <li>Issue resolved (to reporter)</li>
+  <li>Site Instruction / Variation Order / Permit to Work sign-off and status updates</li>
   <li>Project membership approved or rejected (to applicant)</li>
   <li>You were assigned as PM or task owner</li>
 </ul>
@@ -218,13 +246,14 @@
 <ul>
   <li>
     <strong>Supabase</strong> (database + file storage)
-    — servers in US / EU. All data transmitted over HTTPS; passwords stored as bcrypt hashes.
+    — all data transmitted over HTTPS; passwords stored as bcrypt hashes; photos, drawings, audio and
+    signatures stored in permission-protected storage.
     <a href="https://supabase.com/privacy">https://supabase.com/privacy</a>
   </li>
   <li>
     <strong>OneSignal</strong> (push notification routing)
     — receives only user identifiers for delivery targeting; does <u>not</u> receive personal data,
-    photos, or project content.
+    photos, location, audio, or project content.
     <a href="https://onesignal.com/privacy_policy">https://onesignal.com/privacy_policy</a>
   </li>
   <li>
@@ -236,8 +265,8 @@
 <h2>5. Data Retention and Deletion</h2>
 <ul>
   <li>Account data: retained until account deletion.</li>
-  <li>Project data (progress, issues, photos): retained for the duration of the project as construction records.</li>
-  <li>You may contact us at any time to request deletion of your account and associated data.</li>
+  <li>Project data (progress, issues, drawings, instructions, permits, photos, audio, signatures): retained for the duration of the project as construction records and for audit.</li>
+  <li>You may delete your account in-app (Profile page) at any time, or contact us to request deletion of your account and associated data (see section 10).</li>
   <li>System logs: automatically deleted after 90 days.</li>
 </ul>
 
@@ -247,7 +276,7 @@
   We share data only when:
 </p>
 <ul>
-  <li>Members of the same project can see project progress, issues, and applications (per role-based permissions).</li>
+  <li>Members of the same project can see project progress, issues, documents, and applications (per role-based permissions).</li>
   <li>System administrators can see all user account data for management purposes.</li>
   <li>Required by law or government authority.</li>
 </ul>
@@ -257,7 +286,7 @@
   <li>All API traffic uses HTTPS / TLS.</li>
   <li>Passwords are bcrypt-hashed — never stored in plaintext.</li>
   <li>Database uses Row-Level Security to prevent unauthorized access.</li>
-  <li>Photos stored at randomised paths; access requires authenticated session.</li>
+  <li>Photos, drawings, audio and signatures are stored at permission-protected paths; access requires an authenticated session.</li>
 </ul>
 
 <h2>8. Children's Privacy</h2>
@@ -272,7 +301,7 @@
   <li>Access the data we hold about you</li>
   <li>Correct inaccurate data</li>
   <li>Request deletion of your account and data</li>
-  <li>Withdraw consent for push notifications, camera, or photo library access</li>
+  <li>Withdraw consent for push notifications, camera, photos, microphone, or location access</li>
 </ul>
 
 <h2>10. Contact</h2>
