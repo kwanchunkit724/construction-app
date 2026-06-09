@@ -198,16 +198,22 @@ export interface Rollup {
   planned: number
   status: ProgressStatus
   leafCount: number
+  scheduledCount: number
 }
 
 export function computeRollup(leaves: ProgressItem[], today: Date = new Date()): Rollup {
   if (leaves.length === 0) {
-    return { actual: 0, planned: 0, status: 'not-started', leafCount: 0 }
+    return { actual: 0, planned: 0, status: 'not-started', leafCount: 0, scheduledCount: 0 }
   }
   const actual = Math.round(leaves.reduce((s, x) => s + x.actual_progress, 0) / leaves.length)
-  // Planned is schedule-derived (planned_start/planned_end vs today), not a stored field.
-  const planned = Math.round(leaves.reduce((s, x) => s + plannedProgressOf(x, today), 0) / leaves.length)
-  return { actual, planned, status: deriveStatus(actual, planned), leafCount: leaves.length }
+  // Planned is schedule-derived, averaged over SCHEDULED leaves only — un-scheduled
+  // leaves (no dates) would otherwise count as 0% and falsely drag the parent's
+  // planned down, fabricating a 超前 / on-plan reading. Actual still spans all leaves.
+  const sched = leaves.filter(isScheduled)
+  const planned = sched.length
+    ? Math.round(sched.reduce((s, x) => s + plannedProgressOf(x, today), 0) / sched.length)
+    : 0
+  return { actual, planned, status: deriveStatus(actual, planned), leafCount: leaves.length, scheduledCount: sched.length }
 }
 
 // ── Phase 4: Issue Tracking ─────────────────────────────────

@@ -188,7 +188,7 @@ export function ProgressItemCard({
               <ProgressBar value={displayActual} planned={displayPlanned} status={displayStatus} className="flex-1 h-1.5" />
               <span className={`text-[11px] font-bold flex-shrink-0 ${displayStatus === 'delayed' ? 'text-red-600' : 'text-site-700'}`}>{displayActual}%</span>
               <span
-                title={scheduled ? (diff < 0 ? `落後計劃 ${-diff}%` : diff > 0 ? `超前計劃 ${diff}%` : '與計劃一致') : '未設定計劃日期'}
+                title={scheduled ? (diff < -5 ? `落後計劃 ${-diff}%` : diff > 5 ? `超前計劃 ${diff}%` : '大致與計劃一致') : '未設定計劃日期'}
                 className={`text-[10px] font-semibold flex-shrink-0 w-11 text-right ${!scheduled ? 'text-site-300' : diff < -5 ? 'text-red-500' : diff > 0 ? 'text-green-600' : 'text-site-400'}`}
               >
                 {!scheduled ? '未排期' : `${diff >= 0 ? '+' : ''}${diff}%`}

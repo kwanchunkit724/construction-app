@@ -269,7 +269,9 @@ export function buildReportModel(project: Project, items: ProgressItem[], opts: 
   const scopeLeaves = scopeItems.filter(isLeaf)
   const sr = computeRollup(scopeLeaves)
   const counts = { 'not-started': 0, 'in-progress': 0, 'completed': 0, 'delayed': 0, 'blocked': 0 } as Record<ProgressStatus, number>
-  for (const l of scopeLeaves) counts[l.status]++
+  // Derive status live (matches rows/zones/verdict) — the stored l.status column
+  // freezes at save-time and goes stale as the schedule advances.
+  for (const l of scopeLeaves) counts[deriveStatus(l.actual_progress, plannedProgressOf(l))]++
   const behind = scopeLeaves.filter(l => (l.actual_progress - plannedProgressOf(l)) < -10).length
 
   // every zone's rollup bar for the one-pager (incl. all-not-started zones)
