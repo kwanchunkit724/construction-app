@@ -36,6 +36,10 @@ const MaterialListPage = lazy(() => import('./pages/MaterialList'))
 const TimetablePage = lazy(() => import('./pages/TimetablePage'))
 const ContactListPage = lazy(() => import('./pages/ContactList'))
 
+// 教學 (tutorial) catalogue — lazy so the 80KB tutorial dataset stays out of
+// the entry chunk; only loaded when a user opens the help page.
+const HelpPage = lazy(() => import('./pages/Help'))
+
 // Mission control panel — public-read sales dashboard at /#/mission.
 // Lazy so the entry chunk isn't bloated for users who never open it.
 const MissionPage = lazy(() => import('./pages/Mission'))
@@ -73,6 +77,7 @@ export default function App() {
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/help" element={<ProtectedRoute>{lazyRoute(<HelpPage />)}</ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminProjects /></ProtectedRoute>} />
           <Route path="/admin/users" element={<ProtectedRoute requireAdmin><AdminUsers /></ProtectedRoute>} />
           <Route path="/admin/projects/:id/chains" element={<ProtectedRoute requireAdmin><AdminProjectChainsPage /></ProtectedRoute>} />

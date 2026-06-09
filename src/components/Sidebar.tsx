@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { Home, Building2, User, Shield, HardHat, LogOut, LayoutDashboard, Users, FileText, Receipt, BookOpen, Package, CalendarDays, Contact as ContactIcon } from 'lucide-react'
+import { Home, Building2, User, Shield, HardHat, LogOut, LayoutDashboard, Users, FileText, Receipt, BookOpen, Package, CalendarDays, Contact as ContactIcon, GraduationCap } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { usePtwFlag } from '../contexts/PtwFlagContext'
@@ -43,6 +43,7 @@ export function Sidebar() {
       { to: '/admin', label: '管理', icon: Shield },
       { to: '/admin/users', label: '用戶', icon: Users },
     ] : []),
+    { to: '/help', label: '教學', icon: GraduationCap },
     { to: '/profile', label: '個人', icon: User },
   ]
 
