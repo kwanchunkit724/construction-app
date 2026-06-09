@@ -4,7 +4,7 @@ import { useAuth } from './AuthContext'
 import { useProjects } from './ProjectsContext'
 import { cacheGet, cacheSet, getOnline, subscribeOnline } from '../lib/offline'
 import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
-import { deriveStatus, floorsToProgress } from '../types'
+import { deriveStatus, floorsToProgress, plannedProgressOf } from '../types'
 import type { ProgressItem, ProgressStatus, TrackingMode, ProgressHistoryEntry } from '../types'
 
 interface ProgressContextType {
@@ -183,7 +183,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     if (!profile) return { error: '未登入' }
     const item = items.find(i => i.id === id)
     if (!item) return { error: '找不到此項目' }
-    const status = deriveStatus(actual, item.planned_progress)
+    const status = deriveStatus(actual, plannedProgressOf(item))
     const { error } = await supabase.from('progress_items').update({
       actual_progress: actual,
       status,
@@ -202,7 +202,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     const item = items.find(i => i.id === id)
     if (!item) return { error: '找不到此項目' }
     const actual = floorsToProgress(floorsCompleted, item.floor_labels)
-    const status = deriveStatus(actual, item.planned_progress)
+    const status = deriveStatus(actual, plannedProgressOf(item))
     const { error } = await supabase.from('progress_items').update({
       actual_progress: actual,
       floors_completed: floorsCompleted,

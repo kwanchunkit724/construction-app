@@ -13,7 +13,7 @@ import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import {
   PROGRESS_STATUS_ZH, ISSUE_STATUS_ZH, ISSUE_HANDLER_ZH, ROLE_ZH,
-  computeRollup, getDescendantLeaves,
+  computeRollup, getDescendantLeaves, plannedProgressOf, deriveStatus,
   LINE_ITEM_CATEGORY_ZH,
 } from '../types'
 import type {
@@ -183,7 +183,8 @@ export function buildReportModel(project: Project, items: ProgressItem[], opts: 
     if (isLeaf(it)) {
       const actual = it.actual_progress
       const pv = pmap ? pmap[it.id] : undefined
-      return { actual, planned: it.planned_progress, status: it.status, gap: actual - it.planned_progress, delta: pv === undefined ? null : actual - pv }
+      const planned = plannedProgressOf(it)
+      return { actual, planned, status: deriveStatus(actual, planned), gap: actual - planned, delta: pv === undefined ? null : actual - pv }
     }
     const r = computeRollup(getDescendantLeaves(items, it.id))
     return { actual: r.actual, planned: r.planned, status: r.status, gap: r.actual - r.planned, delta: aggDelta(getDescendantLeaves(items, it.id), r.actual) }
@@ -260,7 +261,7 @@ export function buildReportModel(project: Project, items: ProgressItem[], opts: 
     // zone agg from ALL leaves in that zone within scope (true progress).
     const zoneLeaves = scopeItems.filter(i => isLeaf(i) && zoneKeyOf(i) === key)
     const r = computeRollup(zoneLeaves)
-    const behind = zoneLeaves.filter(l => (l.actual_progress - l.planned_progress) < -10).length
+    const behind = zoneLeaves.filter(l => (l.actual_progress - plannedProgressOf(l)) < -10).length
     zones.push({ key, name: zoneNameOf(key), agg: { actual: r.actual, planned: r.planned, gap: r.actual - r.planned, status: r.status, count: zoneLeaves.length, behind, delta: aggDelta(zoneLeaves, r.actual) }, rows })
   }
 
@@ -269,14 +270,14 @@ export function buildReportModel(project: Project, items: ProgressItem[], opts: 
   const sr = computeRollup(scopeLeaves)
   const counts = { 'not-started': 0, 'in-progress': 0, 'completed': 0, 'delayed': 0, 'blocked': 0 } as Record<ProgressStatus, number>
   for (const l of scopeLeaves) counts[l.status]++
-  const behind = scopeLeaves.filter(l => (l.actual_progress - l.planned_progress) < -10).length
+  const behind = scopeLeaves.filter(l => (l.actual_progress - plannedProgressOf(l)) < -10).length
 
   // every zone's rollup bar for the one-pager (incl. all-not-started zones)
   const allZones = zoneOrder.flatMap(key => {
     const zl = scopeItems.filter(i => isLeaf(i) && zoneKeyOf(i) === key)
     if (zl.length === 0) return []
     const r = computeRollup(zl)
-    const zbehind = zl.filter(l => (l.actual_progress - l.planned_progress) < -10).length
+    const zbehind = zl.filter(l => (l.actual_progress - plannedProgressOf(l)) < -10).length
     return [{ key, name: zoneNameOf(key), agg: { actual: r.actual, planned: r.planned, gap: r.actual - r.planned, status: r.status, count: zl.length, behind: zbehind, delta: aggDelta(zl, r.actual) } }]
   })
 

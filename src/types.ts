@@ -119,6 +119,45 @@ export const PROGRESS_STATUS_ZH: Record<ProgressStatus, string> = {
   'blocked': '受阻',
 }
 
+// ── Schedule-derived planned progress ───────────────────────
+// Where the PLAN says we should be today: linear from planned_start to
+// planned_end, counting inclusive days (start day = day 1 of the span).
+// e.g. start=Day1, end=Day15 (15-day span), today=Day3 → 3/15 = 20%.
+// Before start → 0; on/after end → 100; no dates → 0 (treat as un-scheduled).
+const MS_PER_DAY = 86400000
+function dateOnlyMs(d: Date): number {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+}
+export function plannedProgressOf(
+  item: { planned_start: string | null; planned_end: string | null },
+  today: Date = new Date(),
+): number {
+  const { planned_start, planned_end } = item
+  if (!planned_start || !planned_end) return 0
+  const s = new Date(planned_start + 'T00:00:00').getTime()
+  const e = new Date(planned_end + 'T00:00:00').getTime()
+  if (Number.isNaN(s) || Number.isNaN(e)) return 0
+  const t = dateOnlyMs(today)
+  if (t < s) return 0
+  const totalDays = Math.floor((e - s) / MS_PER_DAY) + 1 // inclusive
+  if (totalDays <= 1) return t >= e ? 100 : 0
+  const elapsedDays = Math.floor((t - s) / MS_PER_DAY) + 1 // start day counts as 1
+  if (elapsedDays >= totalDays) return 100
+  return Math.round((elapsedDays / totalDays) * 100)
+}
+
+// Schedule variance: actual − planned. Positive = 超前 (ahead), negative = 落後.
+export function scheduleVariance(
+  item: { planned_start: string | null; planned_end: string | null },
+  actual: number,
+  today: Date = new Date(),
+): number {
+  return actual - plannedProgressOf(item, today)
+}
+export function isScheduled(item: { planned_start: string | null; planned_end: string | null }): boolean {
+  return !!item.planned_start && !!item.planned_end
+}
+
 // Auto-derive status from progress vs planned
 export function deriveStatus(actual: number, planned: number): ProgressStatus {
   if (actual >= 100) return 'completed'
@@ -161,12 +200,13 @@ export interface Rollup {
   leafCount: number
 }
 
-export function computeRollup(leaves: ProgressItem[]): Rollup {
+export function computeRollup(leaves: ProgressItem[], today: Date = new Date()): Rollup {
   if (leaves.length === 0) {
     return { actual: 0, planned: 0, status: 'not-started', leafCount: 0 }
   }
   const actual = Math.round(leaves.reduce((s, x) => s + x.actual_progress, 0) / leaves.length)
-  const planned = Math.round(leaves.reduce((s, x) => s + x.planned_progress, 0) / leaves.length)
+  // Planned is schedule-derived (planned_start/planned_end vs today), not a stored field.
+  const planned = Math.round(leaves.reduce((s, x) => s + plannedProgressOf(x, today), 0) / leaves.length)
   return { actual, planned, status: deriveStatus(actual, planned), leafCount: leaves.length }
 }
 

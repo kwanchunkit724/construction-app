@@ -4,7 +4,7 @@ import { Modal } from './Modal'
 import { Spinner } from './Spinner'
 import { ProgressBar } from './ProgressBar'
 import { useProgress } from '../contexts/ProgressContext'
-import { deriveStatus, floorsToProgress } from '../types'
+import { deriveStatus, floorsToProgress, plannedProgressOf } from '../types'
 import type { ProgressItem } from '../types'
 
 export function UpdateProgressModal({
@@ -34,7 +34,8 @@ export function UpdateProgressModal({
 
   const isFloors = item.tracking_mode === 'floors'
   const computedActual = isFloors ? floorsToProgress(floorsCompleted, item.floor_labels) : actual
-  const status = deriveStatus(computedActual, item.planned_progress)
+  const planned = plannedProgressOf(item)
+  const status = deriveStatus(computedActual, planned)
 
   function toggleFloor(label: string) {
     setFloorsCompleted(prev =>
@@ -104,7 +105,7 @@ export function UpdateProgressModal({
             })}
           </div>
           <div className="mt-3">
-            <ProgressBar value={computedActual} planned={item.planned_progress} status={status} />
+            <ProgressBar value={computedActual} planned={planned} status={status} />
           </div>
         </div>
       ) : (
@@ -147,18 +148,18 @@ export function UpdateProgressModal({
           </div>
           <div className="flex justify-between text-xs text-site-400 mt-1">
             <span>0%</span>
-            <span className="text-orange-500">計劃: {item.planned_progress}%</span>
+            <span className="text-orange-500">計劃: {planned}%</span>
             <span>100%</span>
           </div>
           <div className="mt-3">
-            <ProgressBar value={actual} planned={item.planned_progress} status={status} />
+            <ProgressBar value={actual} planned={planned} status={status} />
           </div>
         </div>
       )}
 
-      {computedActual < item.planned_progress - 5 && (
+      {computedActual < planned - 5 && (
         <div className="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
-          ⚠ 進度落後計劃 {item.planned_progress - computedActual}%，請說明原因
+          ⚠ 進度落後計劃 {planned - computedActual}%，請說明原因
         </div>
       )}
 

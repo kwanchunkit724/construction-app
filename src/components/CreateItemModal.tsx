@@ -6,6 +6,7 @@ import { useProgress } from '../contexts/ProgressContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { supabase } from '../lib/supabase'
 import type { ProgressItem, TrackingMode, Zone } from '../types'
+import { plannedProgressOf } from '../types'
 
 export function CreateItemModal({
   open, onClose, parent, zone,
@@ -20,7 +21,12 @@ export function CreateItemModal({
   const [title, setTitle] = useState('')
   const [plannedStart, setPlannedStart] = useState('')
   const [plannedEnd, setPlannedEnd] = useState('')
-  const [plannedProgress, setPlannedProgress] = useState(0)
+  // Planned progress is NOT entered by hand — it is derived from the schedule
+  // (planned_start → planned_end vs today). This is the "where we should be" %.
+  const plannedPreview = useMemo(
+    () => plannedProgressOf({ planned_start: plannedStart || null, planned_end: plannedEnd || null }),
+    [plannedStart, plannedEnd],
+  )
   const [trackingMode, setTrackingMode] = useState<TrackingMode>('percentage')
   const [floorMode, setFloorMode] = useState<'auto' | 'custom'>('auto')
   const [floorCount, setFloorCount] = useState(10)
@@ -74,7 +80,6 @@ export function CreateItemModal({
       setTitle('')
       setPlannedStart('')
       setPlannedEnd('')
-      setPlannedProgress(0)
       setTrackingMode('percentage')
       setFloorMode('auto')
       setFloorCount(10)
@@ -223,6 +228,10 @@ export function CreateItemModal({
     const missing = insertTargets.filter(t => !codeMap[t.key])
     if (missing.length > 0) return setError('自動編號尚未準備好，請稍候')
 
+    if (plannedStart && plannedEnd && plannedEnd < plannedStart) {
+      return setError('計劃完成日期不可早於開始日期')
+    }
+
     setSubmitting(true)
 
     const results = await Promise.all(
@@ -233,7 +242,7 @@ export function CreateItemModal({
         zone_id: t.zoneId,
         planned_start: plannedStart || null,
         planned_end: plannedEnd || null,
-        planned_progress: plannedProgress,
+        planned_progress: plannedPreview,
         tracking_mode: trackingMode,
         floor_labels: trackingMode === 'floors' ? resolvedFloorLabels : [],
       }))
@@ -390,20 +399,16 @@ export function CreateItemModal({
           </div>
         </div>
 
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="label mb-0">計劃進度</label>
-            <span className="text-base font-bold text-safety-600">{plannedProgress}%</span>
+        <div className="rounded-xl bg-site-50 border border-site-100 p-3">
+          <div className="flex items-center justify-between">
+            <span className="label mb-0">計劃進度（自動）</span>
+            <span className="text-base font-bold text-safety-600">
+              {plannedStart && plannedEnd ? `${plannedPreview}%` : '未排期'}
+            </span>
           </div>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={5}
-            value={plannedProgress}
-            onChange={e => setPlannedProgress(Number(e.target.value))}
-            className="w-full accent-safety-600"
-          />
+          <p className="text-xs text-site-400 mt-1">
+            依「計劃開始 → 計劃完成」與今日自動計算，無需手動輸入。
+          </p>
         </div>
 
         {/* Tracking mode */}

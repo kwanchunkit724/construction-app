@@ -9,7 +9,7 @@ import { useProgress } from '../contexts/ProgressContext'
 import { DrawingsContext } from '../contexts/DrawingsContext'
 import { DrawingsSection } from './drawings/DrawingsSection'
 import { MaterialItemsPanel } from './material/MaterialItemsPanel'
-import { PROGRESS_STATUS_ZH, computeRollup, getDescendantLeaves } from '../types'
+import { PROGRESS_STATUS_ZH, computeRollup, getDescendantLeaves, plannedProgressOf, deriveStatus, isScheduled } from '../types'
 import type { ProgressItem, ProgressStatus, UserProfile } from '../types'
 import { supabase } from '../lib/supabase'
 import { useProjects } from '../contexts/ProjectsContext'
@@ -116,10 +116,15 @@ export function ProgressItemCard({
     [drawingsCtx, item.id],
   )
 
-  const rollup = isLeaf ? null : computeRollup(getDescendantLeaves(items, item.id))
+  const descLeaves = isLeaf ? [] : getDescendantLeaves(items, item.id)
+  const rollup = isLeaf ? null : computeRollup(descLeaves)
   const displayActual = isLeaf ? item.actual_progress : rollup!.actual
-  const displayPlanned = isLeaf ? item.planned_progress : rollup!.planned
-  const displayStatus: ProgressStatus = isLeaf ? item.status : rollup!.status
+  // Planned is schedule-derived (planned_start→planned_end vs today), not stored.
+  const displayPlanned = isLeaf ? plannedProgressOf(item) : rollup!.planned
+  const displayStatus: ProgressStatus = isLeaf
+    ? deriveStatus(item.actual_progress, displayPlanned)
+    : rollup!.status
+  const scheduled = isLeaf ? isScheduled(item) : descLeaves.some(isScheduled)
 
   const StatusIcon = STATUS_ICON[displayStatus] ?? Minus
   const diff = displayActual - displayPlanned
@@ -182,8 +187,11 @@ export function ProgressItemCard({
             <div className="flex items-center gap-1.5 mt-1">
               <ProgressBar value={displayActual} planned={displayPlanned} status={displayStatus} className="flex-1 h-1.5" />
               <span className={`text-[11px] font-bold flex-shrink-0 ${displayStatus === 'delayed' ? 'text-red-600' : 'text-site-700'}`}>{displayActual}%</span>
-              <span className={`text-[10px] font-semibold flex-shrink-0 w-9 text-right ${diff < -5 ? 'text-red-500' : diff >= 0 ? 'text-green-600' : 'text-site-400'}`}>
-                {diff >= 0 ? '+' : ''}{diff}%
+              <span
+                title={scheduled ? (diff < 0 ? `落後計劃 ${-diff}%` : diff > 0 ? `超前計劃 ${diff}%` : '與計劃一致') : '未設定計劃日期'}
+                className={`text-[10px] font-semibold flex-shrink-0 w-11 text-right ${!scheduled ? 'text-site-300' : diff < -5 ? 'text-red-500' : diff > 0 ? 'text-green-600' : 'text-site-400'}`}
+              >
+                {!scheduled ? '未排期' : `${diff >= 0 ? '+' : ''}${diff}%`}
               </span>
             </div>
           </button>
