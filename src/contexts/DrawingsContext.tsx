@@ -23,6 +23,7 @@ const SIGNED_URL_TTL = 3600 // 1 hour (D-20)
 const ALLOWED_MIME = ['application/pdf', 'image/jpeg', 'image/png'] as const
 
 interface DrawingsContextType {
+  projectId: string
   drawings: Drawing[]
   versionsByDrawing: Record<string, DrawingVersion[]>
   uploaderNameById: Record<string, string>
@@ -465,6 +466,7 @@ export function DrawingsProvider({
   return (
     <DrawingsContext.Provider
       value={{
+        projectId,
         drawings,
         versionsByDrawing,
         uploaderNameById,

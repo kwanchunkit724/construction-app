@@ -1,13 +1,32 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, GraduationCap, Camera } from 'lucide-react'
+import { ChevronDown, ChevronRight, GraduationCap, Camera, Search } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
+import { useAuth } from '../contexts/AuthContext'
+import { ROLE_ZH } from '../types'
 import { orderedTutorials } from '../lib/tutorials'
 import { TutorialView, tutorialIcon } from '../components/tutorial/TutorialView'
 
+// Tutorials everyone should see regardless of role filter.
+const ALWAYS = ['quick-start', 'auth-register-login', 'apply-join-project', 'account-deletion', 'push-notifications', 'offline-readonly-cache']
+
 export default function Help() {
-  const tutorials = orderedTutorials()
-  const [openKey, setOpenKey] = useState<string | null>(tutorials[0]?.key ?? null)
+  const { profile } = useAuth()
+  const all = orderedTutorials()
+  const myLabel = profile ? ROLE_ZH[profile.global_role] : ''
+  const [query, setQuery] = useState('')
+  const [mineOnly, setMineOnly] = useState(false)
+  const [openKey, setOpenKey] = useState<string | null>(all[0]?.key ?? null)
   const [expandAll, setExpandAll] = useState(false)
+
+  const tutorials = all.filter(t => {
+    const q = query.trim()
+    if (q && !(t.title.includes(q) || t.summary.includes(q))) return false
+    if (mineOnly && myLabel && !ALWAYS.includes(t.key)) {
+      const inRoles = t.roles.some(r => r.role.includes(myLabel) || myLabel.includes(r.role))
+      if (!inRoles) return false
+    }
+    return true
+  })
 
   return (
     <AppLayout title="教學">
@@ -39,7 +58,32 @@ export default function Help() {
           </div>
         </div>
 
+        {/* Search + role filter */}
+        <div className="flex items-center gap-2 mb-3">
+          <div className="relative flex-1">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-site-400" />
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="搜尋功能…"
+              className="input pl-9 py-2"
+            />
+          </div>
+          {myLabel && (
+            <button
+              type="button"
+              onClick={() => setMineOnly(v => !v)}
+              className={`text-xs font-semibold rounded-full px-3 py-2 border whitespace-nowrap min-h-0 ${mineOnly ? 'bg-safety-500 text-white border-safety-500' : 'bg-white text-site-600 border-site-200'}`}
+            >
+              我相關
+            </button>
+          )}
+        </div>
+
         {/* Catalogue */}
+        {tutorials.length === 0 && (
+          <p className="text-sm text-site-400 text-center py-8">冇符合嘅教學</p>
+        )}
         <div className="space-y-2">
           {tutorials.map(t => {
             const Icon = tutorialIcon(t.icon)

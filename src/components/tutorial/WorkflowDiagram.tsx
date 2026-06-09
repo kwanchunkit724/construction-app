@@ -62,6 +62,16 @@ export function WorkflowDiagram({ flow }: { flow: TutorialFlowNode[] }) {
                 </span>
                 {node.seenBy.length === 0 ? (
                   <span className="text-[10px] text-site-400">—</span>
+                ) : node.seenBy.length > 3 ? (
+                  // Collapse long lists so the row stays readable on 390px phones.
+                  <>
+                    {node.seenBy.slice(0, 2).map((r, j) => (
+                      <span key={j} className={`text-[10px] px-1.5 py-0.5 rounded-full border ${roleStyle(r)}`}>{r}</span>
+                    ))}
+                    <span title={node.seenBy.join('、')} className="text-[10px] px-1.5 py-0.5 rounded-full border bg-site-100 text-site-600 border-site-200">
+                      ＋{node.seenBy.length - 2} 其他
+                    </span>
+                  </>
                 ) : (
                   node.seenBy.map((r, j) => (
                     <span key={j} className={`text-[10px] px-1.5 py-0.5 rounded-full border ${roleStyle(r)}`}>{r}</span>

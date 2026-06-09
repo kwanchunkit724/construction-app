@@ -12,6 +12,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { MoreVertical, Plus, Search } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDrawings } from '../../contexts/DrawingsContext'
+import { useProjects } from '../../contexts/ProjectsContext'
 import { FullPageSpinner, Spinner } from '../Spinner'
 import { DrawingThumbnail } from './DrawingThumbnail'
 import { DrawingUploadSheet } from './DrawingUploadSheet'
@@ -36,6 +37,7 @@ interface ViewingState {
 export function DrawingsSection({ leafItemId }: DrawingsSectionProps) {
   const { profile } = useAuth()
   const {
+    projectId,
     drawings,
     versionsByDrawing,
     loading,
@@ -43,6 +45,7 @@ export function DrawingsSection({ leafItemId }: DrawingsSectionProps) {
     getThumbUrl,
     withdrawVersion,
   } = useDrawings()
+  const { memberships, projects } = useProjects()
 
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
@@ -61,9 +64,19 @@ export function DrawingsSection({ leafItemId }: DrawingsSectionProps) {
     }
   }, [searchInput])
 
-  // ISSUE-07 FIX: explicit array .includes — NOT shorthand-OR.
-  const canUpload =
-    !!profile && ['admin', 'pm', 'main_contractor', 'general_foreman'].includes(profile.global_role)
+  // Mirror can_upload_drawing (DB): admin OR assigned PM OR an approved member
+  // whose PER-PROJECT membership role is pm/main_contractor. NOT general_foreman,
+  // NOT global-role-based (a global pm without an approved membership here would
+  // be RLS-rejected, and a membership-pm with a different global role was wrongly
+  // blocked). ISSUE-07: keep explicit .includes, never shorthand-OR.
+  const canUpload = (() => {
+    if (!profile) return false
+    if (profile.global_role === 'admin') return true
+    const project = projects.find(p => p.id === projectId)
+    if (project?.assigned_pm_ids.includes(profile.id)) return true
+    const m = memberships.find(x => x.user_id === profile.id && x.project_id === projectId && x.status === 'approved')
+    return !!m && ['pm', 'main_contractor'].includes(m.role)
+  })()
 
   // Filter to this leaf item, then by search, then sort created_at DESC (D-23)
   const itemDrawings = useMemo(() => {
