@@ -1,10 +1,20 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check, Edit3, CornerUpLeft, X, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useProjects } from '../../contexts/ProjectsContext'
 import { useSi } from '../../contexts/SiContext'
+import { supabase } from '../../lib/supabase'
 import { Spinner } from '../Spinner'
 import type { SI, SIVersion, SiPayload } from '../../types'
+
+// Active delegation grantors for this user on a project. Mirrors
+// active_role_holders' delegation branch (v9-rls-helpers.sql ~50-58):
+// a row where delegate_to = me, scoped to today within [valid_from, valid_until].
+// We expose the grantor (user_id) so the caller can check whether the
+// grantor would hold required_role on the project.
+interface DelegationRow {
+  user_id: string
+}
 
 const MIN_REASON = 10
 
@@ -24,27 +34,62 @@ export function SiApproverBar({ si, latestVersion }: SiApproverBarProps) {
   const optionalUser = si.chain_snapshot?.[si.current_step]?.optional_user_id ?? null
   const isAdmin = profile?.global_role === 'admin'
 
+  // Active delegations TO this user (delegate_to = me, today within validity).
+  // Fetched inline to avoid new provider plumbing. RLS lets the delegate read
+  // their own rows. We only need the grantor id (user_id) to check role holding.
+  const [delegators, setDelegators] = useState<string[]>([])
+  useEffect(() => {
+    if (!profile) {
+      setDelegators([])
+      return
+    }
+    let cancelled = false
+    const today = new Date().toISOString().slice(0, 10)
+    supabase
+      .from('delegations')
+      .select('user_id')
+      .eq('delegate_to', profile.id)
+      .lte('valid_from', today)
+      .gte('valid_until', today)
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) {
+          console.error('delegations fetch error:', error)
+          setDelegators([])
+          return
+        }
+        setDelegators((data as DelegationRow[] | null)?.map(d => d.user_id) ?? [])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [profile])
+
   // Mirror server-side active_role_holders(project_id, required_role) so the
   // UI gate matches what submit_approval will actually authorise. The check is
   // membership-based (per-project), NOT global_role-based: a holder is an admin,
-  // an assigned PM (when required_role='pm'), or an approved project_member whose
-  // membership role matches required_role. Server stays source of truth — this
-  // is a convenience hint that avoids showing actions the RPC would reject.
+  // an assigned PM (when required_role='pm'), an approved project_member whose
+  // membership role matches required_role, OR a delegate whose grantor holds
+  // required_role on the project. Server stays source of truth — this is a
+  // convenience hint that avoids showing actions the RPC would reject.
   const isRoleHolder = useMemo(() => {
     if (!profile || !requiredRole) return false
     if (isAdmin) return true
-    if (requiredRole === 'pm') {
-      const proj = projects.find(p => p.id === si.project_id)
-      if (proj?.assigned_pm_ids.includes(profile.id)) return true
-    }
-    return memberships.some(
-      m =>
-        m.project_id === si.project_id &&
-        m.user_id === profile.id &&
-        m.status === 'approved' &&
-        m.role === requiredRole,
-    )
-  }, [profile, requiredRole, isAdmin, projects, memberships, si.project_id])
+    const proj = projects.find(p => p.id === si.project_id)
+    if (requiredRole === 'pm' && proj?.assigned_pm_ids.includes(profile.id)) return true
+    const holdsRole = (uid: string) =>
+      (requiredRole === 'pm' && (proj?.assigned_pm_ids.includes(uid) ?? false)) ||
+      memberships.some(
+        m =>
+          m.project_id === si.project_id &&
+          m.user_id === uid &&
+          m.status === 'approved' &&
+          m.role === requiredRole,
+      )
+    if (holdsRole(profile.id)) return true
+    // Delegation: any grantor who delegated to me holds required_role here.
+    return delegators.some(holdsRole)
+  }, [profile, requiredRole, isAdmin, projects, memberships, si.project_id, delegators])
 
   // Server is source of truth; UI gate is a convenience hint.
   const canAct = useMemo(() => {

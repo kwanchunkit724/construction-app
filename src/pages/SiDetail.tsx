@@ -7,7 +7,6 @@ import { SiProvider, useSi } from '../contexts/SiContext'
 import { VoProvider, useVo } from '../contexts/VoContext'
 import { ProgressProvider, useProgress } from '../contexts/ProgressContext'
 import { DrawingsProvider } from '../contexts/DrawingsContext'
-import { useAuth } from '../contexts/AuthContext'
 import { VoSubmitForm } from '../components/vo/VoSubmitForm'
 import { VoConfirmationScreen } from '../components/vo/VoConfirmationScreen'
 import { signedUrlFor } from '../lib/si'
@@ -37,11 +36,9 @@ function statusStyle(status: SiStatus): string {
 function SiDetailInner({ projectId, siId }: { projectId: string; siId: string }) {
   const navigate = useNavigate()
   const { sis, versionsBySi, approvalsBySi, commentsBySi, loading } = useSi()
-  const { vos } = useVo()
+  const { vos, canSubmit: canSubmitVO } = useVo()
   const { items: progressItems } = useProgress()
-  const { profile } = useAuth()
-  const canSubmitVO = !!profile && ['admin', 'pm', 'main_contractor', 'general_foreman'].includes(profile.global_role)
-  const existingVo = vos.find(v => v.si_id === siId)
+  const relatedVos = vos.filter(v => v.si_id === siId)
   const [voFormOpen, setVoFormOpen] = useState(false)
   const [voConfirmation, setVoConfirmation] = useState<{ voId: string; serverTotal: number; voNumber: string } | null>(null)
 
@@ -176,15 +173,21 @@ function SiDetailInner({ projectId, siId }: { projectId: string; siId: string })
             (not an edit of it); many VOs may cite the same SI. */}
         {si.status === 'locked' && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            {existingVo && (
+            {relatedVos.length > 0 && (
+              <span className="text-xs text-site-500">
+                已有 {relatedVos.length} 張變更指令：
+              </span>
+            )}
+            {relatedVos.map(vo => (
               <button
+                key={vo.id}
                 type="button"
-                onClick={() => navigate(`/project/${projectId}/vo/${existingVo.id}`)}
+                onClick={() => navigate(`/project/${projectId}/vo/${vo.id}`)}
                 className="btn-ghost inline-flex items-center gap-1 text-sm"
               >
-                已有變更指令 <span className="font-mono">{existingVo.number}</span> →
+                <span className="font-mono">{vo.number}</span> →
               </button>
-            )}
+            ))}
             {canSubmitVO && (
               <button
                 type="button"

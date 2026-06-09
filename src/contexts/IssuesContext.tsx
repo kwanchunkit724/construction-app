@@ -245,11 +245,28 @@ export function useIssues() {
 }
 
 // Helper: can the user (with role X in project) act on this issue?
-export function canActOnIssue(myRole: GlobalRole | null, handler: IssueHandlerRole): boolean {
+//
+// Authority mirrors the issues UPDATE RLS policy in v4-issues-schema.sql:
+//   admin OR has_role_in_project(handler) OR reporter_id = auth.uid()
+// The reporter clause is what keeps escalation from dead-ending: a
+// subcontractor_worker reports an issue routed to 'subcontractor', but if that
+// sub tier has no 'subcontractor' member, nobody but a global admin matches the
+// handler role — the issue would be stuck at 'subcontractor' forever. Letting
+// the reporter act on their own open issue (escalate it upward, or resolve it)
+// breaks the dead-end without widening anyone else's authority, and the server
+// already permits exactly this.
+export function canActOnIssue(
+  myRole: GlobalRole | null,
+  handler: IssueHandlerRole,
+  isReporter = false,
+): boolean {
   if (!myRole) return false
   if (myRole === 'admin') return true
   if (handler === 'pm' && myRole === 'pm') return true
   if (handler === 'main_contractor' && myRole === 'main_contractor') return true
   if (handler === 'subcontractor' && myRole === 'subcontractor') return true
+  // Fallback so the chain never dead-ends: the reporter can always move their
+  // own issue forward (matches the RLS reporter_id = auth.uid() clause).
+  if (isReporter) return true
   return false
 }

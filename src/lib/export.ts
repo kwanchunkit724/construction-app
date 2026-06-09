@@ -716,6 +716,7 @@ export async function exportVOToPDF(
   drawings: DrawingVersion[],
   _users: Record<string, UserProfile>,
   approvalTimeline: Array<{ actor_name: string; action_zh: string; at: string; reason: string | null }>,
+  parentSiNumber?: string,
 ): Promise<void> {
   // Dynamic imports keep jspdf in the lazy reports-pdf chunk.
   const jspdfMod = await import('jspdf')
@@ -737,7 +738,7 @@ export async function exportVOToPDF(
 
   // SI reference
   doc.setFontSize(12)
-  doc.text(`參考工地指令：${vo.si_id ? vo.si_id : '—'}`, 40, 130)
+  doc.text(`參考工地指令：${parentSiNumber ?? '—'}`, 40, 130)
   doc.setFontSize(10)
   doc.text(version.payload.description || '', 40, 150, { maxWidth: 515 })
 

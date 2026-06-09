@@ -184,6 +184,7 @@ function PendingApprovalCard({
   onReject: () => Promise<{ error: string | null }>
 }) {
   const [applicant, setApplicant] = useState<Applicant | null>(null)
+  const [loadError, setLoadError] = useState(false)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -193,9 +194,17 @@ function PendingApprovalCard({
     // Read via the SECURITY DEFINER RPC that gates on the same approver
     // predicate as `pendingForMe`. See supabase/v30-applicant-visibility.sql.
     supabase.rpc('admin_or_pm_list_applicants', { p_project_id: membership.project_id })
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('applicant rpc error:', error)
+          setLoadError(true)
+          setApplicant(null)
+          return
+        }
         const rows = (data as Applicant[] | null) ?? []
-        setApplicant(rows.find(r => r.id === membership.user_id) ?? null)
+        const found = rows.find(r => r.id === membership.user_id) ?? null
+        setLoadError(!found)
+        setApplicant(found)
       })
   }, [membership.user_id, membership.project_id])
 
@@ -217,6 +226,9 @@ function PendingApprovalCard({
           </p>
         </div>
       </div>
+      {loadError && (
+        <p className="text-xs text-red-600 mt-2">無法載入申請人資料</p>
+      )}
       <div className="flex gap-2 mt-3 pt-3 border-t border-site-100">
         <button
           onClick={async () => { setBusy(true); await onReject(); setBusy(false) }}
@@ -227,7 +239,7 @@ function PendingApprovalCard({
         </button>
         <button
           onClick={async () => { setBusy(true); await onApprove(); setBusy(false) }}
-          disabled={busy}
+          disabled={busy || !applicant}
           className="flex-1 text-sm font-semibold bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg disabled:opacity-50"
         >
           {busy ? <Spinner size={16} className="text-white mx-auto" /> : '批准'}

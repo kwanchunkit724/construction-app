@@ -1,13 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check, ArrowLeftToLine, X as XIcon, Shield } from 'lucide-react'
 import { Modal } from '../Modal'
 import { PtwSignaturePad } from './PtwSignaturePad'
 import { usePtw } from '../../contexts/PtwContext'
 import { useAuth } from '../../contexts/AuthContext'
+import { useProjects } from '../../contexts/ProjectsContext'
 import { useIsOnline } from '../../hooks/useIsOnline'
 import { OfflineBanner } from '../OfflineBanner'
 import { supabase } from '../../lib/supabase'
-import type { PTW } from '../../types'
+import type { PTW, ChainStep } from '../../types'
 
 interface Props {
   ptw: PTW
@@ -18,6 +19,7 @@ type Action = 'sign' | 'revision' | 'reject' | 'admin_override' | null
 
 export function PtwApproverBar({ ptw, onAction }: Props) {
   const { profile } = useAuth()
+  const { projects, memberships } = useProjects()
   const { approve, requestRevision, reject, adminOverride } = usePtw()
   const online = useIsOnline()
   const [activeAction, setActiveAction] = useState<Action>(null)
@@ -25,10 +27,76 @@ export function PtwApproverBar({ ptw, onAction }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  // Can act only when status is in_review (chain advancing).
-  if (ptw.status !== 'in_review') return null
-
   const isAdmin = profile?.global_role === 'admin'
+
+  // chain_snapshot is typed `unknown` on PTW; narrow defensively to the same
+  // ChainStep shape SI/VO use. The active chain step dictates who may act.
+  const chain = Array.isArray(ptw.chain_snapshot) ? (ptw.chain_snapshot as ChainStep[]) : null
+  const step = chain?.[ptw.current_step] ?? null
+  const requiredRole = step?.required_role
+  const optionalUser = step?.optional_user_id ?? null
+
+  // Active delegations TO this user (delegate_to = me, today within validity).
+  // Fetched inline to avoid new provider plumbing. RLS lets the delegate read
+  // their own rows. We only need the grantor id (user_id) to check role holding.
+  const [delegators, setDelegators] = useState<string[]>([])
+  useEffect(() => {
+    if (!profile) {
+      setDelegators([])
+      return
+    }
+    let cancelled = false
+    const today = new Date().toISOString().slice(0, 10)
+    supabase
+      .from('delegations')
+      .select('user_id')
+      .eq('delegate_to', profile.id)
+      .lte('valid_from', today)
+      .gte('valid_until', today)
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) {
+          console.error('delegations fetch error:', error)
+          setDelegators([])
+          return
+        }
+        setDelegators(((data as { user_id: string }[] | null) ?? []).map(d => d.user_id))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [profile])
+
+  // Mirror server-side active_role_holders(project_id, required_role): admin,
+  // assigned PM (when required_role='pm'), approved project_member with matching
+  // role, the chain step's optional_user_id, OR a delegate whose grantor holds
+  // required_role on the project. Server stays source of truth — this gate just
+  // avoids showing the signature step to members the RPC would later reject.
+  const canAct = useMemo(() => {
+    if (!profile) return false
+    if (ptw.status !== 'in_review') return false
+    if (isAdmin) return true
+    if (!requiredRole) return false
+    if (optionalUser) return optionalUser === profile.id
+    const proj = projects.find(p => p.id === ptw.project_id)
+    const holdsRole = (uid: string) =>
+      (requiredRole === 'pm' && (proj?.assigned_pm_ids.includes(uid) ?? false)) ||
+      memberships.some(
+        m =>
+          m.project_id === ptw.project_id &&
+          m.user_id === uid &&
+          m.status === 'approved' &&
+          m.role === requiredRole,
+      )
+    if (holdsRole(profile.id)) return true
+    return delegators.some(holdsRole)
+  }, [profile, isAdmin, requiredRole, optionalUser, projects, memberships, ptw.project_id, ptw.status, delegators])
+
+  // Can act only when status is in_review (chain advancing) AND the user is in
+  // the active role (admin, role holder, optional signer, or delegate). The
+  // admin_override affordance below stays available to admins regardless.
+  if (ptw.status !== 'in_review') return null
+  if (!canAct && !isAdmin) return null
 
   async function handleSign(b64: string) {
     setSubmitting(true)
@@ -78,33 +146,37 @@ export function PtwApproverBar({ ptw, onAction }: Props) {
     <>
       {!online && <div className="mb-2"><OfflineBanner /></div>}
       <div className="card p-3 flex flex-wrap gap-2 sticky bottom-0">
-        <button
-          type="button"
-          className="btn-primary flex-1 min-w-[8rem]"
-          disabled={!online}
-          onClick={() => setActiveAction('sign')}
-        >
-          <Check size={16} className="inline mr-1" />
-          簽署批准
-        </button>
-        <button
-          type="button"
-          className="btn-ghost flex-1 min-w-[7rem] text-amber-700"
-          disabled={!online}
-          onClick={() => setActiveAction('revision')}
-        >
-          <ArrowLeftToLine size={16} className="inline mr-1" />
-          退回
-        </button>
-        <button
-          type="button"
-          className="btn-ghost flex-1 min-w-[6rem] text-red-700"
-          disabled={!online}
-          onClick={() => setActiveAction('reject')}
-        >
-          <XIcon size={16} className="inline mr-1" />
-          拒絕
-        </button>
+        {canAct && (
+          <>
+            <button
+              type="button"
+              className="btn-primary flex-1 min-w-[8rem]"
+              disabled={!online}
+              onClick={() => setActiveAction('sign')}
+            >
+              <Check size={16} className="inline mr-1" />
+              簽署批准
+            </button>
+            <button
+              type="button"
+              className="btn-ghost flex-1 min-w-[7rem] text-amber-700"
+              disabled={!online}
+              onClick={() => setActiveAction('revision')}
+            >
+              <ArrowLeftToLine size={16} className="inline mr-1" />
+              退回
+            </button>
+            <button
+              type="button"
+              className="btn-ghost flex-1 min-w-[6rem] text-red-700"
+              disabled={!online}
+              onClick={() => setActiveAction('reject')}
+            >
+              <XIcon size={16} className="inline mr-1" />
+              拒絕
+            </button>
+          </>
+        )}
         {isAdmin && (
           <button
             type="button"

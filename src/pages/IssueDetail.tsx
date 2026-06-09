@@ -111,8 +111,8 @@ function IssueDetailInner({ projectId, issueId }: { projectId: string; issueId: 
   const isOpen = issue.status === 'open'
   const StatusIcon = isOpen ? AlertCircle : CheckCircle2
   const statusStyle = isOpen ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
-  const canAct = canActOnIssue(myRoleInProject, issue.current_handler_role)
   const isReporter = issue.reporter_id === profile?.id
+  const canAct = canActOnIssue(myRoleInProject, issue.current_handler_role, isReporter)
   const nextRole = getNextHandler(issue.current_handler_role)
 
   async function handleSendComment() {

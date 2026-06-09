@@ -115,7 +115,7 @@ function VoDetailInner({ projectId, voId }: { projectId: string; voId: string })
 
       // Lazy import so jspdf + Noto Sans HK stay in lazy chunks.
       const { exportVOToPDF } = await import('../lib/export')
-      await exportVOToPDF(project, vo, current, drawings, usersById, approvalTimeline)
+      await exportVOToPDF(project, vo, current, drawings, usersById, approvalTimeline, parentSi?.number)
     } catch (e: any) {
       console.error('exportVOToPDF error:', e)
       setExportError(e?.message ?? '產生 PDF 失敗')

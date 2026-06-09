@@ -37,7 +37,11 @@ export function AssignmentModal({
     m => m.project_id === item.project_id && m.status === 'approved'
   ) : []
 
-  const ownerCandidateIds = projectMembers.filter(m => m.role === 'main_contractor').map(m => m.user_id)
+  // 負責人 can be 總承建商 OR 判頭 — a 判頭 must be able to own a leaf, not just
+  // be a delegatee. Keep main_contractor too.
+  const ownerCandidateIds = projectMembers
+    .filter(m => m.role === 'main_contractor' || m.role === 'subcontractor')
+    .map(m => m.user_id)
   // Delegate to 判頭 AND 判頭工人 — workers gain per-row update rights only via
   // assigned_to/delegated_to (canUpdateItem), and only a supervisor can open
   // this modal, so without workers here a worker's core job is unreachable.
@@ -121,14 +125,14 @@ export function AssignmentModal({
       </div>
 
       <p className="text-xs text-site-400 mb-2">
-        {tab === 'assign' ? '從總承建商員工選擇負責人（可多選）' : '從判頭或工人選擇委派對象（可多選）'}
+        {tab === 'assign' ? '從總承建商員工或判頭選擇負責人（可多選）' : '從判頭或工人選擇委派對象（可多選）'}
       </p>
 
       {loadingProfiles && candidateIds.some(id => !profiles[id]) ? (
         <div className="py-8 flex justify-center"><Spinner size={24} /></div>
       ) : candidateIds.length === 0 ? (
         <div className="py-8 text-center text-sm text-site-500">
-          {tab === 'assign' ? '此工地暫無已批准的總承建商員工' : '此工地暫無已批准的判頭或工人'}
+          {tab === 'assign' ? '此工地暫無已批准的總承建商員工或判頭' : '此工地暫無已批准的判頭或工人'}
         </div>
       ) : (
         <div className="space-y-2 max-h-72 overflow-y-auto">
