@@ -224,10 +224,9 @@ function Screenshots() {
     { img: '/marketing/shot-ptw.png', icon: <ShieldCheck size={16} />, t: '動火高空吊運，安全主任電子簽核', d: 'PTW 工作許可證涵蓋動火、高空、吊運等高風險工序，附安全核對清單同工人名單，由安全主任逐步簽。動火仲有 30 分鐘火警監察計時，生效期間出 QR 碼俾人巡查掃描。' },
     { img: '/marketing/shot-timetable.png', icon: <CalendarDays size={16} />, t: '到貨、完工、會議，一個行事曆睇晒', d: '行事曆自動 merge 三樣嘢落同一條時間線：物料到貨、進度完工、會議檢查。邊日有咩死線一覽無遺，唔使再開幾個表去對。' },
     { img: '/marketing/shot-daily.png', icon: <BookOpen size={16} />, t: '每日工地日誌，過咗今日就鎖死', d: '管工每日揀天氣、剔返今日做咗嘅進度項目、寫低備註同出勤。按香港時間鎖定，尋日嘅改唔到 —— 落雨停工、待料全部留底，做你 EOT／索償嘅 contemporaneous 證據。' },
+    { img: '/marketing/shot-drawings.png', icon: <ImageIcon size={16} />, t: '圖則掛喺工序度，逐版追蹤邊張係現行', d: '每張圖則掛喺對應嘅工序底下，逐版上載、版本對比，狀態標「現行 / 已取代」。全地盤睇住同一個現行版本，唔會撞錯舊圖；SI 仲可以指定引用邊個 rev。' },
   ]
-  const more = [
-    { icon: <ImageIcon size={14} />, t: '圖則版本管理（掛喺每個工序，逐版追蹤）' },
-  ]
+  const more: { icon: React.ReactNode; t: string }[] = []
   return (
     <Section n="09" kicker="睇真啲 · 同一個地盤" title={<>一個 demo 地盤，<span className="text-safety-500">由開工睇到完工</span></>}>
       <p className="-mt-6 mb-12 max-w-2xl text-base text-site-600 leading-relaxed">
@@ -249,16 +248,18 @@ function Screenshots() {
           </div>
         ))}
       </div>
-      <div className="mt-16 rounded-2xl border border-site-200 bg-site-50/60 p-6 md:p-8">
-        <div className="font-mono text-xs uppercase tracking-widest text-site-400 mb-4">仲有 —— 同一個 app 入面</div>
-        <div className="flex flex-wrap gap-2.5">
-          {more.map(m => (
-            <div key={m.t} className="inline-flex items-center gap-2 rounded-full bg-white border border-site-200 px-4 py-2 text-sm font-medium text-site-700 shadow-sm">
-              <span className="text-safety-600">{m.icon}</span> {m.t}
-            </div>
-          ))}
+      {more.length > 0 && (
+        <div className="mt-16 rounded-2xl border border-site-200 bg-site-50/60 p-6 md:p-8">
+          <div className="font-mono text-xs uppercase tracking-widest text-site-400 mb-4">仲有 —— 同一個 app 入面</div>
+          <div className="flex flex-wrap gap-2.5">
+            {more.map(m => (
+              <div key={m.t} className="inline-flex items-center gap-2 rounded-full bg-white border border-site-200 px-4 py-2 text-sm font-medium text-site-700 shadow-sm">
+                <span className="text-safety-600">{m.icon}</span> {m.t}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </Section>
   )
 }
