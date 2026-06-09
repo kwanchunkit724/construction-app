@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Check, Edit3, CornerUpLeft, X, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useProjects } from '../../contexts/ProjectsContext'
 import { useVo } from '../../contexts/VoContext'
 import { Spinner } from '../Spinner'
 import { VoLineItemsEditor, validateLineItems } from './VoLineItemsEditor'
@@ -18,18 +19,41 @@ export interface VoApproverBarProps {
 
 export function VoApproverBar({ vo, latestVersion, progressItems }: VoApproverBarProps) {
   const { profile } = useAuth()
+  const { projects, memberships } = useProjects()
   const { approve, requestRevision, reject, adminOverride } = useVo()
 
   const requiredRole = vo.chain_snapshot?.[vo.current_step]?.required_role
   const optionalUser = vo.chain_snapshot?.[vo.current_step]?.optional_user_id ?? null
   const isAdmin = profile?.global_role === 'admin'
 
+  // Mirror server-side active_role_holders(project_id, required_role) so the
+  // UI gate matches what submit_approval will actually authorise. The check is
+  // membership-based (per-project), NOT global_role-based: a holder is an admin,
+  // an assigned PM (when required_role='pm'), or an approved project_member whose
+  // membership role matches required_role. Server stays source of truth — this
+  // is a convenience hint that avoids showing actions the RPC would reject.
+  const isRoleHolder = useMemo(() => {
+    if (!profile || !requiredRole) return false
+    if (isAdmin) return true
+    if (requiredRole === 'pm') {
+      const proj = projects.find(p => p.id === vo.project_id)
+      if (proj?.assigned_pm_ids.includes(profile.id)) return true
+    }
+    return memberships.some(
+      m =>
+        m.project_id === vo.project_id &&
+        m.user_id === profile.id &&
+        m.status === 'approved' &&
+        m.role === requiredRole,
+    )
+  }, [profile, requiredRole, isAdmin, projects, memberships, vo.project_id])
+
   const canAct = useMemo(() => {
     if (!profile || !requiredRole) return false
     if (vo.status !== 'in_review') return false
     if (optionalUser) return optionalUser === profile.id || isAdmin
-    return profile.global_role === requiredRole || isAdmin
-  }, [profile, requiredRole, optionalUser, isAdmin, vo.status])
+    return isRoleHolder
+  }, [profile, requiredRole, optionalUser, isAdmin, isRoleHolder, vo.status])
 
   const [modal, setModal] = useState<ModalKind>(null)
   const [reason, setReason] = useState('')

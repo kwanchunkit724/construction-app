@@ -6,8 +6,11 @@ import { ApplyToProjectModal } from '../components/ApplyToProjectModal'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { ROLE_ZH } from '../types'
-import type { Project, ProjectMember, UserProfile } from '../types'
+import type { Project, ProjectMember } from '../types'
 import { supabase } from '../lib/supabase'
+
+// Subset returned by the admin_or_pm_list_applicants RPC (v30).
+type Applicant = { id: string; name: string; phone: string; company: string | null }
 
 const STATUS_STYLE: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-700',
@@ -180,13 +183,21 @@ function PendingApprovalCard({
   onApprove: () => Promise<{ error: string | null }>
   onReject: () => Promise<{ error: string | null }>
 }) {
-  const [applicant, setApplicant] = useState<UserProfile | null>(null)
+  const [applicant, setApplicant] = useState<Applicant | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    supabase.from('user_profiles').select('*').eq('id', membership.user_id).maybeSingle()
-      .then(({ data }) => setApplicant(data as UserProfile | null))
-  }, [membership.user_id])
+    // v17 narrowed the user_profiles SELECT policy so a brand-new applicant
+    // who shares no approved project with the approver is invisible to a
+    // direct SELECT (admin / subcontractor approvers in particular).
+    // Read via the SECURITY DEFINER RPC that gates on the same approver
+    // predicate as `pendingForMe`. See supabase/v30-applicant-visibility.sql.
+    supabase.rpc('admin_or_pm_list_applicants', { p_project_id: membership.project_id })
+      .then(({ data }) => {
+        const rows = (data as Applicant[] | null) ?? []
+        setApplicant(rows.find(r => r.id === membership.user_id) ?? null)
+      })
+  }, [membership.user_id, membership.project_id])
 
   if (!project) return null
 

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, useCallback, ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
+import { useProjects } from './ProjectsContext'
 import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import type {
   PTW, PtwVersion, PermitWorker, PermitSignoff, PermitScan, Approval, PtwPayload,
@@ -36,6 +37,7 @@ const PtwContext = createContext<PtwContextValue | null>(null)
 
 export function PtwProvider({ projectId, children }: { projectId: string; children: ReactNode }) {
   const { profile } = useAuth()
+  const { memberships, projects } = useProjects()
   const [ptws, setPtws] = useState<PTW[]>([])
   const [versionsByPtw, setVersionsByPtw] = useState<Record<string, PtwVersion[]>>({})
   const [workersByPtw, setWorkersByPtw] = useState<Record<string, PermitWorker[]>>({})
@@ -45,10 +47,22 @@ export function PtwProvider({ projectId, children }: { projectId: string; childr
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
+  // Mirrors the server-side can_edit_project_progress() check that gates
+  // the permits_to_work INSERT RLS (v10-ptw-schema.sql): admin OR assigned
+  // PM OR an approved project membership with role in
+  // (pm, main_contractor, subcontractor). Per-project MEMBERSHIP — NOT the
+  // global account role — governs this, so subcontractor_worker / owner are
+  // correctly excluded (the DB would reject their insert anyway).
   const canSubmit = useMemo(() => {
     if (!profile) return false
-    return ['admin', 'pm', 'main_contractor', 'subcontractor', 'subcontractor_worker'].includes(profile.global_role)
-  }, [profile])
+    if (profile.global_role === 'admin') return true
+    const project = projects.find(p => p.id === projectId)
+    if (project?.assigned_pm_ids.includes(profile.id)) return true
+    const myMembership = memberships.find(
+      m => m.user_id === profile.id && m.project_id === projectId && m.status === 'approved',
+    )
+    return !!myMembership && ['pm', 'main_contractor', 'subcontractor'].includes(myMembership.role)
+  }, [profile, projects, memberships, projectId])
 
   const refetch = useCallback(async () => {
     setLoading(true)

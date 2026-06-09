@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Check, Edit3, CornerUpLeft, X, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useProjects } from '../../contexts/ProjectsContext'
 import { useSi } from '../../contexts/SiContext'
 import { Spinner } from '../Spinner'
 import type { SI, SIVersion, SiPayload } from '../../types'
@@ -16,19 +17,42 @@ export interface SiApproverBarProps {
 
 export function SiApproverBar({ si, latestVersion }: SiApproverBarProps) {
   const { profile } = useAuth()
+  const { projects, memberships } = useProjects()
   const { approve, requestRevision, reject, adminOverride } = useSi()
 
   const requiredRole = si.chain_snapshot?.[si.current_step]?.required_role
   const optionalUser = si.chain_snapshot?.[si.current_step]?.optional_user_id ?? null
   const isAdmin = profile?.global_role === 'admin'
 
+  // Mirror server-side active_role_holders(project_id, required_role) so the
+  // UI gate matches what submit_approval will actually authorise. The check is
+  // membership-based (per-project), NOT global_role-based: a holder is an admin,
+  // an assigned PM (when required_role='pm'), or an approved project_member whose
+  // membership role matches required_role. Server stays source of truth — this
+  // is a convenience hint that avoids showing actions the RPC would reject.
+  const isRoleHolder = useMemo(() => {
+    if (!profile || !requiredRole) return false
+    if (isAdmin) return true
+    if (requiredRole === 'pm') {
+      const proj = projects.find(p => p.id === si.project_id)
+      if (proj?.assigned_pm_ids.includes(profile.id)) return true
+    }
+    return memberships.some(
+      m =>
+        m.project_id === si.project_id &&
+        m.user_id === profile.id &&
+        m.status === 'approved' &&
+        m.role === requiredRole,
+    )
+  }, [profile, requiredRole, isAdmin, projects, memberships, si.project_id])
+
   // Server is source of truth; UI gate is a convenience hint.
   const canAct = useMemo(() => {
     if (!profile || !requiredRole) return false
     if (si.status !== 'in_review') return false
     if (optionalUser) return optionalUser === profile.id || isAdmin
-    return profile.global_role === requiredRole || isAdmin
-  }, [profile, requiredRole, optionalUser, isAdmin, si.status])
+    return isRoleHolder
+  }, [profile, requiredRole, optionalUser, isAdmin, isRoleHolder, si.status])
 
   const [modal, setModal] = useState<ModalKind>(null)
   const [reason, setReason] = useState('')

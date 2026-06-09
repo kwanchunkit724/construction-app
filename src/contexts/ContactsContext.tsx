@@ -72,7 +72,11 @@ export function ContactsProvider({ projectId, children }: { projectId: string; c
   const projectIdRef = useRef(projectId)
   projectIdRef.current = projectId
 
-  const canManage = profile?.global_role === 'admin' || profile?.global_role === 'pm' || profile?.global_role === 'general_foreman'
+  // Mirror v11-contacts-schema.sql write policies (contacts_insert/update/delete):
+  // write is locked to global_role in ('admin','pm'). Anyone else (incl.
+  // general_foreman) is read-only — don't show write affordances that the
+  // server would reject with an RLS error.
+  const canManage = profile?.global_role === 'admin' || profile?.global_role === 'pm'
 
   const refresh = useCallback(async () => {
     setLoading(true)

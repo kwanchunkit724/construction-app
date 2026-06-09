@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, useCallback, ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
+import { useProjects } from './ProjectsContext'
 import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import type { SI, SIVersion, ProtestComment, Approval, SiPayload } from '../types'
 
@@ -29,6 +30,7 @@ export const SiContext = createContext<SiContextValue | null>(null)
 
 export function SiProvider({ projectId, children }: { projectId: string; children: ReactNode }) {
   const { profile } = useAuth()
+  const { memberships, projects } = useProjects()
   const [sis, setSis] = useState<SI[]>([])
   const [versionsBySi, setVersionsBySi] = useState<Record<string, SIVersion[]>>({})
   const [approvalsBySi, setApprovalsBySi] = useState<Record<string, Approval[]>>({})
@@ -36,10 +38,22 @@ export function SiProvider({ projectId, children }: { projectId: string; childre
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
+  // Mirrors the server-side can_edit_project_progress() check that gates the
+  // site_instructions INSERT RLS (v9-si-schema.sql): admin OR assigned PM of
+  // this project OR an APPROVED project membership with role in
+  // (pm, main_contractor, subcontractor). NOT keyed on global_role — a
+  // subcontractor_worker (or any non-member) would be RLS-denied, so we must
+  // hide 新增 from them instead of letting the insert fail.
   const canSubmit = useMemo(() => {
     if (!profile) return false
-    return ['admin', 'pm', 'main_contractor', 'subcontractor', 'subcontractor_worker'].includes(profile.global_role)
-  }, [profile])
+    if (profile.global_role === 'admin') return true
+    const project = projects.find(p => p.id === projectId)
+    if (project?.assigned_pm_ids.includes(profile.id)) return true
+    const myMembership = memberships.find(
+      m => m.user_id === profile.id && m.project_id === projectId && m.status === 'approved',
+    )
+    return !!myMembership && ['pm', 'main_contractor', 'subcontractor'].includes(myMembership.role)
+  }, [profile, projects, memberships, projectId])
 
   const refetch = useCallback(async () => {
     setLoading(true)
