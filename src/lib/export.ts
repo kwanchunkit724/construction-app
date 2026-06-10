@@ -14,7 +14,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem'
 import {
   PROGRESS_STATUS_ZH, ISSUE_STATUS_ZH, ISSUE_HANDLER_ZH, ROLE_ZH,
   computeRollup, getDescendantLeaves, plannedProgressOf, deriveStatus,
-  LINE_ITEM_CATEGORY_ZH,
+  isScheduled, LINE_ITEM_CATEGORY_ZH,
 } from '../types'
 import type {
   Project, ProgressItem, Issue, UserProfile, ProgressStatus,
@@ -145,7 +145,12 @@ export function exportPreset(p: 'internal' | 'owner' | 'exception', project: Pro
 const UNZONED = '__unzoned__'
 
 // delta = 本期 movement (actual − previous snapshot actual); null when no baseline.
-interface Eff { actual: number; planned: number; status: ProgressStatus; gap: number; delta: number | null }
+// planned / gap are null for an UNSCHEDULED leaf (no planned_start/planned_end):
+// the app's ProgressItemCard shows 未排期 and suppresses 計劃%/差距 for such
+// leaves, so the report must do the same instead of fabricating a 0% baseline
+// and a bogus variance. Zone/rollup aggregates stay numeric (computeRollup
+// already excludes unscheduled leaves from its planned average).
+interface Eff { actual: number; planned: number | null; status: ProgressStatus; gap: number | null; delta: number | null }
 interface ItemRow {
   zoneKey: string; zoneName: string
   code: string; title: string; level: number; depth: number
@@ -183,8 +188,16 @@ export function buildReportModel(project: Project, items: ProgressItem[], opts: 
     if (isLeaf(it)) {
       const actual = it.actual_progress
       const pv = pmap ? pmap[it.id] : undefined
+      const delta = pv === undefined ? null : actual - pv
+      // Unscheduled leaf (no planned dates): match ProgressItemCard — show 未排期,
+      // suppress 計劃%/差距 (null), but keep the live-derived status so the report
+      // stays consistent with the card (which derives status from actual vs 0, NOT
+      // from the stored planned_progress column).
+      if (!isScheduled(it)) {
+        return { actual, planned: null, status: deriveStatus(actual, 0), gap: null, delta }
+      }
       const planned = plannedProgressOf(it)
-      return { actual, planned, status: deriveStatus(actual, planned), gap: actual - planned, delta: pv === undefined ? null : actual - pv }
+      return { actual, planned, status: deriveStatus(actual, planned), gap: actual - planned, delta }
     }
     const r = computeRollup(getDescendantLeaves(items, it.id))
     return { actual: r.actual, planned: r.planned, status: r.status, gap: r.actual - r.planned, delta: aggDelta(getDescendantLeaves(items, it.id), r.actual) }
@@ -207,7 +220,9 @@ export function buildReportModel(project: Project, items: ProgressItem[], opts: 
   const qualifies = (it: ProgressItem) => {
     const e = effOf(it)
     if (!statusSel.has(e.status)) return false
-    if (opts.onlyBehind && e.gap >= -10) return false
+    // gap is null for unscheduled leaves — variance is not meaningful, so they
+    // can never satisfy the 落後 (onlyBehind) filter.
+    if (opts.onlyBehind && (e.gap === null || e.gap >= -10)) return false
     return true
   }
   // keep qualified items + their ancestor chain (to preserve tree context).
@@ -365,16 +380,22 @@ export async function exportProgressToExcel(project: Project, items: ProgressIte
       cells[2] = '　'.repeat(it.depth) + it.title
       cells[3] = it.level
       cells[4] = it.tracking
-      cells[colIndex.plan] = pct(it.eff.planned)
+      // Unscheduled leaf: 計劃 → 未排期, 差距 → — (text, not 0%). Match the app card.
+      cells[colIndex.plan] = it.eff.planned === null ? '未排期' : pct(it.eff.planned)
       cells[colIndex.act] = pct(it.eff.actual)
-      if (opts.showGap) cells[colIndex.gap] = it.eff.gap
+      if (opts.showGap) cells[colIndex.gap] = it.eff.gap === null ? '—' : it.eff.gap
       cells[statusCol] = STATUS_PILL[it.eff.status].mark + PROGRESS_STATUS_ZH[it.eff.status]
       cells[startCol] = it.start
       cells[endCol] = it.end
       cells[notesCol] = it.notes
       const idx = aoa.length
       pushRow(cells, opts.groupByZone ? it.depth + 1 : it.depth)
-      markNums(idx, [colIndex.plan, colIndex.act, ...(opts.showGap ? [colIndex.gap] : [])])
+      // Only mark numeric % columns for "0%" formatting — skip null (text) cells
+      // so the 未排期 / — labels aren't coerced/formatted as numbers.
+      const numCols = [colIndex.act]
+      if (it.eff.planned !== null) numCols.push(colIndex.plan)
+      if (opts.showGap && it.eff.gap !== null) numCols.push(colIndex.gap)
+      markNums(idx, numCols)
     }
     if (opts.groupByZone) pushRow([], 0)
   }
@@ -434,20 +455,22 @@ function reportHtml(project: Project, model: ReportModel, opts: ExportProgressOp
     </div>`
   }).join('')
 
-  const attn: Array<{ zone: string; title: string; actual: number; gap: number; note: string; status: ProgressStatus }> = []
+  // gap === null → unscheduled leaf: variance is not meaningful, so it can never
+  // land on the 需要關注 list via gap (only via an explicit delayed/blocked status).
+  const attn: Array<{ zone: string; title: string; actual: number; gap: number | null; note: string; status: ProgressStatus }> = []
   for (const z of model.zones) for (const r of z.rows) {
-    if (r.eff.status === 'delayed' || r.eff.status === 'blocked' || r.eff.gap < -10) {
+    if (r.eff.status === 'delayed' || r.eff.status === 'blocked' || (r.eff.gap !== null && r.eff.gap < -10)) {
       attn.push({ zone: z.name, title: r.title, actual: r.eff.actual, gap: r.eff.gap, note: r.notes ?? '', status: r.eff.status })
     }
   }
-  attn.sort((x, y) => x.gap - y.gap)
+  attn.sort((x, y) => (x.gap ?? 0) - (y.gap ?? 0))
   const attnRows = attn.length === 0
     ? `<div class="pgblk" style="font-size:14px; color:#15803d; margin:4px 0;">暫無落後 / 阻塞項目，全部按計劃。</div>`
     : attn.slice(0, 12).map(a => {
       const fg = STATUS_PILL[a.status].fg
       return `<div class="pgblk" style="display:flex; justify-content:space-between; gap:12px; padding:5px 0; border-bottom:1px solid #f1f5f9;">
         <div style="font-size:13px; color:${fg};">${escapeHtml(STATUS_PILL[a.status].mark + a.zone + ' · ' + a.title)}${a.note ? `<div style="font-size:12px; color:#94a3b8;">${escapeHtml(a.note)}</div>` : ''}</div>
-        <div style="font-size:13px; color:#475569; white-space:nowrap;">實際 ${a.actual}%（${a.gap >= 0 ? '+' : ''}${a.gap}%）</div>
+        <div style="font-size:13px; color:#475569; white-space:nowrap;">實際 ${a.actual}%${a.gap === null ? '（未排期）' : `（${a.gap >= 0 ? '+' : ''}${a.gap}%）`}</div>
       </div>`
     }).join('')
   const moreAttn = attn.length > 12 ? `<div class="pgblk" style="font-size:12px; color:#64748b; margin-top:4px;">…另有 ${attn.length - 12} 項，詳見內部版附錄。</div>` : ''
@@ -477,8 +500,8 @@ function reportHtml(project: Project, model: ReportModel, opts: ExportProgressOp
           <td style="padding:5px 6px; font-family:Consolas,monospace; color:#64748b; font-size:11px;">${escapeHtml(r.code)}</td>
           <td style="padding:5px 6px; padding-left:${6 + r.depth * 16}px; font-weight:${w};">${escapeHtml(r.title)}${r.tracking ? ` <span style="color:#7c3aed; font-size:11px;">${escapeHtml(r.tracking)}</span>` : ''}</td>
           <td style="padding:5px 6px; text-align:right; font-weight:700;">${r.eff.actual}%</td>
-          <td style="padding:5px 6px; text-align:right; color:#64748b;">${r.eff.planned}%</td>
-          <td style="padding:5px 6px; text-align:right; font-weight:700; color:${gapColour(r.eff.gap)};">${r.eff.gap >= 0 ? '+' : ''}${r.eff.gap}%</td>
+          <td style="padding:5px 6px; text-align:right; color:#64748b;">${r.eff.planned === null ? '未排期' : `${r.eff.planned}%`}</td>
+          <td style="padding:5px 6px; text-align:right; font-weight:700; color:${r.eff.gap === null ? '#94a3b8' : gapColour(r.eff.gap)};">${r.eff.gap === null ? '—' : `${r.eff.gap >= 0 ? '+' : ''}${r.eff.gap}%`}</td>
           ${hasDelta ? `<td style="padding:5px 6px; text-align:right; font-weight:700; color:${r.eff.delta === null ? '#cbd5e1' : r.eff.delta >= 0 ? '#15803d' : '#b91c1c'};">${r.eff.delta === null ? '—' : `${r.eff.delta >= 0 ? '+' : ''}${r.eff.delta}%`}</td>` : ''}
           <td style="padding:5px 6px; text-align:center;"><span style="background:${sp.bg}; color:${sp.fg}; padding:2px 7px; border-radius:7px; font-size:11px;">${escapeHtml(sp.mark + PROGRESS_STATUS_ZH[r.eff.status])}</span></td>
           <td style="padding:5px 6px; color:#475569; font-size:12px;">${escapeHtml(r.notes ?? '')}</td>
@@ -597,10 +620,14 @@ export async function exportIssuesToExcel(
       標題: i.title,
       描述: i.description,
       照片數: i.photos.length,
-      報告者: users[i.reporter_id]?.name ?? '—',
+      // '前成員' (ex-member) — not '—' — when an id has no resolvable name, so
+      // the audit trail never fully loses who reported / resolved an issue even
+      // after they leave the project (RLS hides their profile; see the RPC merge
+      // in ProjectDetail.tsx that should already supply most of these).
+      報告者: users[i.reporter_id]?.name ?? '前成員',
       報告者角色: ROLE_ZH[i.reporter_role],
       當前處理層: ISSUE_HANDLER_ZH[i.current_handler_role],
-      解決者: i.resolved_by ? (users[i.resolved_by]?.name ?? '—') : '',
+      解決者: i.resolved_by ? (users[i.resolved_by]?.name ?? '前成員') : '',
       報告時間: new Date(i.created_at).toLocaleString('zh-HK'),
       解決時間: i.resolved_at ? new Date(i.resolved_at).toLocaleString('zh-HK') : '',
     }))

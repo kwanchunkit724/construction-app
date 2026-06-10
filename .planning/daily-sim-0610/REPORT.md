@@ -62,8 +62,34 @@ issues ×3、dailies ×3（含 1 條 undeletable backdated，v35 會刪）、con
 project_members 1（測試工人 approved）、SI SI-002（卡 in_review）、tagged progress 改動。
 v35 清 backdated daily；其餘 `[sim-0610]` row 可留待下輪一次過清，唔影響 live admin view（全部 tag 住）。
 
+## Round 2 —補跑 7 個未完成 case（2026-06-11，session 重置後）
+
+7 個 case 全部跑晒。**3 個 case PASS 乾淨**（行事曆 v34 narrowing 無洩漏無漏睇、物料訂單 v34 GF insert OK、改項目名/日期）、
+**1 個 PASS（樓層模式，v34 assignee history OK）**、**1 個 PASS（轉判+審計，v34 history insert 201 成功）**、
+**動火證 PASS 但揭一個鏈缺陷**、**報表揭兩個數據缺陷**。adversarial verify：**3 confirmed，3 rejected**（rejected 全部係 stale-spec 假設或 by-design，已核對 v27 membership 規則）。
+
+### NEW-2 — 進度報表為「未排期」項目作假 計劃%/差距（P1，client）
+- **症狀**：`export.ts effOf` leaf 用 `plannedProgressOf(it)`，冇日期就返 0；於是未排期項目 print 計劃 0%、差距 +X%，同 app 卡（顯示「未排期」、唔出數）唔一致。落後項目睇落變超前，仲跌出「需要關注」。
+- **修復**：`Eff.planned/gap` 改 `number|null`；未排期 leaf → planned/gap=null、status 維持 live-derive（同卡一致，唔回退 stored planned_progress）；3 種 export 格式（HTML/PDF/Excel）render「未排期」/「—」；`onlyBehind` 明確排除 `gap===null`。tsc 清。
+- **狀態**：✅ 修咗（client-only，tsc exit 0）。
+
+### NEW-3 — 問題報表對「非成員」當事人 print「—」，審計斷鏈（P2）
+- **症狀**：`user_profiles` RLS（v17）只放現任同項目成員；已離場/未審批嘅 reporter/resolver 解析唔到 → export print「—」，丟失「誰報誰解」。
+- **修復**：新 `v36-issue-actor-profiles-rpc.sql`（SECURITY DEFINER，gate `can_view_project`，只返當前項目 issues 上嘅 actor 名）+ ProjectDetail 改用 RPC；fallback「前成員」代替「—」。
+- **狀態**：✅ 已上 prod + 執行驗證：PM 叫 RPC 返 6 個 actor（含非成員 `Admin`、`PM Kwan`），舊 plain select 只得 4 個。
+
+### NEW-1 — 動火證預設審批鏈一定要 safety_officer，但無機制保證項目有 → 合法 PTW 永久卡 step 0（P1，⚠️ 待你決策）
+- **症狀**：`seed_default_chain`（`supabase/v10-split/6-default-ptw-chain-seed.sql`）為每個項目 seed 鏈 `[safety_officer, main_contractor]`。測試項目冇 safety_officer 成員 → `submit_ptw` 凍結鏈後，`submit_approval` 對所有非持有者一律 `P0001 你冇權批准`。**無恢復路徑**：PM insert safety_officer membership→42501；成員加第二角色→23505 unique；AdminProjectChains 係 requireAdmin（PM 入唔到）。
+- **影響**：PTW 係 HK 地盤核心功能，任何未配 safety_officer 嘅項目，動火/高空/吊運許可證一 submit 就靜靜雞死鎖。
+- **未修原因**：改 `submit_ptw` 語意 / 改預設鏈 / 加 safety_officer 委派路徑，全部會影響**現有 live 項目**（CLAUDE.md：backwards-compatible，App Store 現有用戶唔可以爛）。呢個係產品決策，唔應該我擅自改 live PTW 簽核流程 → 留俾你揀（見對話問題）。
+
+## 殘留測試資料（`[sim-0610]`/`[sim-0611]` tag）
+
+Round1：v35 已清 backdated daily + 2 test-worker membership + 2 空 SI。
+Round2：events 1（週會）、materials 3、progress 改動、PTW-003、1 條 append-only progress_history 探針（ap=99，immutable 設計刪唔到，已 tag）。全部 tag 住，唔影響 live admin view，可下輪一次過清。
+
 ## 一句總結
 
-跑出 3 個真 bug，最重要係發現 **v33 其實冇上到 prod**（approver RPC 仲爆緊）。3 個都修咗入 `v35`，
-**等你 Supabase 登入後我即刻 apply + 執行驗證**。乾淨嘅 6 個 case 證明 issue 鏈、圖則權限、聯絡人 gate 穩陣。
-未跑完嘅 6 個 case（timetable/material/edit/ptw/floors/export）下輪 session 重置後補跑。
+兩輪共 **6 個真 bug**：5 個已修+執行驗證（v35 ×3 backend、NEW-2 client、NEW-3 = v36 RPC），淨低 **NEW-1（PTW 鏈）等你決策**（改 live 簽核流程，唔擅自郁）。
+14 個 case 全部跑過，clean 嘅證明 issue 鏈/圖則/聯絡人/物料/行事曆 v34 narrowing/樓層/轉判審計/改項目 全部穩陣。
+最大發現：**v33 從來冇真上到 prod**（approver RPC 仲爆緊）——已 v35 修好並今次用執行驗證鎖死。

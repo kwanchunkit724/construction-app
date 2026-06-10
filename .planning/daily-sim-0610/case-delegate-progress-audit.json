@@ -1,0 +1,29 @@
+{
+  "case_key": "delegate-progress-audit",
+  "date": "2026-06-11",
+  "project_id": "cccc2026-2026-2026-2026-000026202620",
+  "leaf_item": "aaaa0003-0003-0003-0003-000000000001 (code 01, zone C / 3座, percentage)",
+  "passed": true,
+  "summary": "The delegate->contributor->audit chain works end to end. 老總(general_foreman) assigned an unassigned 3座 leaf to 判頭, 判頭 delegated to 管工, the delegated 管工 ticked actual_progress 0->30 AND the progress_history audit INSERT SUCCEEDED (HTTP 201) — confirming the v34 fix that re-gated the history insert policy on can_update_progress_item. 判頭 then advanced 30->55 with its own history row, and the trail contains BOTH contributor rows. The only deviation from the case script is its negative assertion: 陳工程師(60001003) is NOT denied — his per-project membership role is main_contractor, which v27 deliberately includes in the supervisor set, so can_manage_project_progress=true and he can legitimately update; this is correct, self-consistent behavior, not a bug.",
+  "assertions": [
+    {"step": "老總 PATCH assigned_to=[判頭]", "expect": "200", "got": "200", "pass": true},
+    {"step": "判頭 PATCH delegated_to=[管工]", "expect": "200", "got": "200", "pass": true},
+    {"step": "管工 PATCH actual_progress 0->30", "expect": "200 (v15 update policy allows delegated)", "got": "200 1 row", "pass": true},
+    {"step": "管工 INSERT progress_history (KEY v34 audit assertion)", "expect": "201 SUCCEED", "got": "201", "pass": true},
+    {"step": "判頭 PATCH actual_progress 30->55", "expect": "200", "got": "200 1 row", "pass": true},
+    {"step": "判頭 INSERT progress_history", "expect": "201", "got": "201", "pass": true},
+    {"step": "history has BOTH contributor rows", "expect": ">=2 (ap=30 by 管工, ap=55 by 判頭)", "got": "both present with correct zh-HK notes", "pass": true},
+    {"step": "陳工程師 can_manage_project_progress(self, project)", "expect": "case assumed false", "got": "true (membership role=main_contractor, in v27 supervisor set)", "pass": "n/a - premise wrong"},
+    {"step": "陳工程師 can_update_progress_item(self, leaf)", "expect": "case assumed false", "got": "true", "pass": "n/a - premise wrong"},
+    {"step": "陳工程師 leaf visible via get_visible_progress_items", "expect": "—", "got": "true (supervisor sees full tree)", "pass": true},
+    {"step": "陳工程師 PATCH actual_progress (not assigned/delegated)", "expect": "case assumed denied/0 rows", "got": "200 1 row (legitimately allowed as supervisor)", "pass": "n/a - premise wrong"}
+  ],
+  "bugs": [],
+  "design_notes": [
+    "progress_history has only SELECT + INSERT RLS policies (v3-5 + v34). No UPDATE/DELETE policy exists -> the audit table is append-only/immutable. DELETE attempts by any persona return HTTP 200 with 0 rows affected (RLS-filtered, not error). This is the correct property for a dispute audit trail.",
+    "陳工程師(60001003): global_role=main_contractor, sub_role=engineer, BUT per-project membership role=main_contractor. v27 unified supervisor rights on the PER-PROJECT membership role (pm/general_foreman/main_contractor), not the engineer sub_role. So the engineer IS a progress supervisor on this project and the client canUpdateItem (mirrors can_manage_project_progress) would also show him the 更新 button — client and server agree.",
+    "To get a true negative (a non-supervisor who is NOT assigned/delegated being denied), the case would need a persona whose membership role is subcontractor_worker/owner OR a subcontractor not on the row. 何判頭(60001005, membership=subcontractor) would be denied on a row he is NOT assigned to — but here he was the assignee, so he is correctly allowed."
+  ],
+  "cleanup": "Leaf reset to actual_progress=55 (last legit 判頭 value). One stray test history row (ap=99, [sim-0611] ENG audit) created while probing 陳工程師's update right could NOT be removed because progress_history is append-only (no DELETE policy) — left in place; tagged [sim-0611]. assigned_to=[判頭], delegated_to=[管工] left in place to reflect the delegation chain.",
+  "notes": "All writes confined to project cccc2026 and the single seed leaf aaaa0003-...0001. No user_profiles touched. Windows curl UTF-8 argv bug avoided by writing JSON to files. Console cp950 print crashes were cosmetic only; all HTTP results captured."
+}

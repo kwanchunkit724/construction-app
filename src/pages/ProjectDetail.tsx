@@ -182,6 +182,16 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
                 const { data } = await supabase.from('user_profiles').select('*').in('id', ids)
                 if (data) for (const u of data as UserProfile[]) users[u.id] = u
               }
+              // Authoritative actor names come from the RPC, not the RLS-narrowed
+              // select above: user_profiles RLS (v17) hides profiles of non/ex-members,
+              // so a reporter/resolver who has left the project would resolve to '—'.
+              // get_issue_actor_profiles (v36) is SECURITY DEFINER and gated on the
+              // same can_view_project predicate as the issues SELECT policy — it returns
+              // only the names of actors on issues the caller can already see.
+              const { data: actors } = await supabase.rpc('get_issue_actor_profiles', { p_project_id: project.id })
+              if (actors) for (const a of actors as Array<{ id: string; name: string }>) {
+                users[a.id] = { ...(users[a.id] ?? {} as UserProfile), id: a.id, name: a.name }
+              }
               const { exportIssuesToExcel } = await import('../lib/export')
               await exportIssuesToExcel(project, issues, users)
             }}

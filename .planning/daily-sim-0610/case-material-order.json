@@ -1,0 +1,28 @@
+{
+  "case_key": "material-order",
+  "date": "2026-06-11",
+  "project_id": "cccc2026-2026-2026-2026-000026202620",
+  "passed": true,
+  "summary": "判頭 (60001005) successfully created a normal 混凝土 5 立方米 order linked to one of HIS assigned items (bbbb0001...031 水管立管 zone A), an URGENT 焊條 5 包 order, and a yesterday-planned 砂 order; all inserted with generated status='requested'. 老總 (general_foreman) successfully created 鋼筋 10 噸 — confirming the v34 INSERT-policy fix (general_foreman was missing from the v11/v16 allowlist). PM sees all orders. 管工 (main_contractor, non-owner non-supervisor) DELETE and UPDATE of 判頭's order both returned 0 rows (RLS deny, confirmed genuine by PM supervisor-delete succeeding). 判頭 marked own order received (qty_arrived 0->5) flipping status->'arrived' with arrived_at stamped. The client 逾期 derivation (isMaterialLate = status==='requested' && planned_arrival_at < now()) is fully supported by the data.",
+  "bugs": [],
+  "assertions": {
+    "subcontractor_insert_normal": "PASS - 混凝土 id 7ca73b36-0090-405a-8c4c-cb97621a2c61, status=requested, item linked to 判頭's own assigned leaf",
+    "subcontractor_insert_urgent": "PASS - 焊條 id 89d99d94-c854-42b6-ad16-2d965a16dda3, urgent=true",
+    "subcontractor_insert_backdated": "PASS - 砂 id ba361493-494f-49af-b12f-21bfc1cf94f7, planned 2026-06-10 (past)",
+    "general_foreman_insert_v34": "PASS - 鋼筋 id 2e85b770... inserted by 老總 (general_foreman), HTTP 200 + representation. Confirms v34-realworld-sim-fixes.sql added general_foreman to materials_insert WITH CHECK (v11 schema + v16 fix had omitted it for INSERT).",
+    "pm_sees_all": "PASS - PM (60001001) SELECT returned all 4 sim-0611 rows incl. urgent 焊條",
+    "foreman_delete_denied": "PASS - 管工 (60001004) DELETE 判頭's 混凝土 -> HTTP 200 Content-Range */* (0 rows), row survived. Genuine RLS deny per v16/v34 policy (requester OR is_material_supervisor). Proven not a missing-row fluke: PM supervisor DELETE of 鋼筋 returned 1 deleted row.",
+    "foreman_update_denied": "PASS - 管工 PATCH rename of 判頭's 焊條 -> 0 rows, name unchanged (v16-materials-rls-fix holds)",
+    "subcontractor_receive_own": "PASS - 判頭 PATCH qty_arrived=5 -> status auto 'requested'->'arrived' (generated column), arrived_at stamped",
+    "overdue_derivation": "PASS - status='requested' rows with planned_arrival_at in past (砂 06-10) compute 逾期=true; 'arrived' row computes false. Data supports client isMaterialLate(). Note: status is a STORED generated column (qty-driven only); 'late' is correctly never persisted (now() is non-immutable, rejected in generated expr) and is derived at render time + inside get_timetable."
+  },
+  "status_values_observed": ["requested", "arrived"],
+  "status_model": "GENERATED STORED column: qty_arrived>=qty_needed->'arrived', qty_arrived>0->'partial', else 'requested'. ZH: requested=已申請 partial=部分到貨 arrived=已齊料. 逾期 is a client/RPC pseudo-status, not a 4th DB value.",
+  "rows_created": [
+    {"id": "7ca73b36-0090-405a-8c4c-cb97621a2c61", "name": "混凝土 [sim-0611]", "by": "60001005", "final_status": "arrived"},
+    {"id": "89d99d94-c854-42b6-ad16-2d965a16dda3", "name": "焊條 [sim-0611]", "by": "60001005", "final_status": "requested", "urgent": true},
+    {"id": "ba361493-494f-49af-b12f-21bfc1cf94f7", "name": "砂 [sim-0611]", "by": "60001005", "final_status": "requested", "note": "yesterday-planned, 逾期 candidate"},
+    {"id": "2e85b770-e8e7-4d48-ad82-b4189df623bf", "name": "鋼筋 [sim-0611]", "by": "60001002", "final_status": "DELETED by PM (supervisor-delete assertion)"}
+  ],
+  "notes": "All sim rows tagged [sim-0611]. Only the test project cccc2026 was touched. The Windows curl inline-UTF8 PGRST102 gotcha was hit and worked around by writing JSON files with python json.dump(ensure_ascii=False, encoding='utf-8') (NOT an app bug). 老總's 鋼筋 was intentionally deleted to prove supervisor-delete works (adversarial confirmation that 管工's 0-row delete was a real RLS deny). 3 sim rows left in place as evidence."
+}
