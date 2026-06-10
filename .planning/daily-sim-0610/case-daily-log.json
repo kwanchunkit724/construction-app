@@ -1,0 +1,45 @@
+{
+  "case_key": "daily-log",
+  "date": "2026-06-10",
+  "feature": {
+    "table": "dailies",
+    "schema": "supabase/v11-dailies-schema.sql",
+    "client": [
+      "src/contexts/DailiesContext.tsx",
+      "src/pages/DailyList.tsx",
+      "src/pages/DailyEdit.tsx"
+    ],
+    "insert_shape": "upsert {project_id, user_id, date(todayHKT), weather(晴|陰|雨|暴雨|熱|凍|大風), progress_item_ids uuid[], freeform_items text[], notes} onConflict=project_id,user_id,date",
+    "write_rule": "main_contractor + sub_role in (foreman, engineer), self only, approved member",
+    "read_rule": "any approved project member reads all dailies in project",
+    "lock_rule": "UPDATE/DELETE only when row.date == today HKT; INSERT has NO date check"
+  },
+  "passed": false,
+  "steps": [
+    {"step": "foreman 60001004 upsert today's daily 大風 [sim-0610] 外牆架已搭好", "result": "PASS", "row_id": "4626a8ba-ba17-4935-accc-a88ef289cfff"},
+    {"step": "engineer 60001003 upsert own daily", "result": "PASS", "row_id": "59b6e34c-afca-470c-b36e-1b3d8c2a52c5"},
+    {"step": "subcontractor 60001005 insert attempt", "result": "PASS (denied 42501, matches client promise 判頭唔可以寫日誌)"},
+    {"step": "subcontractor read today's logs", "result": "PASS (read-only allowed per RLS + client copy)"},
+    {"step": "PM 60001001 reads all today's logs", "result": "PASS (both rows visible)"},
+    {"step": "general_foreman 60001002 reads all today's logs", "result": "PASS (both rows visible)"},
+    {"step": "foreman PATCH own today row", "result": "PASS (edit window open)"},
+    {"step": "foreman PATCH yesterday-dated row", "result": "PASS (locked, 0 rows)"},
+    {"step": "foreman DELETE yesterday-dated row", "result": "PASS (locked, 0 rows)"},
+    {"step": "engineer PATCH foreman's row", "result": "PASS (denied, 0 rows)"},
+    {"step": "foreman INSERT row dated 2026-06-09 (yesterday)", "result": "FAIL — DB accepted it; lock rule only covers UPDATE/DELETE", "row_id": "8e49641d-31c2-40e3-b566-c88b494d9455"}
+  ],
+  "bugs": [
+    {
+      "title": "dailies insert RLS has no date=today check — foreman/engineer can fabricate backdated (or future) daily logs via API",
+      "severity": "P1",
+      "repro": "Sign in as 60001004 (main_contractor/foreman); POST /rest/v1/dailies?on_conflict=project_id,user_id,date with Prefer: resolution=merge-duplicates and body {\"project_id\":\"cccc2026-2026-2026-2026-000026202620\",\"user_id\":\"aaaa1004-...\",\"date\":\"2026-06-09\",\"weather\":\"晴\",\"freeform_items\":[\"[sim-0610] 補寫尋日日誌測試\"],\"notes\":\"[sim-0610] backdated insert test\"}",
+      "evidence": "201-equivalent success: [{\"id\":\"8e49641d-31c2-40e3-b566-c88b494d9455\",\"date\":\"2026-06-09\",...,\"created_at\":\"2026-06-10T15:54:21Z\"}]. v11-dailies-schema.sql header states 'yesterday's diary stays locked' but dailies_insert policy (lines 64-80) checks role+membership only, no date = (now() at time zone 'Asia/Hong_Kong')::date clause. Secondary effect: the backdated row is then PERMANENT — update/delete policies block the author from correcting or removing it (PATCH/DELETE both returned []).",
+      "layer": "db"
+    }
+  ],
+  "residual_rows": [
+    "dailies 4626a8ba-ba17-4935-accc-a88ef289cfff (2026-06-10, foreman, [sim-0610])",
+    "dailies 59b6e34c-afca-470c-b36e-1b3d8c2a52c5 (2026-06-10, engineer, [sim-0610])",
+    "dailies 8e49641d-31c2-40e3-b566-c88b494d9455 (2026-06-09, foreman, [sim-0610], undeletable by author due to delete lock — needs admin/SQL cleanup)"
+  ]
+}
