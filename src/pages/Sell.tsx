@@ -326,7 +326,7 @@ function Numbers() {
 function Solution() {
   const cols = [
     { icon: <HardHat size={22} />, role: '判頭', points: ['物料 request + 急件 alert', '逾期 / 吹大水即時知', '自動 link 進度項目'] },
-    { icon: <ClipboardCheck size={22} />, role: '工程師 / 管工', points: ['30 秒 daily report', 'PTW 電子簽 + 拎相', '焊接 / 棚架全部 PTW'] },
+    { icon: <ClipboardCheck size={22} />, role: '工程師 / 管工', points: ['30 秒 daily report', 'PTW 電子簽 + 拎相', '動火 / 高空 / 吊運 PTW'] },
     { icon: <LayoutDashboard size={22} />, role: '老總 / PM', points: ['Real-time 4-zone dashboard', 'Audit trail for dispute', '自動 escalation chain'] },
   ]
   return (
@@ -436,13 +436,13 @@ function Cell({ v, highlight }: { v: boolean | string; highlight?: boolean }) {
 // ── PRICING ─────────────────────────────────────────────────
 function Pricing() {
   const tiers = [
-    { name: 'Pilot 試用', price: 'HK$0', cycle: '1 個月', feats: ['1 個項目', '10 個帳號', '全部 v1.1 功能'], cta: '免費開始', href: APP_STORE },
+    { name: 'Pilot 試用', price: 'HK$0', cycle: '1 個月', feats: ['1 個項目', '10 個帳號', '全部 v1.3 功能'], cta: '免費開始', href: APP_STORE },
     { name: 'Standard', price: 'HK$3,800', cycle: '/月 per project', feats: ['1 個項目', '50 個帳號', '10 GB 圖則', '每月 1 份自訂報告'], cta: '立即試用', href: APP_STORE, highlight: true },
     { name: 'Pro', price: 'HK$9,800', cycle: '/月 無限項目', feats: ['無限項目', '無限帳號', '100 GB 圖則', '每月 review call'], cta: '聯絡我哋', href: `mailto:${EMAIL}` },
     { name: 'Enterprise', price: 'Quote', cycle: '年度合約', feats: ['專屬客戶經理', 'HK 區數據', '99.9% SLA + DPA'], cta: '聯絡我哋', href: `mailto:${EMAIL}` },
   ]
   return (
-    <Section n="06" kicker="越多 project 越平" title="所有 tier 都包 v1.1 security + UX，唔係 paywall" tone="dark" id="pricing">
+    <Section n="06" kicker="越多 project 越平" title="所有 tier 都包 v1.3 security + UX，唔係 paywall" tone="dark" id="pricing">
       <div className="grid md:grid-cols-4 gap-5">
         {tiers.map(t => (
           <div key={t.name} className={`relative rounded-2xl p-6 flex flex-col ${t.highlight ? 'bg-white text-site-900 shadow-2xl ring-2 ring-safety-500 md:-translate-y-3' : 'bg-white/[0.03] border border-white/10 text-white'}`}>
@@ -472,7 +472,7 @@ function Pricing() {
         <div className="h-1.5 w-full" style={HAZARD} />
         <div className="bg-safety-500 text-white p-6 text-center">
           <div className="font-heading text-xl md:text-2xl font-extrabold">創始客戶價 — HK$2,850/月</div>
-          <div className="text-sm text-white/90 mt-1 font-mono">鎖 12 個月 · 2026-06-30 前簽 · Standard 慳 25%</div>
+          <div className="text-sm text-white/90 mt-1 font-mono">鎖 12 個月 · 2026-08-31 前簽 · Standard 慳 25%</div>
         </div>
       </div>
     </Section>
@@ -513,8 +513,8 @@ function Roi() {
 // ── TRUST ───────────────────────────────────────────────────
 function Trust() {
   const bullets = [
-    'Apple App Store 已通過 review（v1.1 自 5/27）',
-    'Google Play 已通過 closed test review',
+    'Apple App Store 上架 · 持續更新至 v1.3',
+    'Android 版已驗證，Google Play 上架審批中',
     '5-persona security simulation，25/25 attack vectors blocked',
     'Apple 帳號刪除合規（soft-anonymize）',
     'Data 加密：at rest (Supabase) + in transit (HTTPS only)',
