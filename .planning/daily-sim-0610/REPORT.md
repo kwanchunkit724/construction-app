@@ -10,8 +10,11 @@ evidence 落 `.planning/daily-sim-0610/`，所以 finding 由 disk 救返。
 - **6 個 case 證實乾淨**（RLS 雙向都正確）：issue 升級鏈、issue 翻發、圖則上載＋版本＋權限、
   聯絡人權限、新工人入職的 membership/approve、每日日誌的讀取＋今日編輯窗。
 - 修復：`supabase/v35-daily-sim-fixes.sql`（3 個 fix，idempotent）。
-- ⚠️ **v35 未上 prod** — Supabase 登出咗，等你登入 SQL editor。上完我會**執行驗證**（唔係淨係睇 source，
-  v33 就係因為淨係睇 source 漏咗）。
+- ✅ **v35 已上 prod 並執行驗證**（2026-06-10 22:2x UTC，經 SQL editor apply → REST execute-verify）：
+  - FIX 1：PM 叫 `admin_or_pm_list_applicants` 返到 `name:測試工人2, phone:60001007` — 冇 42702。
+  - FIX 2：foreman 補寫 backdated daily → `42501` 拒絕；舊 backdated row 已清（`[]`）。
+  - FIX 3：空 SI submit → raise `請先填寫並儲存工地指令內容後再提交`。
+  （今次係**執行驗證**，唔係淨睇 source — v33 就係淨睇 source 漏咗。）
 
 ## Per-case 結果
 
