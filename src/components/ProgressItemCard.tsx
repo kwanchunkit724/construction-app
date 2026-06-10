@@ -81,7 +81,7 @@ function useProfiles(ids: string[]): Record<string, UserProfile> {
 }
 
 export function ProgressItemCard({
-  item, expanded, onToggle, onUpdate, onAddChild, onAssign, onHistory, onDelete,
+  item, expanded, onToggle, onUpdate, onAddChild, onAssign, onHistory, onEdit, onDelete,
 }: {
   item: ProgressItem
   expanded: Set<string>
@@ -90,6 +90,7 @@ export function ProgressItemCard({
   onAddChild: (parent: ProgressItem) => void
   onAssign: (item: ProgressItem) => void
   onHistory: (item: ProgressItem) => void
+  onEdit: (item: ProgressItem) => void
   onDelete: (item: ProgressItem) => void
 }) {
   const { items, canEdit, canUpdateItem } = useProgress()
@@ -237,6 +238,9 @@ export function ProgressItemCard({
                   {canEdit && (
                     <MenuRow icon={<Plus size={15} />} label="加細項" onClick={() => { onAddChild(item); setMenuOpen(false) }} />
                   )}
+                  {canEdit && (
+                    <MenuRow icon={<Edit3 size={15} />} label="編輯（名稱／日期）" onClick={() => { onEdit(item); setMenuOpen(false) }} />
+                  )}
                   {canEdit && !confirmDel && (
                     <MenuRow icon={<Trash2 size={15} />} label="刪除" danger onClick={() => setConfirmDel(true)} />
                   )}
@@ -289,6 +293,7 @@ export function ProgressItemCard({
           onAddChild={onAddChild}
           onAssign={onAssign}
           onHistory={onHistory}
+          onEdit={onEdit}
           onDelete={onDelete}
         />
       ))}

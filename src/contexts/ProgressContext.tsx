@@ -32,6 +32,7 @@ interface ProgressContextType {
   updateFloors: (id: string, floorsCompleted: string[], notes: string) => Promise<{ error: string | null }>
   setAssignment: (id: string, assigned: string[], delegated: string[]) => Promise<{ error: string | null }>
   fetchHistory: (id: string) => Promise<ProgressHistoryEntry[]>
+  updateItemMeta: (id: string, patch: { title?: string; planned_start?: string | null; planned_end?: string | null }) => Promise<{ error: string | null }>
   deleteItem: (id: string) => Promise<{ error: string | null }>
 }
 
@@ -170,13 +171,37 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
 
   async function recordHistory(itemId: string, actual: number, floorsCompleted: string[], notes: string) {
     if (!profile) return
-    await supabase.from('progress_history').insert({
+    const { error } = await supabase.from('progress_history').insert({
       item_id: itemId,
       actual_progress: actual,
       floors_completed: floorsCompleted,
       notes,
       updated_by: profile.id,
     })
+    // Don't block the progress update on the audit write, but never swallow it
+    // silently — a denied history insert means a gap in the dispute trail.
+    if (error) console.error('progress_history insert error:', error)
+  }
+
+  // Edit an item's metadata (title / planned dates). planned_start/end drive
+  // plannedProgressOf, so editing them re-bases the schedule without losing the
+  // item's history, children, drawings or assignments (vs delete + recreate).
+  async function updateItemMeta(
+    id: string,
+    patch: { title?: string; planned_start?: string | null; planned_end?: string | null },
+  ) {
+    if (!profile) return { error: '未登入' }
+    const upd: Record<string, unknown> = {
+      last_updated_by: profile.id,
+      last_updated_at: new Date().toISOString(),
+    }
+    if (patch.title !== undefined) upd.title = patch.title
+    if (patch.planned_start !== undefined) upd.planned_start = patch.planned_start
+    if (patch.planned_end !== undefined) upd.planned_end = patch.planned_end
+    const { error } = await supabase.from('progress_items').update(upd).eq('id', id)
+    if (error) return { error: error.message }
+    await refetch()
+    return { error: null }
   }
 
   async function updateProgress(id: string, actual: number, notes: string) {
@@ -256,7 +281,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
       canManageStructure, canEdit, canUpdateItem,
       refetch,
       addItem, updateProgress, updateFloors,
-      setAssignment, fetchHistory, deleteItem,
+      setAssignment, fetchHistory, updateItemMeta, deleteItem,
     }}>
       {children}
     </ProgressContext.Provider>

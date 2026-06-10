@@ -232,7 +232,7 @@ function IssueDetailInner({ projectId, issueId }: { projectId: string; issueId: 
                 <ArrowUp size={16} /> 上呈到 {ISSUE_HANDLER_ZH[nextRole]}
               </button>
             )}
-            {!isOpen && isReporter && (
+            {!isOpen && (isReporter || canAct) && (
               <button
                 onClick={() => { setDialog({ type: 'reopen' }); setDialogText('') }}
                 className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl py-2.5 flex items-center justify-center gap-1.5 text-sm"

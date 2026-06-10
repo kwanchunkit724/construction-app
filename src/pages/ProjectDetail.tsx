@@ -18,6 +18,7 @@ import { ProgressItemCard } from '../components/ProgressItemCard'
 import { CreateItemModal } from '../components/CreateItemModal'
 import { UpdateProgressModal } from '../components/UpdateProgressModal'
 import { AssignmentModal } from '../components/AssignmentModal'
+import { EditItemModal } from '../components/EditItemModal'
 import { HistoryModal } from '../components/HistoryModal'
 import { IssueCard } from '../components/IssueCard'
 import { CreateIssueModal } from '../components/CreateIssueModal'
@@ -29,7 +30,7 @@ import { MaterialsProvider } from '../contexts/MaterialsContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { usePtwFlag } from '../contexts/PtwFlagContext'
-import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH } from '../types'
+import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH, deriveStatus, plannedProgressOf } from '../types'
 import type { ProgressItem, ProgressStatus, Zone } from '../types'
 
 type Tab = 'progress' | 'issues' | 'si-vo' | 'tools'
@@ -83,6 +84,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const [createCtx, setCreateCtx] = useState<CreateContext | null>(null)
   const [updating, setUpdating] = useState<ProgressItem | null>(null)
   const [assigning, setAssigning] = useState<ProgressItem | null>(null)
+  const [editing, setEditing] = useState<ProgressItem | null>(null)
   const [historyItem, setHistoryItem] = useState<ProgressItem | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [createIssueOpen, setCreateIssueOpen] = useState(false)
@@ -126,10 +128,14 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
 
   // Stats — leaves only (across whole project)
   const leaves = items.filter(i => !items.some(c => c.parent_id === i.id))
-  const completed = leaves.filter(i => i.status === 'completed').length
-  const inProgress = leaves.filter(i => i.status === 'in-progress').length
-  const delayed = leaves.filter(i => i.status === 'delayed').length
-  const notStarted = leaves.filter(i => i.status === 'not-started').length
+  // Derive status live (schedule-vs-today) to match the cards + zone rollups
+  // below — the stored i.status column freezes at save time and goes stale, so
+  // tiles would otherwise contradict the cards right under them.
+  const effStatus = (i: ProgressItem) => deriveStatus(i.actual_progress, plannedProgressOf(i))
+  const completed = leaves.filter(i => effStatus(i) === 'completed').length
+  const inProgress = leaves.filter(i => effStatus(i) === 'in-progress').length
+  const delayed = leaves.filter(i => effStatus(i) === 'delayed').length
+  const notStarted = leaves.filter(i => effStatus(i) === 'not-started').length
 
   const expandedSet = expanded.size === 0 ? autoExpanded : expanded
 
@@ -238,6 +244,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
                     onAddChild={parent => setCreateCtx({ parent, zone: zoneOf(parent, zone) })}
                     onAssign={setAssigning}
                     onHistory={setHistoryItem}
+                    onEdit={setEditing}
                     onDelete={item => deleteItem(item.id)}
                   />
                 ))}
@@ -282,6 +289,11 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
         open={!!assigning}
         onClose={() => setAssigning(null)}
         item={assigning}
+      />
+      <EditItemModal
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        item={editing}
       />
       <HistoryModal
         open={!!historyItem}
@@ -381,7 +393,7 @@ function IssuesTab({
 
 function ZoneSection({
   zone, items, expanded, canEdit,
-  onToggle, onAddRoot, onUpdate, onAddChild, onAssign, onHistory, onDelete,
+  onToggle, onAddRoot, onUpdate, onAddChild, onAssign, onHistory, onEdit, onDelete,
 }: {
   zone: Zone
   items: ProgressItem[]
@@ -393,6 +405,7 @@ function ZoneSection({
   onAddChild: (parent: ProgressItem) => void
   onAssign: (item: ProgressItem) => void
   onHistory: (item: ProgressItem) => void
+  onEdit: (item: ProgressItem) => void
   onDelete: (item: ProgressItem) => void
 }) {
   const zoneRoots = items.filter(i => i.parent_id === null && i.zone_id === zone.id)
@@ -457,6 +470,7 @@ function ZoneSection({
               onAddChild={onAddChild}
               onAssign={onAssign}
               onHistory={onHistory}
+              onEdit={onEdit}
               onDelete={onDelete}
             />
           ))}
