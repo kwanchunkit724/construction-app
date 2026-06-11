@@ -25,7 +25,7 @@ App version bumped **1.3 → 1.4** (package.json, codemagic ×4, pbxproj ×2).
   (HistoryModal shows 名稱：舊→新), and a column write-guard trigger makes title/code/dates/structure
   manager-only (closes the row-vs-column RLS hole; contributors still tick progress).
 
-### 4 — Progress table fits project types · P1 DONE, P2/P3 remaining
+### 4 — Progress table fits project types · DONE (P1+P2+P3, all on prod)
 - `PROGRESS-TABLE-PROJECT-TYPES.md`: per-PIC analysis (小型工程/渠務/大樓維修) + a `project_type` template design.
 - **P1 (v42, applied + verified):** `projects.project_type` + a template registry + the **checklist** mode +
   **small_works auto-zone** (no more fake 分區 for a one-shop job). Backwards-compatible — existing projects
