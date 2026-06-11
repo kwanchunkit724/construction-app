@@ -1,0 +1,53 @@
+{
+  "case_key": "export-soundness",
+  "passed": true,
+  "summary": "PM-path export reads on the live test project are sound: quantity rows render done/total+unit (230/600m verified live), checklist ✓2/4 and floors 2/4樓 correct, 27 unscheduled leaves correctly map to 未排期 with gap — (no fabricated 0%/超前), all 7 issues resolve actor names including an ex-member via the v36 RPC, and zero null/undefined cells. Denials hold: anon gets P0001/0 rows, worker cannot forge progress_snapshots (42501) or patch items. Residual gaps are polish-level: unit_status leaves show no x/y breakdown and 已修復-awaiting-signoff work reads 0%, the issues Excel still uses the hidden-Documents download path on native, and the 計劃% KPI silently rests on only 7/34 scheduled leaves — weakening it as payment-dispute/ISO evidence.",
+  "bugs": [
+    {
+      "title": "unit_status (大樓維修) leaves invisible in progress report — no x/y breakdown, fixed-but-unsigned units count 0%",
+      "severity": "P3",
+      "repro": "Live leaf 09 外牆修補 15/F (MBIS) on cccc2026: label_status {fixed:2,pending:2}, actual_progress=0. Export Excel/PDF → row shows 0% with EMPTY 追蹤模式 column because trackingLabel() (src/lib/export.ts:175-186) has cases for floors/checklist/quantity but unit_status falls to default ''.",
+      "evidence": "rpc get_visible_progress_items returns the leaf with label_status populated; trackingLabel switch source; floors_completed mirror only counts signed_off, so the 2 已修復 units earn 0% and no label in the report a 判頭 would cite for payment.",
+      "layer": "client"
+    },
+    {
+      "title": "exportIssuesToExcel still uses downloadBlob — on native the issues Excel is silently buried in Documents instead of the share sheet",
+      "severity": "P3",
+      "repro": "src/lib/export.ts:660 calls downloadBlob(); the progress exports were already migrated to shareOrDownloadBlob (line 436 comment: 'was downloadBlob, which silently hid the Excel'). Issues export missed the same fix — on iOS/Android the file lands in the Files app with only an alert, no WhatsApp share.",
+      "evidence": "Code read: exportProgressToExcel/PDF → shareOrDownloadBlob; exportIssuesToExcel → downloadBlob. The industry runs on WhatsApp per the module's own comment.",
+      "layer": "client"
+    }
+  ],
+  "improvements": [
+    {
+      "title": "Disclose schedule coverage in the report KPI — 「計劃只覆蓋 7/34 項已排期」 badge next to 整體計劃%",
+      "who": "pm",
+      "why": "On the live project 27/34 leaves are unscheduled, so the verdict 貼近計劃 is computed from 7 items; an owner or auditor reading 計劃% has no idea most of the site has no baseline — fatal in a payment dispute over 落後 claims",
+      "effort": "S"
+    },
+    {
+      "title": "Issues export as evidence pack: issue ref no., photo links/thumbnails, comment + escalation timeline, open→resolved duration",
+      "who": "pm",
+      "why": "Current Excel has 照片數 as a bare count and no 上呈 trail — in a dispute the photos and who-escalated-when ARE the evidence; today the PM must screenshot the app thread into WhatsApp anyway",
+      "effort": "M"
+    },
+    {
+      "title": "Scheduled weekly progress snapshot (cron/edge function) instead of snapshot-only-on-export",
+      "who": "pm",
+      "why": "progress_snapshots was empty — 本期 delta only exists if someone happened to export before, and the baseline is whatever the last export was (could be months old, shown only as a small vs label); a Friday auto-capture makes 本期 mean 「今周」 consistently",
+      "effort": "M"
+    },
+    {
+      "title": "製表人/審核人 signature block + document ref + data cut-off on the PDF, and archive each issued PDF to storage",
+      "who": "pm",
+      "why": "The PDF has a generation footer but no signatory, doc number, or immutable copy — an ISO 9001 auditor or QS in a payment dispute asks 「邊個出、邊個簽、原件喺邊」; only the % snapshot persists, the issued report itself is unrecoverable",
+      "effort": "M"
+    },
+    {
+      "title": "Show 待修/已修復/已簽收 counts for unit_status leaves in the report (credit 已修復 separately from 已簽收)",
+      "who": "subcontractor",
+      "why": "MBIS 判頭 fixes 20 units in a month but the report says 0% until 審批 signs off — he needs the interim count on paper to invoice progress payment",
+      "effort": "S"
+    }
+  ]
+}

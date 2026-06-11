@@ -1,0 +1,47 @@
+{
+ "case_key": "fs-document-workflow",
+ "passed": true,
+ "summary": "Full 物料送審 loop works end-to-end on prod: 判頭 got MAT-004, created header, uploaded PDF to project-docs, v1 submitted via supersede RPC; self-review and direct PATCH self-approval both denied; PM approved v1; v2 correctly superseded v1 and repointed the header; PM rejected v2 with a UTF-8 zh-HK note that landed intact; the document_events trail recorded all 6 events with correct actors. 工人 denied on number/header/storage (read-only OK) and the 判頭 drawing carve-out held on both insert and supersede. Two P3 gaps: next_document_number lacks the drawing carve-out (判頭 burned DWG-002 over REST), and the audit trail never writes 'created'/'superseded' events.",
+ "bugs": [
+  {
+   "title": "next_document_number missing drawing carve-out — 判頭 can burn DWG numbers",
+   "severity": "P3",
+   "repro": "As 60001005 (判頭) POST /rest/v1/rpc/next_document_number {p_project_id: cccc2026..., p_type:'drawing'} -> returns DWG-002 even though every subsequent drawing write is denied (insert 42501, supersede 沒有上載圖則權限).",
+   "evidence": "STEP11b log: returned \"DWG-002\"; counter incremented. The RPC only gates can_upload_document, not can_upload_drawing; client hides the type picker but a REST caller leaves audit-visible gaps in the official DWG sequence.",
+   "layer": "db"
+  },
+  {
+   "title": "Audit trail never logs 'created' or 'superseded' events for native documents",
+   "severity": "P3",
+   "repro": "Create a document + upload v2 superseding an approved v1; then GET document_events for the doc.",
+   "evidence": "Trail for doc 92615a0c (MAT-004) = version_uploaded/submitted/approved/version_uploaded/submitted/rejected — no 'created' on header insert (client inserts header directly, nothing logs) and no 'superseded' row when apply_document_supersede_side_effects flipped v1, despite both values existing in the document_events CHECK constraint. Supersession of an APPROVED version is thus invisible in the event timeline (only inferable from version rows).",
+   "layer": "both"
+  }
+ ],
+ "improvements": [
+  {
+   "title": "Push notification on document submitted / approved / rejected",
+   "who": "subcontractor+pm",
+   "why": "Zero notify triggers exist for documents (verified: no v5-split-style trigger). After 判頭 submits MAT-004 the PM only finds out by opening the docs tab, so on a real site the 判頭 still WhatsApps「幫我睇吓份送審」— the approval loop is not faster than paper unless submitted→reviewers and approved/rejected→submitter push.",
+   "effort": "M"
+  },
+  {
+   "title": "Review due date + 待我審批 inbox for reviewers",
+   "who": "pm/general_foreman",
+   "why": "Material submissions block procurement lead time (C45 石屎 supplier needs the approval before casting). There is no SLA/due-date field and no cross-project 'pending my review' list — a PM running 3 sites must open each project to discover queued submissions; overdue ones silently stall the 判頭's order.",
+   "effort": "M"
+  },
+  {
+   "title": "Resubmit-after-reject shortcut linking the rejection note",
+   "who": "subcontractor",
+   "why": "After PM rejected Rev B (缺氯化物化驗), the 判頭 must mentally carry the rejection reason into a fresh upload; a one-tap 重新送審 that pre-fills revision label and shows the rejection note (and threads discussion like issues comments) keeps the paper trail tight when the supplier emails the missing test report.",
+   "effort": "S"
+  },
+  {
+   "title": "Log 'superseded' (and 'created') document_events so the timeline is complete",
+   "who": "pm",
+   "why": "In a dispute the PM needs the event trail to show WHEN an approved Rev A stopped being current; today that moment is missing from document_events and must be reconstructed from version rows — weakens the audit-trail core value.",
+   "effort": "S"
+  }
+ ]
+}

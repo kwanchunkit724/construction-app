@@ -1,0 +1,53 @@
+{
+  "case_key": "progress-unit-status",
+  "passed": true,
+  "summary": "unit_status (大樓維修/MBIS) flow verified end-to-end on live backend: PM created a 5-室 leaf (all pending), assigned 判頭 ticked fixed/fixing (actual stays 0 — only signed_off counts), PM signed off 2 rooms -> actual_progress=40, floors_completed exactly mirrors the signed-off labels, and both history rows carry the full label_status map so the tick1->tick2 diff (fixed→signed_off etc) is derivable. Denials correct: un-assigned 判頭 and worker get 0-row PATCH + 42501 on history insert; worker hidden by get_visible_progress_items. One nuance: the contributor visibility narrowing is RPC-only — a worker can still read any progress_items row (incl. label_status) by direct table SELECT. Cleanup complete (item deleted, history cascaded).",
+  "bugs": [
+    {
+      "title": "Contributor visibility narrowing bypassable via direct table SELECT on progress_items",
+      "severity": "P3",
+      "repro": "As 60001006 (subcontractor_worker, approved member, NOT assigned): GET /rest/v1/progress_items?id=eq.<item> returns the row (incl. label_status), while POST /rpc/get_visible_progress_items returns 0 rows for the same user.",
+      "evidence": "us-wk-sel.json = 1 row vs us-vis-wk.json = []. v3-progress-schema.sql SELECT policy is can_view_project (any approved member); narrowing to assigned/delegated rows lives only in get_visible_progress_items (v27).",
+      "layer": "db"
+    },
+    {
+      "title": "DB accepts arbitrary actual_progress/status/floors_completed from any assigned contributor (no server-side recompute from label_status)",
+      "severity": "P3",
+      "repro": "As an assigned 判頭, PATCH progress_items with actual_progress=100,status=completed and label_status untouched — DB accepts; %/mirror derivation (unitStatusToProgress) is client-side only. Cross-mode issue (floors/quantity identical), not unit_status-specific.",
+      "evidence": "updateUnitStatus in src/contexts/ProgressContext.tsx materialises actual/floors_completed client-side; no trigger/constraint ties actual_progress to label_status in supabase/v44-progress-unit-status.sql.",
+      "layer": "db"
+    }
+  ],
+  "improvements": [
+    {
+      "title": "MBIS/MWIS 法定限期 countdown + 屋宇署命令編號 field on 大樓維修 items (距法定限期 X 日 KPI, red when <30日)",
+      "who": "pm",
+      "why": "A real MBIS order has a statutory compliance deadline; the PIC prioritises by 距期, but the item only has planned_start/planned_end and no BD order ref, so the legal clock lives outside the app.",
+      "effort": "M"
+    },
+    {
+      "title": "Per-室 defect detail: defect description, photo evidence and RI sign-off identity per label",
+      "who": "main_contractor",
+      "why": "Dispute trail today only proves 'whole-map tick by whom at when'; a surveyor challenge of 邊個簽收咗15/F A室、有冇相佐證 cannot be answered per-unit — photos can only hang off the item or notes.",
+      "effort": "L"
+    },
+    {
+      "title": "待覆檢 (reinspect) worklist/filter — the RI's daily queue",
+      "who": "main_contractor",
+      "why": "unitStatusCounts surfaces only 簽收/修復/共; the state the RI actually plans his覆檢 round from is 'reinspect', and there is no list or filter of those 室 across floors.",
+      "effort": "S"
+    },
+    {
+      "title": "Bulk state actions in the unit_status editor (全層設為..., multi-select 室)",
+      "who": "subcontractor",
+      "why": "Chip cycles 5 states in order, so pending→signed_off is 4 taps per 室; a 200-室 tower means hundreds of taps on a phone in the corridor.",
+      "effort": "M"
+    },
+    {
+      "title": "Prompt assignment (assigned_to) when creating a unit_status item / warn when 0 assignees",
+      "who": "pm",
+      "why": "RLS makes an unassigned register invisible and untickable to the 判頭; nothing in CreateItemModal tells the PM, so the gap only surfaces when the 判頭 phones to ask why he sees nothing.",
+      "effort": "S"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "case_key": "progress-checklist",
+  "passed": true,
+  "summary": "PM created a checklist leaf (tracking_mode=checklist, 4 工序 in floor_labels) on the test project; 管工 ticked 2/4 which materialised actual_progress=50 with status in-progress and a progress_history row carrying the ticked set — floorsToProgress badge math exact. Worker (subcontractor_worker) could read but PATCH returned 0 rows and history insert hit 42501, and the row was unchanged afterward. One P3 observed: no DB-side derivation, so an authorized editor via raw API can set actual_progress inconsistent with the ticks (90% vs 2/4) — in-app flow always writes both together. Test rows fully cleaned up (item deleted, history cascaded).",
+  "bugs": [
+    {
+      "title": "Checklist % is client-trusted: DB accepts actual_progress inconsistent with floors_completed",
+      "severity": "P3",
+      "repro": "As 60001004 (authorized editor), PATCH /rest/v1/progress_items?id=eq.<checklist-item> with {\"actual_progress\":90} while floors_completed still has 2 of 4 labels.",
+      "evidence": "PATCH returned the row with actual_progress=90, floors_completed length 2, floor_labels length 4 (item 57fb0f27-e154-480c-b0da-be261f1fc969, reverted then deleted). ProgressItemCard renders the % badge from actual_progress and a separate 'N/M項' badge from the arrays, so the two can visibly disagree. Applies equally to floors/quantity/unit_status modes — derivation lives only in ProgressContext.",
+      "layer": "db"
+    }
+  ],
+  "improvements": [
+    {
+      "title": "One-tap 工序 templates for common small-works sequences (拆卸→水電→天花→油漆)",
+      "who": "subcontractor",
+      "why": "CreateItemModal makes you type every 工序 into a free-text textarea on a 390px phone. A 判頭 doing his fifth shop fit-out types the same 4-6 lines every time; a picker of saved/標準 sequences (with edit) would make checklist creation a 10-second job and keep naming consistent across items for export.",
+      "effort": "M"
+    },
+    {
+      "title": "Optional per-工序 weighting (man-days) instead of equal-weight ticks",
+      "who": "subcontractor",
+      "why": "floorsToProgress counts every 工序 the same: 水電喉管鋪設 (2 weeks) and 油漆及執漏 (2 days) each move the badge 25%. After ticking the two quick demolition/M&E-prep lines the item reads 50% while most of the money/time is still ahead — a PM glancing at the dashboard over-trusts it. A small weight field per line (default 1) keeps today's behaviour byte-identical.",
+      "effort": "M"
+    },
+    {
+      "title": "Per-工序 completion date (and optional photo) in the tick history",
+      "who": "pm",
+      "why": "History journals the whole ticked SET per save, so if 管工 ticks 拆卸 and 水電 in one go there is no record of which day each individual 工序 finished — exactly what a dispute over a small-works payment milestone (上期款) needs. Surfacing 'first ticked at' per label from history diffs, plus an optional photo on tick, would close that gap.",
+      "effort": "M"
+    },
+    {
+      "title": "Checklist IS faster than % for small works — make it the suggested default when a project has no floors",
+      "who": "subcontractor",
+      "why": "Verdict on the lens question: ticking 工序 matches how a 判頭 actually talks ('拆咗未？水電埋咗未？') and removes the 'is it 40% or 60%?' argument with the 管工. But for project_type 'general' the modal still defaults to percentage; a 判頭 who never opens the mode picker stays on the slider. Suggesting 清單 when the item is small/short-duration (or remembering the user's last mode) would push the better tool to the people it was built for.",
+      "effort": "S"
+    }
+  ]
+}
