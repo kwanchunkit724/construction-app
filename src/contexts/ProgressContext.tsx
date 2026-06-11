@@ -4,8 +4,8 @@ import { useAuth } from './AuthContext'
 import { useProjects } from './ProjectsContext'
 import { cacheGet, cacheSet, getOnline, subscribeOnline } from '../lib/offline'
 import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
-import { deriveStatus, floorsToProgress, plannedProgressOf, qtyToProgress } from '../types'
-import type { ProgressItem, ProgressStatus, TrackingMode, ProgressHistoryEntry } from '../types'
+import { deriveStatus, floorsToProgress, plannedProgressOf, qtyToProgress, unitStatusToProgress } from '../types'
+import type { ProgressItem, ProgressStatus, TrackingMode, ProgressHistoryEntry, UnitState } from '../types'
 
 interface ProgressContextType {
   loading: boolean
@@ -37,6 +37,12 @@ interface ProgressContextType {
   // P2 (v43): set/clear the blocked reason (雨天 / 地下水 / 掘路紙 / 物料 / 其他).
   // A non-null reason makes the item DISPLAY as 受阻 (see displayStatusOf).
   setBlocked: (id: string, reason: string | null) => Promise<{ error: string | null }>
+  // P3 (v44): set the per-label state map on a 大樓維修 (unit_status) leaf.
+  // Materialises actual_progress = unitStatusToProgress(map, floor_labels),
+  // mirrors the signed-off labels into floors_completed (so legacy consumers /
+  // export degrade gracefully), and journals the map into
+  // progress_history.label_status.
+  updateUnitStatus: (id: string, labelStatus: Record<string, UnitState>, notes: string) => Promise<{ error: string | null }>
   setAssignment: (id: string, assigned: string[], delegated: string[]) => Promise<{ error: string | null }>
   fetchHistory: (id: string) => Promise<ProgressHistoryEntry[]>
   updateItemMeta: (id: string, patch: { title?: string; planned_start?: string | null; planned_end?: string | null }) => Promise<{ error: string | null }>
@@ -58,6 +64,10 @@ interface AddItemInput {
   // 'quantity'; ignored (and left at the DB default NULL/0) for other modes.
   qty_total?: number | null
   qty_unit?: string | null
+  // P3 (v44): unit_status seed map. Only meaningful when tracking_mode is
+  // 'unit_status' (the CreateItemModal seeds every label to 'pending'); ignored
+  // (left at the DB default '{}') for other modes.
+  label_status?: Record<string, UnitState>
 }
 
 const ProgressContext = createContext<ProgressContextType | null>(null)
@@ -153,14 +163,21 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     const parent = input.parent_id ? items.find(i => i.id === input.parent_id) : null
     const level = parent ? parent.level + 1 : 1
     const trackingMode: TrackingMode = input.tracking_mode ?? 'percentage'
-    // 'checklist' reuses the floors storage (floor_labels = 工序 names), so
-    // both label-based modes carry their labels; percentage / quantity carry none.
-    const floorLabels = (trackingMode === 'floors' || trackingMode === 'checklist')
+    // 'checklist' reuses the floors storage (floor_labels = 工序 names), and
+    // 'unit_status' (大樓維修) also stores its 室 labels in floor_labels — so all
+    // three label-based modes carry their labels; percentage / quantity carry none.
+    const floorLabels = (trackingMode === 'floors' || trackingMode === 'checklist' || trackingMode === 'unit_status')
       ? (input.floor_labels ?? [])
       : []
     // 'quantity' (渠務) carries qty_total + qty_unit; other modes leave them at
     // the DB defaults (NULL / 0) so they stay weight=1 in computeRollup.
     const isQuantity = trackingMode === 'quantity'
+    // 'unit_status' (大樓維修) seeds its per-label state map (every 室 → 'pending');
+    // other modes leave it at the DB default '{}'.
+    const isUnitStatus = trackingMode === 'unit_status'
+    const labelStatus: Record<string, UnitState> = isUnitStatus
+      ? (input.label_status ?? Object.fromEntries(floorLabels.map(l => [l, 'pending' as UnitState])))
+      : {}
     const { error } = await supabase.from('progress_items').insert({
       project_id: projectId,
       parent_id: input.parent_id,
@@ -180,6 +197,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
       qty_total: isQuantity ? (input.qty_total ?? null) : null,
       qty_done: 0,
       qty_unit: isQuantity ? ((input.qty_unit ?? '').trim() || null) : null,
+      label_status: labelStatus,
       assigned_to: [],
       delegated_to: [],
       last_updated_by: profile.id,
@@ -196,6 +214,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     floorsCompleted: string[],
     notes: string,
     qtyDone?: number | null,
+    labelStatus?: Record<string, UnitState> | null,
   ) {
     if (!profile) return
     const { error } = await supabase.from('progress_history').insert({
@@ -206,6 +225,10 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
       // v43: carry the metres for quantity ticks so "本期 +86m" survives; null
       // (omitted) for every other mode — column is nullable, pre-v43 rows too.
       qty_done: qtyDone ?? null,
+      // v44: carry the per-label state map for unit_status ticks so the
+      // HistoryModal can diff "15/F-C：已修復→已簽收"; null for every other mode
+      // — column is nullable, pre-v44 rows too.
+      label_status: labelStatus ?? null,
       updated_by: profile.id,
     })
     // Don't block the progress update on the audit write, but never swallow it
@@ -321,6 +344,43 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     return { error: null }
   }
 
+  // P3 (v44): unit_status update (大樓維修 / defect register). Persists the
+  // per-label state map, materialises actual_progress = unitStatusToProgress so
+  // every downstream consumer (rollup / status / export / snapshots) still sees
+  // a normal %, AND mirrors the signed-off labels into floors_completed so
+  // legacy consumers (export floor chips / history) degrade gracefully. Journals
+  // the map into progress_history.label_status. Mirrors the updateFloors path.
+  async function updateUnitStatus(id: string, labelStatus: Record<string, UnitState>, notes: string) {
+    if (!profile) return { error: '未登入' }
+    const item = items.find(i => i.id === id)
+    if (!item) return { error: '找不到此項目' }
+    // Keep only labels that actually belong to this item (defensive against a
+    // stale map carrying a removed label), and mirror the signed-off ones into
+    // floors_completed so the floor-chip consumers (export / history) still work.
+    const labels = item.floor_labels ?? []
+    const cleaned: Record<string, UnitState> = {}
+    for (const l of labels) {
+      const s = labelStatus[l]
+      if (s) cleaned[l] = s
+    }
+    const signedOff = labels.filter(l => cleaned[l] === 'signed_off')
+    const actual = unitStatusToProgress(cleaned, labels)
+    const status = deriveStatus(actual, plannedProgressOf(item))
+    const { error } = await supabase.from('progress_items').update({
+      label_status: cleaned,
+      floors_completed: signedOff,
+      actual_progress: actual,
+      status,
+      notes,
+      last_updated_by: profile.id,
+      last_updated_at: new Date().toISOString(),
+    }).eq('id', id)
+    if (error) return { error: error.message }
+    await recordHistory(id, actual, signedOff, notes, null, cleaned)
+    await refetch()
+    return { error: null }
+  }
+
   // P2 (v43): set or clear the blocked reason. A non-null reason makes the
   // item DISPLAY as 受阻 (displayStatusOf) without touching its % — clearing
   // it (null) returns the item to its schedule-derived status. Non-blocking
@@ -384,7 +444,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
       loading, items, fetchError,
       canManageStructure, canEdit, canUpdateItem,
       refetch,
-      addItem, updateProgress, updateFloors, updateQuantity, setBlocked,
+      addItem, updateProgress, updateFloors, updateQuantity, updateUnitStatus, setBlocked,
       setAssignment, fetchHistory, updateItemMeta, deleteItem,
     }}>
       {children}

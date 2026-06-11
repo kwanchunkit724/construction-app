@@ -92,9 +92,29 @@ export type ProgressStatus = 'not-started' | 'in-progress' | 'completed' | 'dela
 // and floorsToProgress derivation — it differs only in rendering (a vertical
 // tick-list of 工序 rather than a 樓層 grid). 'quantity' (P2, 渠務 / linear work)
 // tracks qty_done/qty_total in a real unit (m / m2 / 個…) and derives % via
-// qtyToProgress. 'unit_status' is still P3. Widened in the DB by
-// v42 (checklist) then v43-progress-quantity-mode.sql (quantity).
-export type TrackingMode = 'percentage' | 'floors' | 'checklist' | 'quantity'
+// qtyToProgress. 'unit_status' (P3, 大樓維修 / MBIS·MWIS) tracks a per-label
+// state machine in label_status and derives % = signed_off/total via
+// unitStatusToProgress. Widened in the DB by v42 (checklist), then
+// v43-progress-quantity-mode.sql (quantity), then v44-progress-unit-status.sql
+// (unit_status).
+export type TrackingMode = 'percentage' | 'floors' | 'checklist' | 'quantity' | 'unit_status'
+
+// ── P3 (v44): unit_status state machine (大樓維修 / defect register) ──
+// A defect (室/位置) isn't a % and isn't a boolean tick — it walks a 5-state
+// machine. % rolls up off the terminal 'signed_off' state (RI已簽收), with
+// 'fixed' surfaced as a second number ("已修復 b / 已簽收 a / 共 n"). Order is
+// load-bearing: the UpdateProgressModal chip cycles through it in sequence.
+export type UnitState = 'pending' | 'fixing' | 'fixed' | 'reinspect' | 'signed_off'
+
+export const UNIT_STATE_ORDER: UnitState[] = ['pending', 'fixing', 'fixed', 'reinspect', 'signed_off']
+
+export const UNIT_STATE_ZH: Record<UnitState, string> = {
+  pending: '未處理',
+  fixing: '維修中',
+  fixed: '已修復',
+  reinspect: '待覆檢',
+  signed_off: '已簽收',
+}
 
 export interface ProgressItem {
   id: string
@@ -126,6 +146,14 @@ export interface ProgressItem {
   // deriveStatus alone can never return 'blocked'; this is the only path that
   // surfaces a real stoppage reason (雨天 / 地下水 / 掘路紙 / 物料 / 其他).
   blocked_reason: string | null
+  // ── P3 (v44): unit_status mode (大樓維修 / defect register) ──
+  // A { label: UnitState } map (e.g. { "15/F-A": "signed_off", ... }). '{}' for
+  // every non-unit_status leaf — i.e. every existing row — so the field is a
+  // no-op until someone authors a 大樓維修 item. % is materialised into
+  // actual_progress via unitStatusToProgress on every update, and the
+  // signed-off labels are mirrored into floors_completed so legacy consumers
+  // (export / history floor chips) degrade gracefully.
+  label_status: Record<string, UnitState>
   assigned_to: string[]
   delegated_to: string[]
   last_updated_by: string | null
@@ -150,6 +178,11 @@ export interface ProgressHistoryEntry {
   // audit trail keeps the real number ("本期 +86m"), not just the % delta.
   // null on every non-quantity (and pre-v43) history row.
   qty_done?: number | null
+  // v44: for unit_status updates, the per-label state map AT this tick (e.g.
+  // { "15/F-C": "signed_off", ... }). The HistoryModal diffs consecutive rows
+  // to render "15/F-C：已修復→已簽收". null on every non-unit_status (and
+  // pre-v44) history row.
+  label_status?: Record<string, UnitState> | null
 }
 
 // Helper: compute progress from floors_completed
@@ -165,6 +198,42 @@ export function floorsToProgress(completed: string[], all: string[]): number {
 export function qtyToProgress(done: number, total: number | null | undefined): number {
   if (!total || total <= 0) return 0
   return Math.max(0, Math.min(100, Math.round((done / total) * 100)))
+}
+
+// Helper: compute progress from a unit_status map (大樓維修 / defect register).
+// % = round(signed_off / total * 100) — completion is RI sign-off (已簽收), not
+// merely "fixed". `labels` is the authoritative label set (floor_labels); a
+// label missing from the map counts as 'pending' (not signed-off). 0 when there
+// are no labels (avoids divide-by-zero). Clamped 0–100 defensively.
+export function unitStatusToProgress(
+  labelStatus: Record<string, UnitState> | null | undefined,
+  labels: string[],
+): number {
+  if (!labels || labels.length === 0) return 0
+  const map = labelStatus ?? {}
+  const signedOff = labels.reduce((n, l) => n + (map[l] === 'signed_off' ? 1 : 0), 0)
+  return Math.max(0, Math.min(100, Math.round((signedOff / labels.length) * 100)))
+}
+
+// Helper: count the headline states for the unit_status badge / KPI tiles.
+// total is taken from the authoritative `labels` set (so an un-touched label
+// counts toward 共 N even before it appears in the map). signedOff/fixed read
+// the map; a label not in the map is 'pending'. Used by ProgressItemCard's
+// "簽收 a · 修復 b / n" badge and the maintenance zone-header numbers.
+export function unitStatusCounts(
+  labelStatus: Record<string, UnitState> | null | undefined,
+  labels: string[],
+): { signedOff: number; fixed: number; total: number } {
+  const map = labelStatus ?? {}
+  const ls = labels ?? []
+  let signedOff = 0
+  let fixed = 0
+  for (const l of ls) {
+    const s = map[l]
+    if (s === 'signed_off') signedOff++
+    else if (s === 'fixed') fixed++
+  }
+  return { signedOff, fixed, total: ls.length }
 }
 
 export const PROGRESS_STATUS_ZH: Record<ProgressStatus, string> = {

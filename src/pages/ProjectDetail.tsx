@@ -6,7 +6,7 @@ import {
   ListChecks, AlertCircle, Download, FileCheck2,
   FileText, Receipt, Shield,
   Wrench, BookOpen, Package, CalendarDays,
-  Contact as ContactIcon, FolderOpen,
+  Contact as ContactIcon, FolderOpen, CalendarClock,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { UserProfile } from '../types'
@@ -149,6 +149,27 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const delayed = leaves.filter(i => effStatus(i) === 'delayed').length
   const notStarted = leaves.filter(i => effStatus(i) === 'not-started').length
 
+  // P3: 大樓維修 statutory-deadline tile. The 法定命令 deadline reuses planned_end
+  // on the L1 (root / 座) items — we take the EARLIEST planned_end across all
+  // roots as 限期, then days = ceil((deadline − today)/day). Negative = overdue.
+  // Only computed (and only rendered) for maintenance projects; other types are
+  // byte-identical to before.
+  const isMaintenance = template.kpiTiles === 'maintenance'
+  const statutoryDeadline = useMemo(() => {
+    if (!isMaintenance) return null
+    const ends = items
+      .filter(i => i.parent_id === null && i.planned_end)
+      .map(i => i.planned_end as string)
+      .sort()
+    if (ends.length === 0) return null
+    const earliest = ends[0]
+    const todayMs = new Date(new Date().toDateString()).getTime()
+    const endMs = new Date(earliest + 'T00:00:00').getTime()
+    if (Number.isNaN(endMs)) return null
+    const days = Math.ceil((endMs - todayMs) / 86400000)
+    return { date: earliest, days }
+  }, [isMaintenance, items])
+
   const expandedSet = expanded.size === 0 ? autoExpanded : expanded
 
   // Find a zone to use as fallback when adding from a child item (sub-items inherit parent's zone)
@@ -238,6 +259,9 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
 
         {tab === 'progress' && (
           <>
+            {isMaintenance && statutoryDeadline && (
+              <DeadlineTile date={statutoryDeadline.date} days={statutoryDeadline.days} />
+            )}
             {leaves.length > 0 && (
               <div className="grid grid-cols-4 gap-2 mb-4">
                 <Stat label="已完成" count={completed} color="text-green-700 bg-green-50 border-green-200" />
@@ -671,6 +695,30 @@ function Stat({ label, count, color }: { label: string; count: number; color: st
     <div className={`rounded-xl border p-2 text-center ${color}`}>
       <p className="text-xl font-black leading-none">{count}</p>
       <p className="text-[10px] mt-0.5 font-medium">{label}</p>
+    </div>
+  )
+}
+
+// P3: 大樓維修 statutory-deadline banner. days < 0 = 已逾期 (red), ≤ 14 = 緊迫
+// (amber), else informational (blue). The date is the earliest L1 planned_end.
+function DeadlineTile({ date, days }: { date: string; days: number }) {
+  const overdue = days < 0
+  const urgent = days >= 0 && days <= 14
+  const color = overdue
+    ? 'bg-red-50 border-red-200 text-red-700'
+    : urgent
+      ? 'bg-amber-50 border-amber-200 text-amber-700'
+      : 'bg-blue-50 border-blue-200 text-blue-700'
+  return (
+    <div className={`rounded-xl border p-3 mb-3 flex items-center gap-3 ${color}`}>
+      <CalendarClock size={22} className="flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] font-medium opacity-80">法定限期</p>
+        <p className="text-sm font-bold">
+          {overdue ? `已逾期 ${Math.abs(days)} 日` : `距法定限期 ${days} 日`}
+        </p>
+      </div>
+      <span className="text-xs font-mono font-semibold flex-shrink-0">{date}</span>
     </div>
   )
 }

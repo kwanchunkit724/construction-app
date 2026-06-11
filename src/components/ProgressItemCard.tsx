@@ -2,7 +2,7 @@ import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronRight, ChevronDown, Plus, Trash2, Edit3, MoreVertical,
   CheckCircle2, AlertTriangle, Clock, Minus, Check,
-  Layers, Users, UserPlus, History, Image as ImageIcon, Ruler, Ban,
+  Layers, Users, UserPlus, History, Image as ImageIcon, Ruler, Ban, DoorOpen,
 } from 'lucide-react'
 import { ProgressBar } from './ProgressBar'
 import { useProgress } from '../contexts/ProgressContext'
@@ -12,7 +12,7 @@ import { DrawingsSection } from './drawings/DrawingsSection'
 import { DocumentsSection } from './documents/DocumentsSection'
 import { useFilesFlag } from '../contexts/FilesFlagContext'
 import { MaterialItemsPanel } from './material/MaterialItemsPanel'
-import { PROGRESS_STATUS_ZH, computeRollup, getDescendantLeaves, plannedProgressOf, deriveStatus, isScheduled } from '../types'
+import { PROGRESS_STATUS_ZH, computeRollup, getDescendantLeaves, plannedProgressOf, deriveStatus, isScheduled, unitStatusCounts } from '../types'
 import { displayStatusOf } from '../lib/progressTemplates'
 import type { ProgressItem, ProgressStatus, UserProfile } from '../types'
 import { supabase } from '../lib/supabase'
@@ -164,6 +164,8 @@ export function ProgressItemCard({
   const isFloors = item.tracking_mode === 'floors'
   const isChecklist = item.tracking_mode === 'checklist'
   const isQuantity = item.tracking_mode === 'quantity'
+  const isUnitStatus = item.tracking_mode === 'unit_status'
+  const unitCounts = isUnitStatus ? unitStatusCounts(item.label_status, arr(item.floor_labels)) : null
   const blockedReason = (item.blocked_reason ?? '').trim()
   const assignedTo = arr(item.assigned_to)
   const delegatedTo = arr(item.delegated_to)
@@ -223,6 +225,14 @@ export function ProgressItemCard({
               {isQuantity && isLeaf && (
                 <span className="inline-flex items-center gap-0.5 text-[9px] bg-teal-100 text-teal-700 px-1 rounded flex-shrink-0">
                   <Ruler size={8} />{item.qty_done ?? 0}/{item.qty_total ?? '?'}{item.qty_unit ?? ''}
+                </span>
+              )}
+              {isUnitStatus && isLeaf && unitCounts && (
+                <span
+                  title={`已簽收 ${unitCounts.signedOff} · 已修復 ${unitCounts.fixed} / 共 ${unitCounts.total}`}
+                  className="inline-flex items-center gap-0.5 text-[9px] bg-rose-100 text-rose-700 px-1 rounded flex-shrink-0"
+                >
+                  <DoorOpen size={8} />簽收 {unitCounts.signedOff} · 修復 {unitCounts.fixed} / {unitCounts.total}
                 </span>
               )}
               {blockedReason && isLeaf && (

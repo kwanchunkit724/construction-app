@@ -4,11 +4,27 @@ import { Modal } from './Modal'
 import { Spinner } from './Spinner'
 import { ProgressBar } from './ProgressBar'
 import { useProgress } from '../contexts/ProgressContext'
-import { deriveStatus, floorsToProgress, plannedProgressOf, qtyToProgress } from '../types'
-import type { ProgressItem } from '../types'
+import { deriveStatus, floorsToProgress, plannedProgressOf, qtyToProgress, unitStatusToProgress, unitStatusCounts, UNIT_STATE_ORDER, UNIT_STATE_ZH } from '../types'
+import type { ProgressItem, UnitState } from '../types'
 
 // 受阻 reasons (渠務 staples). Free-form '其他' lets the foreman type a custom note.
 const BLOCK_REASONS = ['雨天', '地下水', '掘路紙', '物料', '其他']
+
+// P3: per-UnitState chip styling for the unit_status editor. The row's chip
+// reflects the CURRENT state and a tap advances to the next state in
+// UNIT_STATE_ORDER (cycling 已簽收 → 未處理). signed_off is the terminal/green.
+const UNIT_STATE_STYLE: Record<UnitState, string> = {
+  pending: 'bg-site-100 text-site-500 border-site-200',
+  fixing: 'bg-blue-50 text-blue-700 border-blue-200',
+  fixed: 'bg-amber-50 text-amber-700 border-amber-200',
+  reinspect: 'bg-purple-50 text-purple-700 border-purple-200',
+  signed_off: 'bg-green-50 text-green-700 border-green-300',
+}
+
+function nextUnitState(s: UnitState): UnitState {
+  const i = UNIT_STATE_ORDER.indexOf(s)
+  return UNIT_STATE_ORDER[(i + 1) % UNIT_STATE_ORDER.length]
+}
 
 export function UpdateProgressModal({
   open, onClose, item,
@@ -17,10 +33,13 @@ export function UpdateProgressModal({
   onClose: () => void
   item: ProgressItem | null
 }) {
-  const { updateProgress, updateFloors, updateQuantity, setBlocked } = useProgress()
+  const { updateProgress, updateFloors, updateQuantity, updateUnitStatus, setBlocked } = useProgress()
   const [actual, setActual] = useState(0)
   const [floorsCompleted, setFloorsCompleted] = useState<string[]>([])
   const [qtyDone, setQtyDone] = useState('')
+  // P3: unit_status editor — a live { label: UnitState } map seeded from the
+  // item, mutated by tapping each row's chip, persisted via updateUnitStatus.
+  const [labelStatus, setLabelStatus] = useState<Record<string, UnitState>>({})
   const [notes, setNotes] = useState('')
   // 受阻 (blocked) toggle + reason. Seeded from the item's current blocked_reason
   // so reopening shows the live state; clearing the toggle clears the reason.
@@ -34,6 +53,13 @@ export function UpdateProgressModal({
       setActual(item.actual_progress)
       setFloorsCompleted([...item.floors_completed])
       setQtyDone(item.qty_done != null ? String(item.qty_done) : '')
+      // Seed the unit_status map: start from the stored map, then default any
+      // label missing from it to 'pending' so newly-added 室 are tappable.
+      const seed: Record<string, UnitState> = {}
+      for (const l of item.floor_labels ?? []) {
+        seed[l] = (item.label_status?.[l] as UnitState) ?? 'pending'
+      }
+      setLabelStatus(seed)
       setNotes(item.notes)
       const r = (item.blocked_reason ?? '').trim()
       setBlockedOn(!!r)
@@ -49,13 +75,19 @@ export function UpdateProgressModal({
   const isFloors = item.tracking_mode === 'floors'
   const isChecklist = item.tracking_mode === 'checklist'
   const isQuantity = item.tracking_mode === 'quantity'
+  const isUnitStatus = item.tracking_mode === 'unit_status'
+  // isLabelMode = the floor-grid / checklist tick path (boolean floors_completed).
+  // unit_status has its OWN editor (state chips) so it is NOT a tick-list label mode.
   const isLabelMode = isFloors || isChecklist
   const qtyDoneNum = Number(qtyDone)
+  const unitCounts = unitStatusCounts(labelStatus, item.floor_labels)
   const computedActual = isLabelMode
     ? floorsToProgress(floorsCompleted, item.floor_labels)
     : isQuantity
       ? qtyToProgress(Number.isFinite(qtyDoneNum) ? qtyDoneNum : 0, item.qty_total)
-      : actual
+      : isUnitStatus
+        ? unitStatusToProgress(labelStatus, item.floor_labels)
+        : actual
   const planned = plannedProgressOf(item)
   const status = deriveStatus(computedActual, planned)
 
@@ -63,6 +95,11 @@ export function UpdateProgressModal({
     setFloorsCompleted(prev =>
       prev.includes(label) ? prev.filter(x => x !== label) : [...prev, label]
     )
+  }
+
+  // P3: advance one 室 to the next state in the cycle (未處理→…→已簽收→未處理).
+  function cycleUnit(label: string) {
+    setLabelStatus(prev => ({ ...prev, [label]: nextUnitState(prev[label] ?? 'pending') }))
   }
 
   // Stepper for the quantity input — gloved-finger friendly. Clamps at 0 and
@@ -94,7 +131,9 @@ export function UpdateProgressModal({
       ? await updateFloors(item.id, floorsCompleted, notes)
       : isQuantity
         ? await updateQuantity(item.id, Number(qtyDone), notes)
-        : await updateProgress(item.id, actual, notes)
+        : isUnitStatus
+          ? await updateUnitStatus(item.id, labelStatus, notes)
+          : await updateProgress(item.id, actual, notes)
     if (error) {
       setSubmitting(false)
       setError(error)
@@ -132,6 +171,7 @@ export function UpdateProgressModal({
         <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
           isLabelMode ? 'bg-purple-100 text-purple-700'
             : isQuantity ? 'bg-teal-100 text-teal-700'
+            : isUnitStatus ? 'bg-rose-100 text-rose-700'
             : 'bg-blue-100 text-blue-700'
         }`}>
           {isChecklist
@@ -140,7 +180,9 @@ export function UpdateProgressModal({
               ? `樓層模式 · ${item.floor_labels.length} 層`
               : isQuantity
                 ? `數量模式 · 總 ${item.qty_total ?? '?'}${item.qty_unit ?? ''}`
-                : '百分比模式'}
+                : isUnitStatus
+                  ? `單位狀態 · ${item.floor_labels.length} 室`
+                  : '百分比模式'}
         </span>
       </div>
 
@@ -258,6 +300,43 @@ export function UpdateProgressModal({
           <div className="flex justify-between text-xs text-site-400 mt-1">
             <span>0 {item.qty_unit ?? ''}</span>
             <span className="text-teal-600">總數量：{item.qty_total ?? '?'} {item.qty_unit ?? ''}</span>
+          </div>
+          <div className="mt-3">
+            <ProgressBar value={computedActual} planned={planned} status={status} />
+          </div>
+        </div>
+      ) : isUnitStatus ? (
+        /* ── Unit-status editor (大樓維修) — per-室 5-state segmented chip ── */
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <label className="label mb-0">各單位狀態</label>
+            <span className="text-right">
+              <span className="text-2xl font-black text-green-600">
+                {unitCounts.signedOff}/{unitCounts.total}
+              </span>
+              <span className="text-xs font-normal text-site-400 ml-1">已簽收 ({computedActual}%)</span>
+            </span>
+          </div>
+          <p className="text-[11px] text-site-500 mb-2">
+            已修復 {unitCounts.fixed} · 已簽收 {unitCounts.signedOff} / 共 {unitCounts.total}（點一下切換狀態）
+          </p>
+          <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+            {item.floor_labels.map(label => {
+              const st = labelStatus[label] ?? 'pending'
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => cycleUnit(label)}
+                  className="w-full min-h-[44px] flex items-center justify-between gap-2.5 px-3 rounded-xl border-2 border-site-200 bg-white text-sm font-semibold transition-colors text-left hover:border-rose-300"
+                >
+                  <span className="flex-1 min-w-0 truncate text-site-700">{label}</span>
+                  <span className={`flex-shrink-0 inline-flex items-center px-2.5 py-1 rounded-full border text-xs font-bold ${UNIT_STATE_STYLE[st]}`}>
+                    {UNIT_STATE_ZH[st]}
+                  </span>
+                </button>
+              )
+            })}
           </div>
           <div className="mt-3">
             <ProgressBar value={computedActual} planned={planned} status={status} />

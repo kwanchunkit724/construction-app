@@ -1,11 +1,11 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { Layers, Percent, ListChecks, Ruler } from 'lucide-react'
+import { Layers, Percent, ListChecks, Ruler, DoorOpen } from 'lucide-react'
 import { Modal } from './Modal'
 import { Spinner } from './Spinner'
 import { useProgress } from '../contexts/ProgressContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { supabase } from '../lib/supabase'
-import type { ProgressItem, TrackingMode, Zone } from '../types'
+import type { ProgressItem, TrackingMode, Zone, UnitState } from '../types'
 import { plannedProgressOf } from '../types'
 import { templateFor } from '../lib/progressTemplates'
 
@@ -20,6 +20,9 @@ const MODE_META: Record<TrackingMode, { label: string; icon: typeof Percent; act
   // P2: 渠務 / linear work — done/total in a real unit (m / m2 / 個…). Teal so
   // it reads distinct from the purple label-modes and the orange percentage.
   quantity: { label: '數量', icon: Ruler, activeClass: 'border-teal-500 bg-teal-50 text-teal-700' },
+  // P3: 大樓維修 — each 室 walks a 5-state machine. Rose so it reads distinct
+  // from the purple label-modes, teal quantity, and orange percentage.
+  unit_status: { label: '單位狀態', icon: DoorOpen, activeClass: 'border-rose-500 bg-rose-50 text-rose-700' },
 }
 
 // Unit suggestions for the quantity sub-form. Free text (no DB check) so trades
@@ -55,6 +58,14 @@ export function CreateItemModal({
   // mid-edit; parsed at submit. qtyUnit free-text with chip suggestions.
   const [qtyTotal, setQtyTotal] = useState('')
   const [qtyUnit, setQtyUnit] = useState('m')
+  // P3: unit_status sub-form (大樓維修). 'grid' = the 樓×室 generator (floors ×
+  // rooms-per-floor → 15/F-A..15/F-H); 'custom' = free-text labels (reuse the
+  // customFloors textarea). Floors source the same auto-floor labels; the room
+  // suffix letters are A.. by unitCount.
+  const [unitMode, setUnitMode] = useState<'grid' | 'custom'>('grid')
+  const [unitFloorCount, setUnitFloorCount] = useState(3)
+  const [unitBaseFloor, setUnitBaseFloor] = useState(1)
+  const [unitCount, setUnitCount] = useState(8)
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -120,6 +131,10 @@ export function CreateItemModal({
       setCustomFloors('')
       setQtyTotal('')
       setQtyUnit('m')
+      setUnitMode('grid')
+      setUnitFloorCount(3)
+      setUnitBaseFloor(1)
+      setUnitCount(8)
       setError('')
       setSuccessMsg('')
       setSelectedZoneIds([zone.id])
@@ -204,15 +219,37 @@ export function CreateItemModal({
     return labels
   }, [floorCount, baseFloor])
 
+  // P3: 樓×室 generator — for each floor (auto-floor labels) emit one label per
+  // room (A.. by unitCount), e.g. floor 15F × 8 rooms → 15/F-A..15/F-H.
+  const autoUnitLabels = useMemo(() => {
+    const floors: string[] = []
+    for (let i = 0; i < unitFloorCount; i++) {
+      const n = unitBaseFloor + i
+      if (n === 0) floors.push('GF')
+      else if (n < 0) floors.push(`B${Math.abs(n)}`)
+      else floors.push(`${n}/F`)
+    }
+    const rooms: string[] = []
+    for (let r = 0; r < unitCount; r++) rooms.push(String.fromCharCode(65 + (r % 26)))
+    const labels: string[] = []
+    for (const f of floors) for (const room of rooms) labels.push(`${f}-${room}`)
+    return labels
+  }, [unitFloorCount, unitBaseFloor, unitCount])
+
   // checklist always sources labels from the free-text 工序 list; floors mode
-  // honours the auto/custom sub-toggle. Both feed the same floor_labels store.
+  // honours the auto/custom sub-toggle; unit_status honours its grid/custom
+  // toggle. All feed the same floor_labels store.
   const customLabels = customFloors.split(/[,，\n]/).map(s => s.trim()).filter(Boolean)
-  const isLabelMode = trackingMode === 'floors' || trackingMode === 'checklist'
+  // unit_status stores its 室 labels in floor_labels too (so floorsToProgress /
+  // export / history floor-chips degrade gracefully) — it is a label mode.
+  const isLabelMode = trackingMode === 'floors' || trackingMode === 'checklist' || trackingMode === 'unit_status'
   const resolvedFloorLabels = trackingMode === 'checklist'
     ? customLabels
-    : floorMode === 'auto'
-      ? autoFloorLabels
-      : customLabels
+    : trackingMode === 'unit_status'
+      ? (unitMode === 'grid' ? autoUnitLabels : customLabels)
+      : floorMode === 'auto'
+        ? autoFloorLabels
+        : customLabels
 
   function toggleZone(zid: string) {
     setSelectedZoneIds(prev => prev.includes(zid) ? prev.filter(x => x !== zid) : [...prev, zid])
@@ -258,7 +295,13 @@ export function CreateItemModal({
     setSuccessMsg('')
     if (!title.trim()) return setError('請輸入名稱')
     if (isLabelMode && resolvedFloorLabels.length === 0) {
-      return setError(trackingMode === 'checklist' ? '清單模式需要至少一項工序' : '樓層模式需要至少一個樓層')
+      return setError(
+        trackingMode === 'checklist'
+          ? '清單模式需要至少一項工序'
+          : trackingMode === 'unit_status'
+            ? '單位狀態模式需要至少一個單位（室）'
+            : '樓層模式需要至少一個樓層',
+      )
     }
     if (trackingMode === 'quantity') {
       const t = Number(qtyTotal)
@@ -293,6 +336,10 @@ export function CreateItemModal({
         floor_labels: isLabelMode ? resolvedFloorLabels : [],
         qty_total: trackingMode === 'quantity' ? Number(qtyTotal) : null,
         qty_unit: trackingMode === 'quantity' ? qtyUnit.trim() : null,
+        // unit_status seeds every 室 to 未處理 ('pending'); ignored for other modes.
+        label_status: trackingMode === 'unit_status'
+          ? Object.fromEntries(resolvedFloorLabels.map(l => [l, 'pending' as UnitState]))
+          : undefined,
       }))
     )
 
@@ -556,6 +603,84 @@ export function CreateItemModal({
               </div>
               <p className="text-[11px] text-site-500">
                 以「已完成 / 總數量」自動計算百分比；更新時輸入實際數量（例：已鋪 230 {qtyUnit.trim() || 'm'}）。
+              </p>
+            </div>
+          )}
+
+          {trackingMode === 'unit_status' && (
+            <div className="mt-3 bg-rose-50 border border-rose-100 rounded-xl p-3 space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setUnitMode('grid')}
+                  className={`py-1.5 rounded-lg text-xs font-semibold border min-h-0 ${
+                    unitMode === 'grid' ? 'border-rose-500 bg-white text-rose-700' : 'border-site-200 text-site-400 bg-white'
+                  }`}
+                >樓×室 自動</button>
+                <button
+                  type="button"
+                  onClick={() => setUnitMode('custom')}
+                  className={`py-1.5 rounded-lg text-xs font-semibold border min-h-0 ${
+                    unitMode === 'custom' ? 'border-rose-500 bg-white text-rose-700' : 'border-site-200 text-site-400 bg-white'
+                  }`}
+                >自訂</button>
+              </div>
+
+              {unitMode === 'grid' ? (
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-xs text-site-500 mb-1">樓層數</label>
+                    <input
+                      type="number" min={1} max={100} value={unitFloorCount}
+                      onChange={e => setUnitFloorCount(Math.max(1, Number(e.target.value) || 1))}
+                      className="input bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-site-500 mb-1">起始（負為地庫）</label>
+                    <input
+                      type="number" min={-20} max={100} value={unitBaseFloor}
+                      onChange={e => setUnitBaseFloor(Number(e.target.value) || 1)}
+                      className="input bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-site-500 mb-1">每層室數</label>
+                    <input
+                      type="number" min={1} max={26} value={unitCount}
+                      onChange={e => setUnitCount(Math.max(1, Math.min(26, Number(e.target.value) || 1)))}
+                      className="input bg-white"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs text-site-500 mb-1">單位名稱（逗號或換行分隔）</label>
+                  <textarea
+                    value={customFloors}
+                    onChange={e => setCustomFloors(e.target.value)}
+                    rows={3}
+                    placeholder="例：15/F-A, 15/F-B, 16/F-A, 天台"
+                    className="input resize-none bg-white"
+                  />
+                </div>
+              )}
+
+              {resolvedFloorLabels.length > 0 && (
+                <div>
+                  <p className="text-xs text-site-500 mb-1.5">預覽（{resolvedFloorLabels.length} 個單位 · 全部 未處理）</p>
+                  <div className="flex flex-wrap gap-1">
+                    {resolvedFloorLabels.slice(0, 30).map(l => (
+                      <span key={l} className="text-[10px] bg-white border border-rose-200 text-rose-600 px-1.5 py-0.5 rounded">{l}</span>
+                    ))}
+                    {resolvedFloorLabels.length > 30 && (
+                      <span className="text-[10px] text-site-400">+{resolvedFloorLabels.length - 30}</span>
+                    )}
+                  </div>
+                </div>
+              )}
+              <p className="text-[11px] text-site-500">
+                每個單位（室）由「未處理 → 維修中 → 已修復 → 待覆檢 → 已簽收」逐步更新；百分比 = 已簽收 / 總數。
               </p>
             </div>
           )}

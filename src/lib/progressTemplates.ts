@@ -12,10 +12,11 @@
 // or mode lists. 'general' encodes today's exact behaviour so existing
 // projects are byte-identical.
 //
-// Scope note (P2): the 'checklist' (P1) and 'quantity' (P2, 渠務) modes are
-// live. The drainage template now defaults to 'quantity'. 'unit_status'
-// (大樓維修) is still P3, so maintenance keeps checklist/percentage defaults —
-// no template references a mode the app can't yet render.
+// Scope note (P3): the 'checklist' (P1), 'quantity' (P2, 渠務) and 'unit_status'
+// (P3, 大樓維修) modes are all live. The drainage template defaults to
+// 'quantity'; the maintenance template now defaults to 'unit_status' (the
+// defect state machine 未處理→…→已簽收). No template references a mode the app
+// can't render.
 
 import type { ProgressItem, ProgressStatus, ProjectType, TrackingMode } from '../types'
 
@@ -84,12 +85,18 @@ const DRAINAGE: ProgressTemplate = {
   kpiTiles: 'drainage',
 }
 
+// maintenance (P3): 大樓維修 (MBIS/MWIS). A 座 holds a defect register whose
+// unit (室/位置) walks the unit_status state machine, so 'unit_status' is the
+// default + first-offered mode; quantity (e.g. spalling m²) and checklist stay
+// available. zoneNoun / labelNoun follow the spec table (§3.1): 座 / 室. The
+// page reads kpiTiles='maintenance' to render the 已簽收/已修復/共 + 距法定限期
+// tiles (the statutory deadline = earliest L1 planned_end).
 const MAINTENANCE: ProgressTemplate = {
   type: 'maintenance',
-  allowedModes: ['checklist', 'percentage'],
-  defaultMode: 'checklist',
+  allowedModes: ['unit_status', 'checklist', 'percentage'],
+  defaultMode: 'unit_status',
   zoneNoun: '座',
-  labelNoun: '室/位置',
+  labelNoun: '室',
   autoZone: false,
   kpiTiles: 'maintenance',
 }

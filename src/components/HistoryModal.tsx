@@ -1,10 +1,34 @@
 import { useEffect, useState } from 'react'
-import { Clock, Check } from 'lucide-react'
+import { Clock, Check, DoorOpen } from 'lucide-react'
 import { Modal } from './Modal'
 import { Spinner } from './Spinner'
 import { useProgress } from '../contexts/ProgressContext'
 import { supabase } from '../lib/supabase'
-import type { ProgressItem, ProgressHistoryEntry, UserProfile } from '../types'
+import { UNIT_STATE_ZH } from '../types'
+import type { ProgressItem, ProgressHistoryEntry, UserProfile, UnitState } from '../types'
+
+// Diff a unit_status history row against the chronologically-previous row's
+// label_status map → the labels whose state CHANGED, as { label, from, to }.
+// `entries` is newest-first, so the previous-in-time row is the NEXT index.
+// First-ever tick (no prior) shows every non-pending label as "→ state".
+function unitStatusDiff(
+  cur: Record<string, UnitState> | null | undefined,
+  prev: Record<string, UnitState> | null | undefined,
+): Array<{ label: string; from: UnitState | null; to: UnitState }> {
+  const curMap = cur ?? {}
+  const prevMap = prev ?? {}
+  const out: Array<{ label: string; from: UnitState | null; to: UnitState }> = []
+  for (const label of Object.keys(curMap)) {
+    const to = curMap[label]
+    const from = prevMap[label] ?? null
+    if (from === to) continue
+    // Suppress noise: a label that was implicitly 'pending' and is still
+    // 'pending' isn't a change worth showing.
+    if (from === null && to === 'pending') continue
+    out.push({ label, from, to })
+  }
+  return out
+}
 
 // zh-HK labels for the keys recorded in a 'meta' (rename / date-change) history row.
 const META_LABEL: Record<string, string> = {
@@ -63,8 +87,13 @@ export function HistoryModal({
         </div>
       ) : (
         <div className="space-y-2">
-          {entries.map(e => {
+          {entries.map((e, idx) => {
             const u = e.updated_by ? users[e.updated_by] : null
+            // unit_status rows carry a label_status map; diff against the
+            // chronologically-previous row (next index, since newest-first).
+            const unitChanges = e.label_status
+              ? unitStatusDiff(e.label_status, entries[idx + 1]?.label_status)
+              : []
             return (
               <div key={e.id} className="border border-site-200 rounded-xl p-3">
                 <div className="flex items-center justify-between gap-2">
@@ -95,14 +124,29 @@ export function HistoryModal({
                     ))}
                   </div>
                 )}
-                {e.floors_completed.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {e.floors_completed.map(f => (
-                      <span key={f} className="inline-flex items-center gap-0.5 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-semibold">
-                        <Check size={9} />{f}
-                      </span>
-                    ))}
-                  </div>
+                {/* unit_status rows: show the per-室 state CHANGES (not the raw
+                    signed-off floor chips, which would just repeat 已簽收 labels). */}
+                {e.label_status ? (
+                  unitChanges.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {unitChanges.map(c => (
+                        <span key={c.label} className="inline-flex items-center gap-0.5 text-[10px] bg-rose-50 text-rose-700 border border-rose-200 px-1.5 py-0.5 rounded font-semibold">
+                          <DoorOpen size={9} />
+                          {c.label}：{c.from ? `${UNIT_STATE_ZH[c.from]}→` : ''}{UNIT_STATE_ZH[c.to]}
+                        </span>
+                      ))}
+                    </div>
+                  )
+                ) : (
+                  e.floors_completed.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {e.floors_completed.map(f => (
+                        <span key={f} className="inline-flex items-center gap-0.5 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-semibold">
+                          <Check size={9} />{f}
+                        </span>
+                      ))}
+                    </div>
+                  )
                 )}
                 {e.notes && (
                   <p className="text-xs text-site-600 mt-2 whitespace-pre-wrap">{e.notes}</p>
