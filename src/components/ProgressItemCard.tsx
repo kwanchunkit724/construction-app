@@ -7,7 +7,10 @@ import {
 import { ProgressBar } from './ProgressBar'
 import { useProgress } from '../contexts/ProgressContext'
 import { DrawingsContext } from '../contexts/DrawingsContext'
+import { DocumentsContext } from '../contexts/DocumentsContext'
 import { DrawingsSection } from './drawings/DrawingsSection'
+import { DocumentsSection } from './documents/DocumentsSection'
+import { useFilesFlag } from '../contexts/FilesFlagContext'
 import { MaterialItemsPanel } from './material/MaterialItemsPanel'
 import { PROGRESS_STATUS_ZH, computeRollup, getDescendantLeaves, plannedProgressOf, deriveStatus, isScheduled } from '../types'
 import type { ProgressItem, ProgressStatus, UserProfile } from '../types'
@@ -17,6 +20,13 @@ import { useProjects } from '../contexts/ProjectsContext'
 // useDrawingsOptional — null when no DrawingsProvider mounted (e.g. dashboard preview).
 function useDrawingsOptional() {
   return useContext(DrawingsContext)
+}
+
+// useDocumentsOptional — null when no DocumentsProvider mounted. Same defensive
+// pattern as useDrawingsOptional: the card must not crash on surfaces (dashboard
+// preview, history modals) that render it outside a DocumentsProvider.
+function useDocumentsOptional() {
+  return useContext(DocumentsContext)
 }
 
 // arr — defensive: DB can deliver null for nominally-array columns
@@ -111,11 +121,26 @@ export function ProgressItemCard({
   const isLeaf = children.length === 0
   const isOpen = expanded.has(item.id)
 
+  // files_enabled flag (Phase C). When ON, the per-item drawings surface is
+  // replaced by the documents register. When OFF the app is PIXEL-IDENTICAL to
+  // today — every documents branch below early-returns to the drawings path.
+  const { enabled: filesEnabled } = useFilesFlag()
   const drawingsCtx = useDrawingsOptional()
+  const documentsCtx = useDocumentsOptional()
+  // Which context/section drives the per-item file affordance. Flag ON →
+  // documents (only if a DocumentsProvider is actually mounted); else drawings.
+  const filesMode = filesEnabled && !!documentsCtx
+  const fileCtxPresent = filesMode ? !!documentsCtx : !!drawingsCtx
   const drawingCount = useMemo(
     () => drawingsCtx ? drawingsCtx.drawings.filter(d => d.leaf_item_id === item.id).length : 0,
     [drawingsCtx, item.id],
   )
+  const documentCount = useMemo(
+    () => documentsCtx ? documentsCtx.documents.filter(d => d.progress_item_id === item.id).length : 0,
+    [documentsCtx, item.id],
+  )
+  // The label/count shown on the kebab row: 文件 (n) when in files mode, else 圖則 (n).
+  const fileRowLabel = filesMode ? `文件 (${documentCount})` : `圖則 (${drawingCount})`
 
   const descLeaves = isLeaf ? [] : getDescendantLeaves(items, item.id)
   const rollup = isLeaf ? null : computeRollup(descLeaves)
@@ -150,7 +175,7 @@ export function ProgressItemCard({
     return () => document.removeEventListener('mousedown', h)
   }, [menuOpen])
 
-  const hasMenuActions = canEdit || (isLeaf && !!drawingsCtx)
+  const hasMenuActions = canEdit || (isLeaf && fileCtxPresent)
   // Every row is expandable: parents → children, leaves → detail (notes /
   // assignees / drawings / 需用物料). Leaves always expandable so linked
   // materials stay reachable even when the row has no notes/assignees.
@@ -226,8 +251,8 @@ export function ProgressItemCard({
               </button>
               {menuOpen && (
                 <div className="absolute right-0 top-full mt-1 z-30 bg-white rounded-xl border border-site-200 shadow-card-md py-1 min-w-[150px]">
-                  {isLeaf && drawingsCtx && (
-                    <MenuRow icon={<ImageIcon size={15} />} label={`圖則 (${drawingCount})`} onClick={() => { setDrawingsOpen(o => !o); if (!isOpen) onToggle(item.id); setMenuOpen(false) }} />
+                  {isLeaf && fileCtxPresent && (
+                    <MenuRow icon={<ImageIcon size={15} />} label={fileRowLabel} onClick={() => { setDrawingsOpen(o => !o); if (!isOpen) onToggle(item.id); setMenuOpen(false) }} />
                   )}
                   {canEdit && isLeaf && (
                     <MenuRow icon={<Users size={15} />} label="指派" onClick={() => { onAssign(item); setMenuOpen(false) }} />
@@ -277,7 +302,11 @@ export function ProgressItemCard({
                 ))}
               </div>
             )}
-            {drawingsOpen && drawingsCtx && <DrawingsSection leafItemId={item.id} />}
+            {drawingsOpen && (
+              filesMode
+                ? documentsCtx && <DocumentsSection leafItemId={item.id} />
+                : drawingsCtx && <DrawingsSection leafItemId={item.id} />
+            )}
             <MaterialItemsPanel itemId={item.id} title="需用物料" />
           </div>
         )}

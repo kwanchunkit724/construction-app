@@ -26,6 +26,7 @@ import { ExportProgressModal } from '../components/ExportProgressModal'
 import { ProgressProvider, useProgress } from '../contexts/ProgressContext'
 import { IssuesProvider, useIssues } from '../contexts/IssuesContext'
 import { DrawingsProvider } from '../contexts/DrawingsContext'
+import { DocumentsProvider } from '../contexts/DocumentsContext'
 import { MaterialsProvider } from '../contexts/MaterialsContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -57,9 +58,11 @@ export default function ProjectDetail() {
     <ProgressProvider projectId={id}>
       <IssuesProvider projectId={id}>
         <DrawingsProvider projectId={id}>
-          <MaterialsProvider projectId={id}>
-            <ProjectDetailInner projectId={id} />
-          </MaterialsProvider>
+          <DocumentsProvider projectId={id}>
+            <MaterialsProvider projectId={id}>
+              <ProjectDetailInner projectId={id} />
+            </MaterialsProvider>
+          </DocumentsProvider>
         </DrawingsProvider>
       </IssuesProvider>
     </ProgressProvider>

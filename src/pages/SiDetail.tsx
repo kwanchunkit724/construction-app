@@ -7,6 +7,7 @@ import { SiProvider, useSi } from '../contexts/SiContext'
 import { VoProvider, useVo } from '../contexts/VoContext'
 import { ProgressProvider, useProgress } from '../contexts/ProgressContext'
 import { DrawingsProvider } from '../contexts/DrawingsContext'
+import { DocumentsProvider } from '../contexts/DocumentsContext'
 import { VoSubmitForm } from '../components/vo/VoSubmitForm'
 import { VoConfirmationScreen } from '../components/vo/VoConfirmationScreen'
 import { signedUrlFor } from '../lib/si'
@@ -490,13 +491,15 @@ export default function SiDetailPage() {
   return (
     <AppLayout title="工地指令">
       <DrawingsProvider projectId={id}>
-        <SiProvider projectId={id}>
-          <ProgressProvider projectId={id}>
-            <VoProvider projectId={id}>
-              <SiDetailInner projectId={id} siId={siId} />
-            </VoProvider>
-          </ProgressProvider>
-        </SiProvider>
+        <DocumentsProvider projectId={id}>
+          <SiProvider projectId={id}>
+            <ProgressProvider projectId={id}>
+              <VoProvider projectId={id}>
+                <SiDetailInner projectId={id} siId={siId} />
+              </VoProvider>
+            </ProgressProvider>
+          </SiProvider>
+        </DocumentsProvider>
       </DrawingsProvider>
     </AppLayout>
   )

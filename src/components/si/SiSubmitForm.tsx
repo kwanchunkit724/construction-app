@@ -1,7 +1,9 @@
-import { ChangeEvent, useMemo, useRef, useState } from 'react'
+import { ChangeEvent, useContext, useMemo, useRef, useState } from 'react'
 import { X, Camera, Image as ImageIcon, FileUp, Trash2, Plus } from 'lucide-react'
 import { useSi } from '../../contexts/SiContext'
 import { useDrawings } from '../../contexts/DrawingsContext'
+import { DocumentsContext } from '../../contexts/DocumentsContext'
+import { useFilesFlag } from '../../contexts/FilesFlagContext'
 import { uploadSiPhotos, uploadSiVoice } from '../../lib/si'
 import { Spinner } from '../Spinner'
 import { VoiceRecorder } from './VoiceRecorder'
@@ -17,9 +19,57 @@ export interface SiSubmitFormProps {
   onCancel: () => void
 }
 
+// Minimal shape the drawing-reference picker needs — both DrawingsContext and
+// (files_enabled) DocumentsContext adapt into this so the JSX has one path.
+interface PinDrawing {
+  id: string
+  title: string
+  current_version_id: string | null
+}
+interface PinVersion {
+  id: string
+  version_no: number
+}
+
 export function SiSubmitForm({ projectId, onSubmitted, onCancel }: SiSubmitFormProps) {
   const { createDraftSi, saveVersion, submitSi } = useSi()
   const { drawings, versionsByDrawing } = useDrawings()
+  const { enabled: filesEnabled } = useFilesFlag()
+  // Optional — null when no DocumentsProvider is mounted (older mount sites).
+  const documentsCtx = useContext(DocumentsContext)
+  // Files mode only when the flag is on AND a DocumentsProvider is in scope.
+  const filesMode = filesEnabled && !!documentsCtx
+
+  // Source the drawing-reference picker from documents (document_type==='drawing')
+  // when in files mode, else from drawings. version ids are identical post-backfill
+  // so SiPayload.drawing_version_ids is unchanged either way.
+  const pinDrawings: PinDrawing[] = useMemo(() => {
+    if (filesMode && documentsCtx) {
+      return documentsCtx.documents
+        .filter(d => d.document_type === 'drawing')
+        .map(d => ({ id: d.id, title: d.title, current_version_id: d.current_version_id }))
+    }
+    return drawings.map(d => ({
+      id: d.id,
+      title: d.title,
+      current_version_id: d.current_version_id,
+    }))
+  }, [filesMode, documentsCtx, drawings])
+
+  const versionsByPinDrawing: Record<string, PinVersion[]> = useMemo(() => {
+    if (filesMode && documentsCtx) {
+      const out: Record<string, PinVersion[]> = {}
+      for (const [docId, vers] of Object.entries(documentsCtx.versionsByDocument)) {
+        out[docId] = vers.map(v => ({ id: v.id, version_no: v.version_no }))
+      }
+      return out
+    }
+    const out: Record<string, PinVersion[]> = {}
+    for (const [drId, vers] of Object.entries(versionsByDrawing)) {
+      out[drId] = vers.map(v => ({ id: v.id, version_no: v.version_no }))
+    }
+    return out
+  }, [filesMode, documentsCtx, versionsByDrawing])
 
   // Form state
   const [title, setTitle] = useState('')
@@ -37,17 +87,17 @@ export function SiSubmitForm({ projectId, onSubmitted, onCancel }: SiSubmitFormP
 
   // Drawing pin picker — default to each drawing's current_version_id
   const defaultPinIds = useMemo(() => {
-    return drawings
+    return pinDrawings
       .map(d => d.current_version_id)
       .filter((id): id is string => !!id)
-  }, [drawings])
+  }, [pinDrawings])
 
   const [pickedVersionIds, setPickedVersionIds] = useState<string[]>(defaultPinIds)
   const [expandedDrawingId, setExpandedDrawingId] = useState<string | null>(null)
 
   // Keep picked ids in sync the first time drawings load
   const hydratedRef = useRef(false)
-  if (!hydratedRef.current && drawings.length > 0) {
+  if (!hydratedRef.current && pinDrawings.length > 0) {
     hydratedRef.current = true
     setPickedVersionIds(defaultPinIds)
   }
@@ -85,7 +135,7 @@ export function SiSubmitForm({ projectId, onSubmitted, onCancel }: SiSubmitFormP
   // of the same drawing in the picked set). If none of this drawing's versions
   // is currently pinned, just add the chosen version.
   function pickVersionForDrawing(drawingId: string, versionId: string) {
-    const versions = versionsByDrawing[drawingId] || []
+    const versions = versionsByPinDrawing[drawingId] || []
     const versionIdsOfThisDrawing = new Set(versions.map(v => v.id))
     setPickedVersionIds(prev => {
       const withoutThisDrawing = prev.filter(id => !versionIdsOfThisDrawing.has(id))
@@ -209,12 +259,12 @@ export function SiSubmitForm({ projectId, onSubmitted, onCancel }: SiSubmitFormP
             <p className="label mb-2">
               圖則參照 <span className="text-red-500">*</span>
             </p>
-            {drawings.length === 0 ? (
+            {pinDrawings.length === 0 ? (
               <p className="text-xs text-site-500">此項目尚未有圖則。</p>
             ) : (
               <div className="space-y-2">
-                {drawings.map(d => {
-                  const versions = (versionsByDrawing[d.id] || []).slice().sort((a, b) => b.version_no - a.version_no)
+                {pinDrawings.map(d => {
+                  const versions = (versionsByPinDrawing[d.id] || []).slice().sort((a, b) => b.version_no - a.version_no)
                   const current = versions.find(v => v.id === d.current_version_id) ?? versions[0]
                   const pickedForThisDrawing = versions.find(v => pickedVersionIds.includes(v.id))
                   const expanded = expandedDrawingId === d.id

@@ -396,6 +396,13 @@ export function DocumentsProvider({
     onProgress?: (pct: number) => void
   }): Promise<{ versionId: string | null; error: string | null }> {
     if (!profile) return { versionId: null, error: '未登入' }
+    // Drawing-type carve-out (D-25): block BEFORE the storage upload so a 判頭/
+    // 老總 never orphans a blob in project-docs against the 1GB budget on a write
+    // supersede_document_version will reject. Mirrors the uploadDocument guard.
+    const parentDoc = documents.find(d => d.id === documentId)
+    if (parentDoc?.document_type === 'drawing' && !canUploadDrawingType) {
+      return { versionId: null, error: '沒有上載圖則權限' }
+    }
     const prepared = await compressImage(file)
     const validationErr = validateFile(prepared)
     if (validationErr) return { versionId: null, error: validationErr }

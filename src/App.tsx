@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core'
 import { AuthProvider } from './contexts/AuthContext'
 import { ProjectsProvider } from './contexts/ProjectsContext'
 import { PtwFlagProvider } from './contexts/PtwFlagContext'
+import { FilesFlagProvider } from './contexts/FilesFlagContext'
 import { PtwGate } from './components/PtwGate'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { FullPageSpinner } from './components/Spinner'
@@ -69,6 +70,7 @@ export default function App() {
     <AuthProvider>
       <ProjectsProvider>
         <PtwFlagProvider>
+        <FilesFlagProvider>
         <HashRouter>
           <Routes>
           <Route path="/login" element={<Login />} />
@@ -107,6 +109,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </HashRouter>
+        </FilesFlagProvider>
         </PtwFlagProvider>
       </ProjectsProvider>
     </AuthProvider>

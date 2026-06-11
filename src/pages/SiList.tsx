@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '../components/AppLayout'
 import { SiProvider } from '../contexts/SiContext'
 import { DrawingsProvider } from '../contexts/DrawingsContext'
+import { DocumentsProvider } from '../contexts/DocumentsContext'
 import { SiList } from '../components/si/SiList'
 import { SiSubmitForm } from '../components/si/SiSubmitForm'
 
@@ -42,9 +43,11 @@ export default function SiListPage() {
   return (
     <AppLayout title="工地指令">
       <DrawingsProvider projectId={id}>
-        <SiProvider projectId={id}>
-          <SiListInner projectId={id} />
-        </SiProvider>
+        <DocumentsProvider projectId={id}>
+          <SiProvider projectId={id}>
+            <SiListInner projectId={id} />
+          </SiProvider>
+        </DocumentsProvider>
       </DrawingsProvider>
     </AppLayout>
   )
