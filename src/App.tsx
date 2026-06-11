@@ -6,6 +6,7 @@ import { ProjectsProvider } from './contexts/ProjectsContext'
 import { PtwFlagProvider } from './contexts/PtwFlagContext'
 import { FilesFlagProvider } from './contexts/FilesFlagContext'
 import { PtwGate } from './components/PtwGate'
+import { FilesGate } from './components/FilesGate'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { FullPageSpinner } from './components/Spinner'
 import Login from './pages/Login'
@@ -28,6 +29,12 @@ import AdminProjectChainsPage from './pages/AdminProjectChains'
 const PtwListPage = lazy(() => import('./pages/PtwList'))
 const PtwDetailPage = lazy(() => import('./pages/PtwDetail'))
 const PtwVerifyPage = lazy(() => import('./pages/PtwVerify'))
+
+// Phase D documents register — lazy + flag-gated (app_config.files_enabled).
+// Only resolves when files_enabled (admins bypass via FilesGate); when OFF the
+// FilesGate redirects to /home so the route is unreachable and the surface is
+// pixel-identical to today.
+const ProjectFilesPage = lazy(() => import('./pages/ProjectFiles'))
 
 // v1.2 feature pages — lazy so the entry chunk stays under the 800 KB CI
 // guard. None of these load until the user actually opens the route.
@@ -92,6 +99,8 @@ export default function App() {
           <Route path="/project/:id/ptw" element={<ProtectedRoute><PtwGate>{lazyRoute(<PtwListPage />)}</PtwGate></ProtectedRoute>} />
           <Route path="/project/:id/ptw/:ptwId" element={<ProtectedRoute><PtwGate>{lazyRoute(<PtwDetailPage />)}</PtwGate></ProtectedRoute>} />
           <Route path="/verify/:token" element={<ProtectedRoute><PtwGate>{lazyRoute(<PtwVerifyPage />)}</PtwGate></ProtectedRoute>} />
+          {/* Phase D documents register — gated like PTW (FilesGate → /home when files_enabled is off). */}
+          <Route path="/project/:id/files" element={<ProtectedRoute><FilesGate>{lazyRoute(<ProjectFilesPage />)}</FilesGate></ProtectedRoute>} />
           {/* v1.2: site diary, on-site materials, and the unified timetable. */}
           <Route path="/project/:id/daily" element={<ProtectedRoute>{lazyRoute(<DailyListPage />)}</ProtectedRoute>} />
           <Route path="/project/:id/daily/edit" element={<ProtectedRoute>{lazyRoute(<DailyEditPage />)}</ProtectedRoute>} />

@@ -1,8 +1,9 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { Home, Building2, User, Shield, HardHat, LogOut, LayoutDashboard, Users, FileText, Receipt, BookOpen, Package, CalendarDays, Contact as ContactIcon, GraduationCap } from 'lucide-react'
+import { Home, Building2, User, Shield, HardHat, LogOut, LayoutDashboard, Users, FileText, Receipt, BookOpen, Package, CalendarDays, Contact as ContactIcon, GraduationCap, FolderOpen } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { usePtwFlag } from '../contexts/PtwFlagContext'
+import { useFilesFlag } from '../contexts/FilesFlagContext'
 import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
 
 /**
@@ -13,9 +14,11 @@ export function Sidebar() {
   const { profile, signOut } = useAuth()
   const { projects } = useProjects()
   const { enabled: ptwEnabled } = usePtwFlag()
+  const { enabled: filesEnabled } = useFilesFlag()
   const location = useLocation()
   const isAdmin = profile?.global_role === 'admin'
   const showPtw = ptwEnabled || isAdmin
+  const showFiles = filesEnabled || isAdmin
   const isPM = !!profile && projects.some(p => p.assigned_pm_ids.includes(profile.id))
   const showDashboard = isAdmin || isPM
 
@@ -38,6 +41,7 @@ export function Sidebar() {
       { to: `/project/${projectId}/materials`, label: '物料', icon: Package },
       { to: `/project/${projectId}/timetable`, label: '行事曆', icon: CalendarDays },
       { to: `/project/${projectId}/contacts`, label: '聯絡人', icon: ContactIcon },
+      ...(showFiles ? [{ to: `/project/${projectId}/files`, label: '文件', icon: FolderOpen }] : []),
     ] : []),
     ...(isAdmin ? [
       { to: '/admin', label: '管理', icon: Shield },

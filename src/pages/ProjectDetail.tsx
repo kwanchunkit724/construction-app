@@ -6,7 +6,7 @@ import {
   ListChecks, AlertCircle, Download, FileCheck2,
   FileText, Receipt, Shield,
   Wrench, BookOpen, Package, CalendarDays,
-  Contact as ContactIcon,
+  Contact as ContactIcon, FolderOpen,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { UserProfile } from '../types'
@@ -31,6 +31,7 @@ import { MaterialsProvider } from '../contexts/MaterialsContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { usePtwFlag } from '../contexts/PtwFlagContext'
+import { useFilesFlag } from '../contexts/FilesFlagContext'
 import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH, deriveStatus, plannedProgressOf } from '../types'
 import type { ProgressItem, ProgressStatus, Zone } from '../types'
 
@@ -552,11 +553,31 @@ function SiVoSwitcher({ projectId }: { projectId: string }) {
 // covers desktop; mobile users land here from the 工具 tab strip.
 function ToolsSwitcher({ projectId }: { projectId: string }) {
   const navigate = useNavigate()
+  const { profile } = useAuth()
+  const { enabled: filesEnabled } = useFilesFlag()
+  // 文件 card appears only when files_enabled is ON (admins bypass to pilot),
+  // matching the route gate (FilesGate) — flag OFF = no new surface.
+  const showFiles = filesEnabled || profile?.global_role === 'admin'
   return (
     <div className="space-y-3">
       <p className="text-sm text-site-600 px-1">
         工地工具：選擇要使用的功能
       </p>
+      {showFiles && (
+        <button
+          onClick={() => navigate(`/project/${projectId}/files`)}
+          className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
+        >
+          <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center flex-shrink-0">
+            <FolderOpen size={22} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-site-900">文件</p>
+            <p className="text-xs text-site-500 mt-0.5">物料送審 · 施工方案 · 圖則 · 檢驗記錄</p>
+          </div>
+          <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
+        </button>
+      )}
       <button
         onClick={() => navigate(`/project/${projectId}/daily`)}
         className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"

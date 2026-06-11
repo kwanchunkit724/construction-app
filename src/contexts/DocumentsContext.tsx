@@ -29,6 +29,7 @@ interface DocumentsContextType {
   uploaderNameById: Record<string, string>
   loading: boolean
   fetchError: string | null
+  refetch: () => Promise<void>
   // Computed from useAuth + useProjects memberships — mirrors the DB helpers
   // can_upload_document / can_review_document (v40-split/3-helpers-and-rls.sql).
   canUpload: boolean
@@ -539,6 +540,7 @@ export function DocumentsProvider({
         uploaderNameById,
         loading,
         fetchError,
+        refetch,
         canUpload,
         canReview,
         canUploadDrawingType,
