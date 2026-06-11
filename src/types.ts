@@ -333,6 +333,97 @@ export const DRAWING_STATUS_ZH: Record<DrawingStatus, string> = {
   withdrawn: '已撤回',
 }
 
+// ── v40 (program-2026-06): Documents register ───────────────
+// Native file system that supersedes per-item drawings. Field names mirror
+// the DB columns in supabase/v40-split/1-tables.sql verbatim (never camelCased
+// — same rule as the Drawing block above).
+export type DocumentType =
+  | 'material_submission'
+  | 'method_statement'
+  | 'drawing'
+  | 'inspection'
+  | 'other'
+
+export type DocumentStatus =
+  | 'draft'
+  | 'submitted'
+  | 'approved'
+  | 'rejected'
+  | 'superseded'
+  | 'withdrawn'
+
+export interface Document {
+  id: string
+  project_id: string
+  progress_item_id: string | null
+  document_type: DocumentType
+  title: string
+  doc_number: string | null
+  current_version_id: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  legacy_drawing_id: string | null
+}
+
+export interface DocumentVersion {
+  id: string
+  document_id: string
+  version_no: number
+  revision_label: string | null
+  bucket_id: 'project-docs' | 'project-drawings'
+  file_path: string
+  thumb_path: string | null
+  mime_type: 'application/pdf' | 'image/jpeg' | 'image/png'
+  size_bytes: number
+  status: DocumentStatus
+  submitted_by: string | null
+  submitted_at: string | null
+  reviewed_by: string | null
+  reviewed_at: string | null
+  review_note: string | null
+  superseded_at: string | null
+  withdrawn_at: string | null
+  legacy_drawing_version_id: string | null
+}
+
+export type DocumentEventType =
+  | 'created'
+  | 'version_uploaded'
+  | 'submitted'
+  | 'approved'
+  | 'rejected'
+  | 'superseded'
+  | 'withdrawn'
+  | 'migrated'
+
+export interface DocumentEvent {
+  id: string
+  document_id: string
+  version_id: string | null
+  event_type: DocumentEventType
+  actor_id: string | null
+  note: string | null
+  created_at: string
+}
+
+export const DOCUMENT_TYPE_ZH: Record<DocumentType, string> = {
+  material_submission: '物料送審',
+  method_statement: '施工方案',
+  drawing: '圖則',
+  inspection: '檢驗記錄',
+  other: '其他文件',
+}
+
+export const DOCUMENT_STATUS_ZH: Record<DocumentStatus, string> = {
+  draft: '草稿',
+  submitted: '已送審',
+  approved: '已批准',
+  rejected: '已拒絕',
+  superseded: '已取代',
+  withdrawn: '已撤回',
+}
+
 // ── Phase 2 SI types ────────────────────────────────────────
 // VO-side types land in Plan 02-06.
 
