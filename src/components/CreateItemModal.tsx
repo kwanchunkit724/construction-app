@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { Layers, Percent, ListChecks } from 'lucide-react'
+import { Layers, Percent, ListChecks, Ruler } from 'lucide-react'
 import { Modal } from './Modal'
 import { Spinner } from './Spinner'
 import { useProgress } from '../contexts/ProgressContext'
@@ -17,7 +17,15 @@ const MODE_META: Record<TrackingMode, { label: string; icon: typeof Percent; act
   percentage: { label: '百分比', icon: Percent, activeClass: 'border-safety-500 bg-safety-50 text-safety-700' },
   floors: { label: '樓層', icon: Layers, activeClass: 'border-purple-500 bg-purple-50 text-purple-700' },
   checklist: { label: '清單', icon: ListChecks, activeClass: 'border-purple-500 bg-purple-50 text-purple-700' },
+  // P2: 渠務 / linear work — done/total in a real unit (m / m2 / 個…). Teal so
+  // it reads distinct from the purple label-modes and the orange percentage.
+  quantity: { label: '數量', icon: Ruler, activeClass: 'border-teal-500 bg-teal-50 text-teal-700' },
 }
+
+// Unit suggestions for the quantity sub-form. Free text (no DB check) so trades
+// can extend, but these cover the 渠務 staples — metres of pipe, area, volume,
+// and counted items (manholes / gullies / connections).
+const QTY_UNIT_SUGGESTIONS = ['m', 'm2', 'm3', '個', '件']
 
 export function CreateItemModal({
   open, onClose, parent, zone,
@@ -43,6 +51,10 @@ export function CreateItemModal({
   const [floorCount, setFloorCount] = useState(10)
   const [baseFloor, setBaseFloor] = useState(1)
   const [customFloors, setCustomFloors] = useState('')
+  // P2: quantity sub-form (渠務). qtyTotal as string so the field can be empty
+  // mid-edit; parsed at submit. qtyUnit free-text with chip suggestions.
+  const [qtyTotal, setQtyTotal] = useState('')
+  const [qtyUnit, setQtyUnit] = useState('m')
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -106,6 +118,8 @@ export function CreateItemModal({
       setFloorCount(10)
       setBaseFloor(1)
       setCustomFloors('')
+      setQtyTotal('')
+      setQtyUnit('m')
       setError('')
       setSuccessMsg('')
       setSelectedZoneIds([zone.id])
@@ -246,6 +260,11 @@ export function CreateItemModal({
     if (isLabelMode && resolvedFloorLabels.length === 0) {
       return setError(trackingMode === 'checklist' ? '清單模式需要至少一項工序' : '樓層模式需要至少一個樓層')
     }
+    if (trackingMode === 'quantity') {
+      const t = Number(qtyTotal)
+      if (!qtyTotal.trim() || !Number.isFinite(t) || t <= 0) return setError('請輸入有效的總數量（大於 0）')
+      if (!qtyUnit.trim()) return setError('請輸入單位（例：m）')
+    }
 
     if (insertTargets.length === 0) {
       return setError(isRootAdd ? '請至少選擇一個分區' : '請至少選擇一個目標項目')
@@ -272,6 +291,8 @@ export function CreateItemModal({
         planned_progress: plannedPreview,
         tracking_mode: trackingMode,
         floor_labels: isLabelMode ? resolvedFloorLabels : [],
+        qty_total: trackingMode === 'quantity' ? Number(qtyTotal) : null,
+        qty_unit: trackingMode === 'quantity' ? qtyUnit.trim() : null,
       }))
     )
 
@@ -488,6 +509,54 @@ export function CreateItemModal({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {trackingMode === 'quantity' && (
+            <div className="mt-3 bg-teal-50 border border-teal-100 rounded-xl p-3 space-y-3">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2">
+                  <label className="block text-xs text-site-500 mb-1">總數量 *</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="any"
+                    value={qtyTotal}
+                    onChange={e => setQtyTotal(e.target.value)}
+                    placeholder="例：600"
+                    className="input bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-site-500 mb-1">單位 *</label>
+                  <input
+                    value={qtyUnit}
+                    onChange={e => setQtyUnit(e.target.value)}
+                    placeholder="m"
+                    className="input bg-white"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {QTY_UNIT_SUGGESTIONS.map(u => (
+                  <button
+                    key={u}
+                    type="button"
+                    onClick={() => setQtyUnit(u)}
+                    className={`text-xs px-2.5 py-1 rounded-lg border min-h-0 ${
+                      qtyUnit.trim() === u
+                        ? 'border-teal-500 bg-white text-teal-700 font-semibold'
+                        : 'border-site-200 bg-white text-site-500'
+                    }`}
+                  >
+                    {u}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-site-500">
+                以「已完成 / 總數量」自動計算百分比；更新時輸入實際數量（例：已鋪 230 {qtyUnit.trim() || 'm'}）。
+              </p>
             </div>
           )}
 

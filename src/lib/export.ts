@@ -169,6 +169,22 @@ interface ReportModel {
   opts: ExportProgressOptions
 }
 
+// Tracking column text per mode. floors → "x/y樓" (unchanged); checklist →
+// "✓x/y" (P1 left this blank — fixed here); quantity → "done/total unit"
+// (P2); percentage → '' (the % columns already say it all).
+function trackingLabel(it: ProgressItem): string {
+  switch (it.tracking_mode) {
+    case 'floors':
+      return `${it.floors_completed.length}/${it.floor_labels.length}樓`
+    case 'checklist':
+      return `✓${it.floors_completed.length}/${it.floor_labels.length}`
+    case 'quantity':
+      return `${it.qty_done ?? 0}/${it.qty_total ?? '?'}${it.qty_unit ?? ''}`
+    default:
+      return ''
+  }
+}
+
 export function buildReportModel(project: Project, items: ProgressItem[], opts: ExportProgressOptions, prev?: PrevSnapshot | null): ReportModel {
   const isLeaf = (it: ProgressItem) => !items.some(i => i.parent_id === it.id)
   const pmap = prev?.map ?? null
@@ -264,7 +280,7 @@ export function buildReportModel(project: Project, items: ProgressItem[], opts: 
         rows.push({
           zoneKey: key, zoneName: zoneNameOf(key),
           code: it.code, title: it.title, level: it.level, depth: d,
-          tracking: it.tracking_mode === 'floors' ? `${it.floors_completed.length}/${it.floor_labels.length}樓` : '',
+          tracking: trackingLabel(it),
           eff: e,
           start: it.planned_start ?? '', end: it.planned_end ?? '',
           notes: isLeaf(it) ? it.notes : '', updated: new Date(it.last_updated_at).toLocaleString('zh-HK'),

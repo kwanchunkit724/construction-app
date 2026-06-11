@@ -90,9 +90,11 @@ export const SUB_ROLE_ZH: Record<NonNullable<SubRole>, string> = {
 export type ProgressStatus = 'not-started' | 'in-progress' | 'completed' | 'delayed' | 'blocked'
 // 'checklist' (P1) reuses the floors storage (floor_labels / floors_completed)
 // and floorsToProgress derivation — it differs only in rendering (a vertical
-// tick-list of 工序 rather than a 樓層 grid). 'quantity' / 'unit_status' arrive
-// in P2 / P3. Widened in the DB by v42-progress-project-types.sql.
-export type TrackingMode = 'percentage' | 'floors' | 'checklist'
+// tick-list of 工序 rather than a 樓層 grid). 'quantity' (P2, 渠務 / linear work)
+// tracks qty_done/qty_total in a real unit (m / m2 / 個…) and derives % via
+// qtyToProgress. 'unit_status' is still P3. Widened in the DB by
+// v42 (checklist) then v43-progress-quantity-mode.sql (quantity).
+export type TrackingMode = 'percentage' | 'floors' | 'checklist' | 'quantity'
 
 export interface ProgressItem {
   id: string
@@ -111,6 +113,19 @@ export interface ProgressItem {
   tracking_mode: TrackingMode
   floor_labels: string[]
   floors_completed: string[]
+  // ── P2 (v43): quantity mode (渠務 / linear work) ──
+  // qty_total = the run's total measure (e.g. 600 m); qty_done = how much is
+  // laid (e.g. 230 m); qty_unit = the free-text unit (m / m2 / m3 / 個 / 件…).
+  // Non-quantity leaves leave these at NULL / 0 — which is treated as weight=1
+  // in computeRollup, so existing projects are byte-identical. % is still
+  // materialised into actual_progress via qtyToProgress on every update.
+  qty_total: number | null
+  qty_done: number
+  qty_unit: string | null
+  // blocked_reason: when set, the item's DISPLAYED status forces 受阻 (blocked).
+  // deriveStatus alone can never return 'blocked'; this is the only path that
+  // surfaces a real stoppage reason (雨天 / 地下水 / 掘路紙 / 物料 / 其他).
+  blocked_reason: string | null
   assigned_to: string[]
   delegated_to: string[]
   last_updated_by: string | null
@@ -131,12 +146,25 @@ export interface ProgressHistoryEntry {
   // keys as { key: [old, new] } for 'meta' rows; null for progress ticks.
   change_type?: 'progress' | 'meta'
   meta?: Record<string, [string | null, string | null]> | null
+  // v43: for quantity-mode updates, the metres laid at this tick — so the
+  // audit trail keeps the real number ("本期 +86m"), not just the % delta.
+  // null on every non-quantity (and pre-v43) history row.
+  qty_done?: number | null
 }
 
 // Helper: compute progress from floors_completed
 export function floorsToProgress(completed: string[], all: string[]): number {
   if (all.length === 0) return 0
   return Math.round((completed.length / all.length) * 100)
+}
+
+// Helper: compute progress from a quantity pair (渠務 / linear work).
+// 0 when total is falsy (un-set / zero — avoids divide-by-zero); otherwise
+// round(done/total*100) clamped to 0–100 so an over-run (done > total) still
+// materialises a valid 100 and a stray negative can't poison the rollup.
+export function qtyToProgress(done: number, total: number | null | undefined): number {
+  if (!total || total <= 0) return 0
+  return Math.max(0, Math.min(100, Math.round((done / total) * 100)))
 }
 
 export const PROGRESS_STATUS_ZH: Record<ProgressStatus, string> = {
@@ -227,21 +255,88 @@ export interface Rollup {
   status: ProgressStatus
   leafCount: number
   scheduledCount: number
+  // ── P2 (v43): quantity roll-up extras (additive, backwards-compatible) ──
+  // qtySum / qtyTotal / qtyUnit are non-null ONLY when EVERY leaf in the set is
+  // quantity-mode and they all share one qty_unit — i.e. a pure 渠務 branch
+  // measured in the same unit. Then the consumer can show "已鋪 230/600 m"
+  // alongside the %. Mixed units (m + 個) or a mix of modes → all null, the
+  // Σ is suppressed, and weighting falls back to equal weight (= today). Any
+  // existing project leaves these null, so every current rollup is unchanged.
+  qtySum: number | null
+  qtyTotal: number | null
+  qtyUnit: string | null
+}
+
+// A leaf weighs into the rollup average by qty_total ONLY when the whole leaf
+// set is quantity-mode in one shared unit; otherwise every leaf weighs 1 (the
+// historical equal-weight behaviour). Returns null when not weightable so the
+// caller falls back to the plain mean — guaranteeing byte-identical numbers
+// for every non-quantity (i.e. every existing) project.
+function quantityWeighting(
+  leaves: ProgressItem[],
+): { unit: string; sumDone: number; sumTotal: number; weights: number[] } | null {
+  if (leaves.length === 0) return null
+  // Must be ALL quantity-mode with a positive qty_total on every leaf — a single
+  // non-quantity or un-sized leaf disqualifies the whole set (can't weight it).
+  let unit: string | null = null
+  for (const l of leaves) {
+    if (l.tracking_mode !== 'quantity') return null
+    const total = l.qty_total
+    if (total == null || total <= 0) return null
+    const u = (l.qty_unit ?? '').trim()
+    if (!u) return null
+    if (unit === null) unit = u
+    else if (unit !== u) return null // mixed units → not weightable
+  }
+  if (unit === null) return null
+  const weights = leaves.map(l => l.qty_total as number)
+  const sumTotal = weights.reduce((s, w) => s + w, 0)
+  const sumDone = leaves.reduce((s, l) => s + (l.qty_done ?? 0), 0)
+  if (sumTotal <= 0) return null
+  return { unit, sumDone, sumTotal, weights }
 }
 
 export function computeRollup(leaves: ProgressItem[], today: Date = new Date()): Rollup {
   if (leaves.length === 0) {
-    return { actual: 0, planned: 0, status: 'not-started', leafCount: 0, scheduledCount: 0 }
+    return {
+      actual: 0, planned: 0, status: 'not-started', leafCount: 0, scheduledCount: 0,
+      qtySum: null, qtyTotal: null, qtyUnit: null,
+    }
   }
-  const actual = Math.round(leaves.reduce((s, x) => s + x.actual_progress, 0) / leaves.length)
+  const qw = quantityWeighting(leaves)
+  // Quantity-weighted average when the whole branch is one-unit 渠務; otherwise
+  // the historical equal-weight mean (weight = 1 each) → identical numbers for
+  // every existing project. Math: equal weights collapse to the plain average.
+  const weights = qw ? qw.weights : leaves.map(() => 1)
+  const weightSum = weights.reduce((s, w) => s + w, 0)
+  const actual = weightSum > 0
+    ? Math.round(leaves.reduce((s, x, i) => s + x.actual_progress * weights[i], 0) / weightSum)
+    : 0
   // Planned is schedule-derived, averaged over SCHEDULED leaves only — un-scheduled
   // leaves (no dates) would otherwise count as 0% and falsely drag the parent's
   // planned down, fabricating a 超前 / on-plan reading. Actual still spans all leaves.
+  // Weighting is applied symmetrically (same per-leaf weight) over scheduled leaves.
   const sched = leaves.filter(isScheduled)
-  const planned = sched.length
-    ? Math.round(sched.reduce((s, x) => s + plannedProgressOf(x, today), 0) / sched.length)
-    : 0
-  return { actual, planned, status: deriveStatus(actual, planned), leafCount: leaves.length, scheduledCount: sched.length }
+  let planned = 0
+  if (sched.length) {
+    if (qw) {
+      // re-derive each scheduled leaf's weight from its own qty_total (the
+      // quantity branch is all sized, so every scheduled leaf has one).
+      const schedWeightSum = sched.reduce((s, x) => s + (x.qty_total as number), 0)
+      planned = schedWeightSum > 0
+        ? Math.round(sched.reduce((s, x) => s + plannedProgressOf(x, today) * (x.qty_total as number), 0) / schedWeightSum)
+        : 0
+    } else {
+      planned = Math.round(sched.reduce((s, x) => s + plannedProgressOf(x, today), 0) / sched.length)
+    }
+  }
+  return {
+    actual, planned, status: deriveStatus(actual, planned),
+    leafCount: leaves.length, scheduledCount: sched.length,
+    qtySum: qw ? qw.sumDone : null,
+    qtyTotal: qw ? qw.sumTotal : null,
+    qtyUnit: qw ? qw.unit : null,
+  }
 }
 
 // ── Phase 4: Issue Tracking ─────────────────────────────────

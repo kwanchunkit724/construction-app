@@ -4,7 +4,7 @@ import { useAuth } from './AuthContext'
 import { useProjects } from './ProjectsContext'
 import { cacheGet, cacheSet, getOnline, subscribeOnline } from '../lib/offline'
 import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
-import { deriveStatus, floorsToProgress, plannedProgressOf } from '../types'
+import { deriveStatus, floorsToProgress, plannedProgressOf, qtyToProgress } from '../types'
 import type { ProgressItem, ProgressStatus, TrackingMode, ProgressHistoryEntry } from '../types'
 
 interface ProgressContextType {
@@ -30,6 +30,13 @@ interface ProgressContextType {
   addItem: (input: AddItemInput) => Promise<{ error: string | null }>
   updateProgress: (id: string, actual: number, notes: string) => Promise<{ error: string | null }>
   updateFloors: (id: string, floorsCompleted: string[], notes: string) => Promise<{ error: string | null }>
+  // P2 (v43): set the quantity done on a 渠務 leaf. Materialises
+  // actual_progress = qtyToProgress(qtyDone, qty_total) and journals the metres
+  // into progress_history.qty_done so "本期 +86m" survives in the audit trail.
+  updateQuantity: (id: string, qtyDone: number, notes: string) => Promise<{ error: string | null }>
+  // P2 (v43): set/clear the blocked reason (雨天 / 地下水 / 掘路紙 / 物料 / 其他).
+  // A non-null reason makes the item DISPLAY as 受阻 (see displayStatusOf).
+  setBlocked: (id: string, reason: string | null) => Promise<{ error: string | null }>
   setAssignment: (id: string, assigned: string[], delegated: string[]) => Promise<{ error: string | null }>
   fetchHistory: (id: string) => Promise<ProgressHistoryEntry[]>
   updateItemMeta: (id: string, patch: { title?: string; planned_start?: string | null; planned_end?: string | null }) => Promise<{ error: string | null }>
@@ -47,6 +54,10 @@ interface AddItemInput {
   notes?: string
   tracking_mode?: TrackingMode
   floor_labels?: string[]
+  // P2 (v43): quantity-mode sizing. Only meaningful when tracking_mode is
+  // 'quantity'; ignored (and left at the DB default NULL/0) for other modes.
+  qty_total?: number | null
+  qty_unit?: string | null
 }
 
 const ProgressContext = createContext<ProgressContextType | null>(null)
@@ -143,10 +154,13 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     const level = parent ? parent.level + 1 : 1
     const trackingMode: TrackingMode = input.tracking_mode ?? 'percentage'
     // 'checklist' reuses the floors storage (floor_labels = 工序 names), so
-    // both label-based modes carry their labels; percentage carries none.
+    // both label-based modes carry their labels; percentage / quantity carry none.
     const floorLabels = (trackingMode === 'floors' || trackingMode === 'checklist')
       ? (input.floor_labels ?? [])
       : []
+    // 'quantity' (渠務) carries qty_total + qty_unit; other modes leave them at
+    // the DB defaults (NULL / 0) so they stay weight=1 in computeRollup.
+    const isQuantity = trackingMode === 'quantity'
     const { error } = await supabase.from('progress_items').insert({
       project_id: projectId,
       parent_id: input.parent_id,
@@ -163,6 +177,9 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
       tracking_mode: trackingMode,
       floor_labels: floorLabels,
       floors_completed: [],
+      qty_total: isQuantity ? (input.qty_total ?? null) : null,
+      qty_done: 0,
+      qty_unit: isQuantity ? ((input.qty_unit ?? '').trim() || null) : null,
       assigned_to: [],
       delegated_to: [],
       last_updated_by: profile.id,
@@ -173,13 +190,22 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     return { error: null }
   }
 
-  async function recordHistory(itemId: string, actual: number, floorsCompleted: string[], notes: string) {
+  async function recordHistory(
+    itemId: string,
+    actual: number,
+    floorsCompleted: string[],
+    notes: string,
+    qtyDone?: number | null,
+  ) {
     if (!profile) return
     const { error } = await supabase.from('progress_history').insert({
       item_id: itemId,
       actual_progress: actual,
       floors_completed: floorsCompleted,
       notes,
+      // v43: carry the metres for quantity ticks so "本期 +86m" survives; null
+      // (omitted) for every other mode — column is nullable, pre-v43 rows too.
+      qty_done: qtyDone ?? null,
       updated_by: profile.id,
     })
     // Don't block the progress update on the audit write, but never swallow it
@@ -269,6 +295,57 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     return { error: null }
   }
 
+  // P2 (v43): quantity-mode update (渠務). Sets qty_done, materialises
+  // actual_progress = qtyToProgress(qtyDone, qty_total) so every downstream
+  // consumer (rollup / status / export / snapshots) still sees a normal %,
+  // and journals the metres into progress_history.qty_done. Mirrors the
+  // updateFloors save path exactly.
+  async function updateQuantity(id: string, qtyDone: number, notes: string) {
+    if (!profile) return { error: '未登入' }
+    const item = items.find(i => i.id === id)
+    if (!item) return { error: '找不到此項目' }
+    const safeDone = Math.max(0, Number.isFinite(qtyDone) ? qtyDone : 0)
+    const actual = qtyToProgress(safeDone, item.qty_total)
+    const status = deriveStatus(actual, plannedProgressOf(item))
+    const { error } = await supabase.from('progress_items').update({
+      qty_done: safeDone,
+      actual_progress: actual,
+      status,
+      notes,
+      last_updated_by: profile.id,
+      last_updated_at: new Date().toISOString(),
+    }).eq('id', id)
+    if (error) return { error: error.message }
+    await recordHistory(id, actual, [], notes, safeDone)
+    await refetch()
+    return { error: null }
+  }
+
+  // P2 (v43): set or clear the blocked reason. A non-null reason makes the
+  // item DISPLAY as 受阻 (displayStatusOf) without touching its % — clearing
+  // it (null) returns the item to its schedule-derived status. Non-blocking
+  // history row mirrors recordHistory so the stoppage shows in the trail.
+  async function setBlocked(id: string, reason: string | null) {
+    if (!profile) return { error: '未登入' }
+    const item = items.find(i => i.id === id)
+    if (!item) return { error: '找不到此項目' }
+    const trimmed = reason && reason.trim() ? reason.trim() : null
+    const { error } = await supabase.from('progress_items').update({
+      blocked_reason: trimmed,
+      last_updated_by: profile.id,
+      last_updated_at: new Date().toISOString(),
+    }).eq('id', id)
+    if (error) return { error: error.message }
+    await recordHistory(
+      id,
+      item.actual_progress,
+      [],
+      trimmed ? `受阻：${trimmed}` : '解除受阻',
+    )
+    await refetch()
+    return { error: null }
+  }
+
   async function setAssignment(id: string, assigned: string[], delegated: string[]) {
     if (!profile) return { error: '未登入' }
     const { error } = await supabase.from('progress_items').update({
@@ -307,7 +384,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
       loading, items, fetchError,
       canManageStructure, canEdit, canUpdateItem,
       refetch,
-      addItem, updateProgress, updateFloors,
+      addItem, updateProgress, updateFloors, updateQuantity, setBlocked,
       setAssignment, fetchHistory, updateItemMeta, deleteItem,
     }}>
       {children}

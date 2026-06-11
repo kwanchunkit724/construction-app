@@ -44,6 +44,9 @@ export async function captureSnapshot(projectId: string, items: ProgressItem[], 
       project_id: projectId,
       item_id: it.id,
       actual_progress: it.actual_progress ?? 0,
+      // v43: snapshot the real metres for quantity-mode leaves so a period
+      // export shows 本期 +Xm, not just the derived %. NULL for other modes.
+      qty_done: it.tracking_mode === 'quantity' ? (it.qty_done ?? 0) : null,
       period,
       captured_by: capturedBy,
     }))

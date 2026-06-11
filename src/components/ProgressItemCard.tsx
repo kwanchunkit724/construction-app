@@ -2,7 +2,7 @@ import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronRight, ChevronDown, Plus, Trash2, Edit3, MoreVertical,
   CheckCircle2, AlertTriangle, Clock, Minus, Check,
-  Layers, Users, UserPlus, History, Image as ImageIcon,
+  Layers, Users, UserPlus, History, Image as ImageIcon, Ruler, Ban,
 } from 'lucide-react'
 import { ProgressBar } from './ProgressBar'
 import { useProgress } from '../contexts/ProgressContext'
@@ -13,6 +13,7 @@ import { DocumentsSection } from './documents/DocumentsSection'
 import { useFilesFlag } from '../contexts/FilesFlagContext'
 import { MaterialItemsPanel } from './material/MaterialItemsPanel'
 import { PROGRESS_STATUS_ZH, computeRollup, getDescendantLeaves, plannedProgressOf, deriveStatus, isScheduled } from '../types'
+import { displayStatusOf } from '../lib/progressTemplates'
 import type { ProgressItem, ProgressStatus, UserProfile } from '../types'
 import { supabase } from '../lib/supabase'
 import { useProjects } from '../contexts/ProjectsContext'
@@ -147,8 +148,10 @@ export function ProgressItemCard({
   const displayActual = isLeaf ? item.actual_progress : rollup!.actual
   // Planned is schedule-derived (planned_start→planned_end vs today), not stored.
   const displayPlanned = isLeaf ? plannedProgressOf(item) : rollup!.planned
+  // A leaf with blocked_reason set DISPLAYS as 受阻 regardless of its % (P2);
+  // displayStatusOf is presentation-only and leaves completed items as 已完成.
   const displayStatus: ProgressStatus = isLeaf
-    ? deriveStatus(item.actual_progress, displayPlanned)
+    ? displayStatusOf(item, deriveStatus(item.actual_progress, displayPlanned))
     : rollup!.status
   const scheduled = isLeaf ? isScheduled(item) : descLeaves.some(isScheduled)
 
@@ -160,6 +163,8 @@ export function ProgressItemCard({
 
   const isFloors = item.tracking_mode === 'floors'
   const isChecklist = item.tracking_mode === 'checklist'
+  const isQuantity = item.tracking_mode === 'quantity'
+  const blockedReason = (item.blocked_reason ?? '').trim()
   const assignedTo = arr(item.assigned_to)
   const delegatedTo = arr(item.delegated_to)
   const assigneeIds = [...assignedTo, ...delegatedTo]
@@ -213,6 +218,19 @@ export function ProgressItemCard({
               {isChecklist && isLeaf && (
                 <span className="inline-flex items-center gap-0.5 text-[9px] bg-purple-100 text-purple-700 px-1 rounded flex-shrink-0">
                   <Check size={8} />{arr(item.floors_completed).length}/{arr(item.floor_labels).length}項
+                </span>
+              )}
+              {isQuantity && isLeaf && (
+                <span className="inline-flex items-center gap-0.5 text-[9px] bg-teal-100 text-teal-700 px-1 rounded flex-shrink-0">
+                  <Ruler size={8} />{item.qty_done ?? 0}/{item.qty_total ?? '?'}{item.qty_unit ?? ''}
+                </span>
+              )}
+              {blockedReason && isLeaf && (
+                <span
+                  title={`受阻：${blockedReason}`}
+                  className="inline-flex items-center gap-0.5 text-[9px] bg-amber-100 text-amber-700 px-1 rounded flex-shrink-0 max-w-[88px]"
+                >
+                  <Ban size={8} className="flex-shrink-0" /><span className="truncate">{blockedReason}</span>
                 </span>
               )}
             </div>

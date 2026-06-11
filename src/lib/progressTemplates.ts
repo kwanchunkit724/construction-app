@@ -12,13 +12,12 @@
 // or mode lists. 'general' encodes today's exact behaviour so existing
 // projects are byte-identical.
 //
-// Scope note (P1): only the 'checklist' mode is actually new. The
-// 'quantity' (渠務) and 'unit_status' (大樓維修) modes arrive in P2 / P3,
-// so drainage / maintenance are made SELECTABLE here with sensible
-// checklist/percentage defaults — no template references a mode that the
-// app can't yet render.
+// Scope note (P2): the 'checklist' (P1) and 'quantity' (P2, 渠務) modes are
+// live. The drainage template now defaults to 'quantity'. 'unit_status'
+// (大樓維修) is still P3, so maintenance keeps checklist/percentage defaults —
+// no template references a mode the app can't yet render.
 
-import type { ProjectType, TrackingMode } from '../types'
+import type { ProgressItem, ProgressStatus, ProjectType, TrackingMode } from '../types'
 
 // A KPI tile descriptor for the project-detail stat strip. P1 keeps the
 // 'general' tiles literally identical to today (status-count tiles in
@@ -71,13 +70,14 @@ const SMALL_WORKS: ProgressTemplate = {
   kpiTiles: 'small-works',
 }
 
-// drainage / maintenance: selectable in P1, but quantity / unit_status
-// are P2 / P3. Give them checklist/percentage defaults so they never
-// reference an unbuilt mode. zoneNoun follows the spec table (§3.1).
+// drainage (P2): quantity is now live. A 渠務 leaf is a pipe-run measured in
+// metres (qty_done / qty_total), so 'quantity' is the default and first-offered
+// mode; checklist (per-run stages) and percentage stay available. zoneNoun /
+// labelNoun follow the spec table (§3.1): 路段 / 工序.
 const DRAINAGE: ProgressTemplate = {
   type: 'drainage',
-  allowedModes: ['checklist', 'percentage'],
-  defaultMode: 'checklist',
+  allowedModes: ['quantity', 'checklist', 'percentage'],
+  defaultMode: 'quantity',
   zoneNoun: '路段',
   labelNoun: '工序',
   autoZone: false,
@@ -107,4 +107,22 @@ const REGISTRY: Record<ProjectType, ProgressTemplate> = {
 export function templateFor(projectType: ProjectType | null | undefined): ProgressTemplate {
   if (projectType && projectType in REGISTRY) return REGISTRY[projectType]
   return GENERAL
+}
+
+// ── P2 (v43): make 'blocked' a real DISPLAYED status ─────────
+// deriveStatus (src/types.ts) can only ever return not-started / in-progress /
+// completed / delayed — nothing in it produces 'blocked'. A 渠務 leaf whose
+// work is stopped (雨天 / 地下水 / 掘路紙 / 物料…) carries a blocked_reason; when
+// that's set, the leaf DISPLAYS as 受阻 regardless of its derived %.
+// This is presentation-only (the stored status column is unchanged), so it
+// never affects rollups for items that don't set blocked_reason — i.e. every
+// existing item. A completed run (100%) is treated as done, not blocked: a
+// finished pipe-run isn't "stopped" even if a stale reason lingers.
+export function displayStatusOf(
+  item: Pick<ProgressItem, 'blocked_reason' | 'actual_progress'>,
+  derived: ProgressStatus,
+): ProgressStatus {
+  if (derived === 'completed') return derived
+  const reason = (item.blocked_reason ?? '').trim()
+  return reason ? 'blocked' : derived
 }
