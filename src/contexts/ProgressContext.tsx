@@ -191,6 +191,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     patch: { title?: string; planned_start?: string | null; planned_end?: string | null },
   ) {
     if (!profile) return { error: '未登入' }
+    const before = items.find(i => i.id === id)
     const upd: Record<string, unknown> = {
       last_updated_by: profile.id,
       last_updated_at: new Date().toISOString(),
@@ -200,6 +201,28 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     if (patch.planned_end !== undefined) upd.planned_end = patch.planned_end
     const { error } = await supabase.from('progress_items').update(upd).eq('id', id)
     if (error) return { error: error.message }
+    // Journal the metadata edit as an immutable history row (v38) — only the
+    // keys that actually changed, recorded as { key: [old, new] }. So a dispute
+    // over "what was this item called / when was it due" has a trail. Non-blocking,
+    // same pattern as recordHistory.
+    if (before) {
+      const diff: Record<string, [string | null, string | null]> = {}
+      if (patch.title !== undefined && patch.title !== before.title) diff.title = [before.title, patch.title]
+      if (patch.planned_start !== undefined && (patch.planned_start ?? null) !== (before.planned_start ?? null)) diff.planned_start = [before.planned_start, patch.planned_start ?? null]
+      if (patch.planned_end !== undefined && (patch.planned_end ?? null) !== (before.planned_end ?? null)) diff.planned_end = [before.planned_end, patch.planned_end ?? null]
+      if (Object.keys(diff).length > 0) {
+        const { error: hErr } = await supabase.from('progress_history').insert({
+          item_id: id,
+          actual_progress: before.actual_progress,
+          floors_completed: [],
+          notes: '',
+          change_type: 'meta',
+          meta: diff,
+          updated_by: profile.id,
+        })
+        if (hErr) console.error('progress_history meta insert error:', hErr)
+      }
+    }
     await refetch()
     return { error: null }
   }

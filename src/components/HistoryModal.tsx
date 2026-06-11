@@ -6,6 +6,13 @@ import { useProgress } from '../contexts/ProgressContext'
 import { supabase } from '../lib/supabase'
 import type { ProgressItem, ProgressHistoryEntry, UserProfile } from '../types'
 
+// zh-HK labels for the keys recorded in a 'meta' (rename / date-change) history row.
+const META_LABEL: Record<string, string> = {
+  title: '名稱',
+  planned_start: '計劃開始',
+  planned_end: '計劃完成',
+}
+
 export function HistoryModal({
   open, onClose, item,
 }: {
@@ -70,8 +77,24 @@ export function HistoryModal({
                       <p className="text-[10px] text-site-400">{new Date(e.created_at).toLocaleString('zh-HK')}</p>
                     </div>
                   </div>
-                  <span className="text-base font-black text-safety-600 flex-shrink-0">{e.actual_progress}%</span>
+                  {e.change_type === 'meta' ? (
+                    <span className="text-[11px] font-bold text-site-500 bg-site-100 px-2 py-0.5 rounded flex-shrink-0">✎ 編輯</span>
+                  ) : (
+                    <span className="text-base font-black text-safety-600 flex-shrink-0">{e.actual_progress}%</span>
+                  )}
                 </div>
+                {e.change_type === 'meta' && e.meta && (
+                  <div className="mt-2 space-y-1">
+                    {Object.entries(e.meta).map(([k, [oldV, newV]]) => (
+                      <p key={k} className="text-xs text-site-600">
+                        {META_LABEL[k] ?? k}：
+                        <span className="line-through text-site-400">{oldV || '—'}</span>
+                        {' → '}
+                        <span className="font-semibold text-site-800">{newV || '—'}</span>
+                      </p>
+                    ))}
+                  </div>
+                )}
                 {e.floors_completed.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
                     {e.floors_completed.map(f => (

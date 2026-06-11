@@ -103,6 +103,11 @@ export interface ProgressHistoryEntry {
   notes: string
   updated_by: string | null
   created_at: string
+  // v38: a row is either a progress tick ('progress', default) or a metadata
+  // edit ('meta', e.g. rename / date change). `meta` holds the diff of changed
+  // keys as { key: [old, new] } for 'meta' rows; null for progress ticks.
+  change_type?: 'progress' | 'meta'
+  meta?: Record<string, [string | null, string | null]> | null
 }
 
 // Helper: compute progress from floors_completed
