@@ -78,10 +78,15 @@ v35 清 backdated daily；其餘 `[sim-0610]` row 可留待下輪一次過清，
 - **修復**：新 `v36-issue-actor-profiles-rpc.sql`（SECURITY DEFINER，gate `can_view_project`，只返當前項目 issues 上嘅 actor 名）+ ProjectDetail 改用 RPC；fallback「前成員」代替「—」。
 - **狀態**：✅ 已上 prod + 執行驗證：PM 叫 RPC 返 6 個 actor（含非成員 `Admin`、`PM Kwan`），舊 plain select 只得 4 個。
 
-### NEW-1 — 動火證預設審批鏈一定要 safety_officer，但無機制保證項目有 → 合法 PTW 永久卡 step 0（P1，⚠️ 待你決策）
-- **症狀**：`seed_default_chain`（`supabase/v10-split/6-default-ptw-chain-seed.sql`）為每個項目 seed 鏈 `[safety_officer, main_contractor]`。測試項目冇 safety_officer 成員 → `submit_ptw` 凍結鏈後，`submit_approval` 對所有非持有者一律 `P0001 你冇權批准`。**無恢復路徑**：PM insert safety_officer membership→42501；成員加第二角色→23505 unique；AdminProjectChains 係 requireAdmin（PM 入唔到）。
-- **影響**：PTW 係 HK 地盤核心功能，任何未配 safety_officer 嘅項目，動火/高空/吊運許可證一 submit 就靜靜雞死鎖。
-- **未修原因**：改 `submit_ptw` 語意 / 改預設鏈 / 加 safety_officer 委派路徑，全部會影響**現有 live 項目**（CLAUDE.md：backwards-compatible，App Store 現有用戶唔可以爛）。呢個係產品決策，唔應該我擅自改 live PTW 簽核流程 → 留俾你揀（見對話問題）。
+### NEW-1 — 動火證預設審批鏈一定要 safety_officer，但 PM 無自助委派路徑（P1，✅ 你揀「完整修」已完成）
+- **症狀**：`seed_default_chain`（`supabase/v10-split/6-default-ptw-chain-seed.sql`）每個項目 seed 鏈 `[safety_officer, main_contractor]`；簽核人由 `active_role_holders(project, role)` 解析 = 已批准 `project_members.role = 'safety_officer'`（＋全體 admin ＋ delegation）。項目冇 project-level safety_officer 時，5 個 persona 一個都簽唔到 step 0；PM 又無自助路徑配一個（cross-user insert→42501、第二角色→23505、AdminProjectChains 係 admin-only）。
+- **真相修正（執行驗證揭示）**：`active_role_holders('safety_officer')` 其實返 **3 個 admin**（admin 對所有 role 都係無條件 holder），所以 PTW-004 唔係技術上死鎖 —— 遠端 admin 簽得到，只係 site team／PM 簽唔到。真正缺口＝PM 無法委派**地盤層**簽核人。
+- **修復（v37，已上 prod + 執行驗證）**：
+  - (a) `submit_ptw` fail-fast 守衛：凍結鏈前，逐個 step 檢查 required_role 有冇 holder；冇就 raise zh-HK「此項目未有【安全主任】，未能提交…請先委派簽核人」。（注：因 admin 永遠算 holder，呢個守衛實際上幾乎唔會觸發 —— 係 defense-in-depth；真正解藥係下面個委派 RPC。）
+  - (b) `pm_assign_safety_officer(project, user)` SECURITY DEFINER：assigned-PM／admin 可將**已批准成員**升做 project `safety_officer`，唔改 project_members RLS。
+  - (c) client：`Projects.tsx` 加「委派安全主任（PTW 簽核）」section（PM/admin 可見，gate 同 `pendingForMe` 一致）；PTW submit 錯誤照 bubble。
+  - **驗證**：判頭叫 RPC→`只有項目經理或管理員可委派安全主任`（拒絕）；PM 委派老總→成功，老總 project role＝safety_officer，`active_role_holders` 多咗佢；新 draft PTW submit→`in_review`（證 rewritten submit_ptw body 完整冇爛）。已清理（老總還原 general_foreman、刪測試 PTW）。
+  - **注意（未在 CHECK 亂郁）**：第一版 v37 重貼 `project_members_role_check` 漏咗 `general_foreman`，被 23514 擋住（原子 rollback，零污染）；改為**唔郁 constraint**（safety_officer 本身已允許），只加兩個 function。
 
 ## 殘留測試資料（`[sim-0610]`/`[sim-0611]` tag）
 
@@ -90,6 +95,7 @@ Round2：events 1（週會）、materials 3、progress 改動、PTW-003、1 條 
 
 ## 一句總結
 
-兩輪共 **6 個真 bug**：5 個已修+執行驗證（v35 ×3 backend、NEW-2 client、NEW-3 = v36 RPC），淨低 **NEW-1（PTW 鏈）等你決策**（改 live 簽核流程，唔擅自郁）。
+兩輪共 **6 個真 bug，全部已修 + 執行驗證 + 上 prod**：v35 ×3 backend（applicant RPC／dailies date／submit_si 內容守衛）、NEW-2 client（export 未排期）、NEW-3 = v36 RPC（issue actor names）、NEW-1 = v37（PTW 守衛 + `pm_assign_safety_officer` 委派 + Projects.tsx UI）。
 14 個 case 全部跑過，clean 嘅證明 issue 鏈/圖則/聯絡人/物料/行事曆 v34 narrowing/樓層/轉判審計/改項目 全部穩陣。
 最大發現：**v33 從來冇真上到 prod**（approver RPC 仲爆緊）——已 v35 修好並今次用執行驗證鎖死。
+教訓：每個 migration 今次都係 **clipboard 入 monaco + DOM `.click()` Run + 執行驗證**（唔再手貼 base64、唔再淨睇 source）—— 已寫入 `daily-site-sim` skill。

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Building2, Clock, CheckCircle2, XCircle, UserPlus } from 'lucide-react'
+import { Building2, Clock, CheckCircle2, XCircle, UserPlus, ShieldCheck } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
+import { Modal } from '../components/Modal'
 import { ApplyToProjectModal } from '../components/ApplyToProjectModal'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
@@ -25,7 +26,7 @@ const STATUS_ZH: Record<string, string> = {
 
 export default function Projects() {
   const { profile } = useAuth()
-  const { loading, projects, memberships, approveMembership, rejectMembership } = useProjects()
+  const { loading, projects, memberships, approveMembership, rejectMembership, refetch } = useProjects()
   const [applyOpen, setApplyOpen] = useState(false)
 
   const myMemberships = useMemo(
@@ -61,6 +62,23 @@ export default function Projects() {
         if (myMembership) return true
       }
       return false
+    })
+  }, [memberships, projects, profile])
+
+  // Approved members in projects I manage as an assigned PM (or admin), shown
+  // so the PM can designate a 安全主任 for the PTW 簽核 chain (NEW-1). Gating
+  // mirrors the assigned-PM / admin branches of `pendingForMe` above. A member
+  // who is already 安全主任 is excluded — there is nothing left to designate.
+  const designatableMembers = useMemo(() => {
+    if (!profile) return [] as ProjectMember[]
+    const isAdmin = profile.global_role === 'admin'
+    return memberships.filter(m => {
+      if (m.status !== 'approved') return false
+      if (m.role === 'safety_officer') return false
+      const project = projects.find(p => p.id === m.project_id)
+      if (!project) return false
+      if (isAdmin) return true
+      return project.assigned_pm_ids.includes(profile.id)
     })
   }, [memberships, projects, profile])
 
@@ -111,6 +129,25 @@ export default function Projects() {
                       membership={m}
                       onApprove={() => approveMembership(m.id)}
                       onReject={() => rejectMembership(m.id)}
+                    />
+                  )
+                })}
+              </div>
+            </Section>
+          )}
+
+          {/* Designate safety officer (PTW 簽核) — assigned PM / admin only */}
+          {designatableMembers.length > 0 && (
+            <Section title="委派安全主任（PTW 簽核）" count={designatableMembers.length}>
+              <div className="space-y-2">
+                {designatableMembers.map(m => {
+                  const project = projects.find(p => p.id === m.project_id)
+                  return (
+                    <DesignateSafetyOfficerCard
+                      key={m.id}
+                      project={project}
+                      membership={m}
+                      onDone={refetch}
                     />
                   )
                 })}
@@ -245,6 +282,102 @@ function PendingApprovalCard({
           {busy ? <Spinner size={16} className="text-white mx-auto" /> : '批准'}
         </button>
       </div>
+    </div>
+  )
+}
+
+function DesignateSafetyOfficerCard({
+  project, membership, onDone,
+}: {
+  project: Project | undefined
+  membership: ProjectMember
+  onDone: () => Promise<void>
+}) {
+  const [name, setName] = useState<string | null>(null)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    // An assigned PM / admin may read the profile of an approved member of
+    // their project (v17 is_pm_of_applicant). Resolve the name for display.
+    supabase.from('user_profiles').select('name').eq('id', membership.user_id).maybeSingle()
+      .then(({ data }) => {
+        setName((data as { name: string } | null)?.name ?? null)
+      })
+  }, [membership.user_id])
+
+  if (!project) return null
+
+  async function handleAssign() {
+    setBusy(true)
+    setError(null)
+    const { error: rpcErr } = await supabase.rpc('pm_assign_safety_officer', {
+      p_project_id: membership.project_id,
+      p_user_id: membership.user_id,
+    })
+    if (rpcErr) {
+      setError(rpcErr.message)
+      setBusy(false)
+      return
+    }
+    setConfirmOpen(false)
+    setBusy(false)
+    await onDone()
+  }
+
+  return (
+    <div className="card p-4">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-full bg-site-200 flex items-center justify-center text-site-700 font-bold flex-shrink-0">
+          {name?.slice(0, 1) ?? '?'}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-site-900 truncate">{name ?? '載入中...'}</p>
+          <p className="text-xs text-site-700 mt-0.5">
+            <span className="font-semibold">{project.name}</span> · {ROLE_ZH[membership.role]}
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 pt-3 border-t border-site-100">
+        <button
+          onClick={() => { setError(null); setConfirmOpen(true) }}
+          className="w-full text-sm font-semibold border border-safety-200 text-safety-700 hover:bg-safety-50 py-2 rounded-lg inline-flex items-center justify-center gap-1"
+        >
+          <ShieldCheck size={16} /> 設為安全主任（PTW 簽核）
+        </button>
+      </div>
+
+      {confirmOpen && (
+        <Modal open title="委派安全主任" onClose={() => { if (!busy) setConfirmOpen(false) }}>
+          <div className="space-y-3">
+            <p className="text-sm text-site-700">
+              確認將 <span className="font-semibold">{name ?? '此成員'}</span> 於工地{' '}
+              <span className="font-semibold">{project.name}</span> 的角色更改為{' '}
+              <span className="font-semibold">安全主任</span>？此後該成員可簽核此工地的工作許可證（PTW）。
+            </p>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="btn-ghost flex-1"
+                disabled={busy}
+                onClick={() => setConfirmOpen(false)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn-primary flex-1"
+                disabled={busy}
+                onClick={handleAssign}
+              >
+                {busy ? <Spinner size={16} className="text-white mx-auto" /> : '確認委派'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
