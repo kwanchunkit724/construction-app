@@ -30,11 +30,30 @@ export interface Zone {
   name: string
 }
 
+// ── Problem 4 / P1: project type ────────────────────────────
+// One project-level field selects a progress-table "template" (see
+// src/lib/progressTemplates.ts). 'general' is today's exact behaviour;
+// existing projects default to it so live data renders byte-identical.
+// drainage / maintenance are selectable in P1 but their bespoke modes
+// (quantity / unit_status) only land in P2 / P3 — for now they fall back
+// to checklist/percentage defaults from the registry.
+export type ProjectType = 'general' | 'small_works' | 'drainage' | 'maintenance'
+
+export const PROJECT_TYPE_ZH: Record<ProjectType, string> = {
+  general: '大地盤 / 新建大樓',
+  small_works: '小型工程 / 裝修',
+  drainage: '渠務 / 地下管線',
+  maintenance: '大樓維修 (MBIS/MWIS)',
+}
+
 export interface Project {
   id: string
   name: string
   zones: Zone[]
   assigned_pm_ids: string[]
+  // P1: defaults to 'general' at the DB level (v42 migration). Older rows
+  // that predate the column read back as 'general' too.
+  project_type: ProjectType
   created_by: string | null
   created_at: string
 }
@@ -69,7 +88,11 @@ export const SUB_ROLE_ZH: Record<NonNullable<SubRole>, string> = {
 
 // ── Phase 3: Progress Tracking ──────────────────────────────
 export type ProgressStatus = 'not-started' | 'in-progress' | 'completed' | 'delayed' | 'blocked'
-export type TrackingMode = 'percentage' | 'floors'
+// 'checklist' (P1) reuses the floors storage (floor_labels / floors_completed)
+// and floorsToProgress derivation — it differs only in rendering (a vertical
+// tick-list of 工序 rather than a 樓層 grid). 'quantity' / 'unit_status' arrive
+// in P2 / P3. Widened in the DB by v42-progress-project-types.sql.
+export type TrackingMode = 'percentage' | 'floors' | 'checklist'
 
 export interface ProgressItem {
   id: string

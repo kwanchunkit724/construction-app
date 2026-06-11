@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { Layers, Percent } from 'lucide-react'
+import { Layers, Percent, ListChecks } from 'lucide-react'
 import { Modal } from './Modal'
 import { Spinner } from './Spinner'
 import { useProgress } from '../contexts/ProgressContext'
@@ -7,6 +7,17 @@ import { useProjects } from '../contexts/ProjectsContext'
 import { supabase } from '../lib/supabase'
 import type { ProgressItem, TrackingMode, Zone } from '../types'
 import { plannedProgressOf } from '../types'
+import { templateFor } from '../lib/progressTemplates'
+
+// Per-mode picker presentation. Keyed by TrackingMode so the picker can be
+// rendered purely from a template's allowedModes list. percentage = today's
+// orange/百分比; floors = purple/樓層; checklist = purple/清單 (it shares the
+// floors storage and palette).
+const MODE_META: Record<TrackingMode, { label: string; icon: typeof Percent; activeClass: string }> = {
+  percentage: { label: '百分比', icon: Percent, activeClass: 'border-safety-500 bg-safety-50 text-safety-700' },
+  floors: { label: '樓層', icon: Layers, activeClass: 'border-purple-500 bg-purple-50 text-purple-700' },
+  checklist: { label: '清單', icon: ListChecks, activeClass: 'border-purple-500 bg-purple-50 text-purple-700' },
+}
 
 export function CreateItemModal({
   open, onClose, parent, zone,
@@ -46,6 +57,12 @@ export function CreateItemModal({
     : projects.find(p => p.zones.some(z => z.id === zone.id))
   const projectId = project?.id ?? ''
   const allZones: Zone[] = project?.zones ?? [zone]
+  // Template drives which tracking modes this project type offers and which
+  // is pre-selected. 'general' (and any unknown type) resolves to today's
+  // [percentage, floors, checklist] with percentage default.
+  const template = templateFor(project?.project_type)
+  const allowedModes = template.allowedModes
+  const defaultMode = template.defaultMode
   const [selectedZoneIds, setSelectedZoneIds] = useState<string[]>([zone.id])
 
   // When the user is adding a 細項 under a first-level parent, we expose a
@@ -80,8 +97,12 @@ export function CreateItemModal({
       setTitle('')
       setPlannedStart('')
       setPlannedEnd('')
-      setTrackingMode('percentage')
-      setFloorMode('auto')
+      // Preselect the project type's default mode (general → percentage,
+      // small_works → checklist). checklist authors labels via the custom
+      // textarea (工序名), so start it in 'custom' rather than the floor
+      // auto-generator.
+      setTrackingMode(defaultMode)
+      setFloorMode(defaultMode === 'checklist' ? 'custom' : 'auto')
       setFloorCount(10)
       setBaseFloor(1)
       setCustomFloors('')
@@ -92,7 +113,7 @@ export function CreateItemModal({
       setCodeMap({})
       setCodeError('')
     }
-  }, [open, zone.id, parent])
+  }, [open, zone.id, parent, defaultMode])
 
   // Build the list of (zone_id, parent_id) pairs we'll insert into. Root
   // adds fan out across selected zones with parent_id=null. Peer-parent
@@ -169,9 +190,15 @@ export function CreateItemModal({
     return labels
   }, [floorCount, baseFloor])
 
-  const resolvedFloorLabels = floorMode === 'auto'
-    ? autoFloorLabels
-    : customFloors.split(/[,，\n]/).map(s => s.trim()).filter(Boolean)
+  // checklist always sources labels from the free-text 工序 list; floors mode
+  // honours the auto/custom sub-toggle. Both feed the same floor_labels store.
+  const customLabels = customFloors.split(/[,，\n]/).map(s => s.trim()).filter(Boolean)
+  const isLabelMode = trackingMode === 'floors' || trackingMode === 'checklist'
+  const resolvedFloorLabels = trackingMode === 'checklist'
+    ? customLabels
+    : floorMode === 'auto'
+      ? autoFloorLabels
+      : customLabels
 
   function toggleZone(zid: string) {
     setSelectedZoneIds(prev => prev.includes(zid) ? prev.filter(x => x !== zid) : [...prev, zid])
@@ -216,8 +243,8 @@ export function CreateItemModal({
     setError('')
     setSuccessMsg('')
     if (!title.trim()) return setError('請輸入名稱')
-    if (trackingMode === 'floors' && resolvedFloorLabels.length === 0) {
-      return setError('樓層模式需要至少一個樓層')
+    if (isLabelMode && resolvedFloorLabels.length === 0) {
+      return setError(trackingMode === 'checklist' ? '清單模式需要至少一項工序' : '樓層模式需要至少一個樓層')
     }
 
     if (insertTargets.length === 0) {
@@ -244,7 +271,7 @@ export function CreateItemModal({
         planned_end: plannedEnd || null,
         planned_progress: plannedPreview,
         tracking_mode: trackingMode,
-        floor_labels: trackingMode === 'floors' ? resolvedFloorLabels : [],
+        floor_labels: isLabelMode ? resolvedFloorLabels : [],
       }))
     )
 
@@ -411,33 +438,58 @@ export function CreateItemModal({
           </p>
         </div>
 
-        {/* Tracking mode */}
+        {/* Tracking mode — driven by the project type's template
+            (allowedModes / defaultMode). For 'general' this is
+            percentage / 樓層 / 清單, byte-identical look to before. */}
         <div className="pt-2 border-t border-site-100">
           <label className="label">追蹤方式</label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setTrackingMode('percentage')}
-              className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 text-sm font-semibold transition-colors min-h-0 ${
-                trackingMode === 'percentage'
-                  ? 'border-safety-500 bg-safety-50 text-safety-700'
-                  : 'border-site-200 text-site-500 hover:border-site-300'
-              }`}
-            >
-              <Percent size={14} /> 百分比
-            </button>
-            <button
-              type="button"
-              onClick={() => setTrackingMode('floors')}
-              className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 text-sm font-semibold transition-colors min-h-0 ${
-                trackingMode === 'floors'
-                  ? 'border-purple-500 bg-purple-50 text-purple-700'
-                  : 'border-site-200 text-site-500 hover:border-site-300'
-              }`}
-            >
-              <Layers size={14} /> 樓層
-            </button>
+          <div className={`grid gap-2 ${allowedModes.length >= 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+            {allowedModes.map(m => {
+              const active = trackingMode === m
+              const meta = MODE_META[m]
+              const Icon = meta.icon
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setTrackingMode(m)}
+                  className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 text-sm font-semibold transition-colors min-h-0 ${
+                    active ? meta.activeClass : 'border-site-200 text-site-500 hover:border-site-300'
+                  }`}
+                >
+                  <Icon size={14} /> {meta.label}
+                </button>
+              )
+            })}
           </div>
+
+          {trackingMode === 'checklist' && (
+            <div className="mt-3 bg-purple-50 border border-purple-100 rounded-xl p-3 space-y-3">
+              <div>
+                <label className="block text-xs text-site-500 mb-1">工序名（每行一項，亦可用逗號分隔）</label>
+                <textarea
+                  value={customFloors}
+                  onChange={e => setCustomFloors(e.target.value)}
+                  rows={4}
+                  placeholder={'例：\n拆卸\n水電\n泥水\n木工\n油漆'}
+                  className="input resize-none bg-white"
+                />
+              </div>
+              {resolvedFloorLabels.length > 0 && (
+                <div>
+                  <p className="text-xs text-site-500 mb-1.5">預覽（{resolvedFloorLabels.length} 項）</p>
+                  <div className="flex flex-wrap gap-1">
+                    {resolvedFloorLabels.slice(0, 30).map(l => (
+                      <span key={l} className="text-[10px] bg-white border border-purple-200 text-purple-600 px-1.5 py-0.5 rounded">{l}</span>
+                    ))}
+                    {resolvedFloorLabels.length > 30 && (
+                      <span className="text-[10px] text-site-400">+{resolvedFloorLabels.length - 30}</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {trackingMode === 'floors' && (
             <div className="mt-3 bg-purple-50 border border-purple-100 rounded-xl p-3 space-y-3">

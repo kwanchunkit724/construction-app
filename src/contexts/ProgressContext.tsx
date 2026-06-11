@@ -142,7 +142,11 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     const parent = input.parent_id ? items.find(i => i.id === input.parent_id) : null
     const level = parent ? parent.level + 1 : 1
     const trackingMode: TrackingMode = input.tracking_mode ?? 'percentage'
-    const floorLabels = trackingMode === 'floors' ? (input.floor_labels ?? []) : []
+    // 'checklist' reuses the floors storage (floor_labels = 工序 names), so
+    // both label-based modes carry their labels; percentage carries none.
+    const floorLabels = (trackingMode === 'floors' || trackingMode === 'checklist')
+      ? (input.floor_labels ?? [])
+      : []
     const { error } = await supabase.from('progress_items').insert({
       project_id: projectId,
       parent_id: input.parent_id,

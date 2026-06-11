@@ -34,6 +34,7 @@ import { usePtwFlag } from '../contexts/PtwFlagContext'
 import { useFilesFlag } from '../contexts/FilesFlagContext'
 import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH, deriveStatus, plannedProgressOf } from '../types'
 import type { ProgressItem, ProgressStatus, Zone } from '../types'
+import { templateFor } from '../lib/progressTemplates'
 
 type Tab = 'progress' | 'issues' | 'si-vo' | 'tools'
 
@@ -130,6 +131,13 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
     )
   }
 
+  // Project-type template drives per-type vocabulary + zone chrome. 'general'
+  // (and existing projects) resolve to today's behaviour, so the page renders
+  // byte-identical for them. autoZone types (小型工程) get one implicit zone at
+  // creation, so the zone header + the "尚未設定分區" dead-end are hidden.
+  const template = templateFor(project.project_type)
+  const hideZoneChrome = template.autoZone
+
   // Stats — leaves only (across whole project)
   const leaves = items.filter(i => !items.some(c => c.parent_id === i.id))
   // Derive status live (schedule-vs-today) to match the cards + zone rollups
@@ -173,7 +181,11 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-base md:text-lg font-bold text-site-900 truncate">{project.name}</h1>
-            <p className="text-[11px] text-site-500">{project.zones.length} 個分區 · {items.length} 個進度項目</p>
+            <p className="text-[11px] text-site-500">
+              {hideZoneChrome
+                ? `${items.length} 個進度項目`
+                : `${project.zones.length} 個分區 · ${items.length} 個進度項目`}
+            </p>
           </div>
           <ExportMenu
             tab={tab}
@@ -237,7 +249,10 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
 
             {loading ? (
               <div className="py-10 flex justify-center"><Spinner size={28} /></div>
-            ) : project.zones.length === 0 ? (
+            ) : project.zones.length === 0 && !hideZoneChrome ? (
+              // Dead-end only for zone-based types with no zones yet. autoZone
+              // types (小型工程) always have their implicit zone, and we never
+              // want to push them to "go ask an admin for a 分區".
               <div className="card p-10 text-center">
                 <Building2 size={36} className="mx-auto text-site-300 mb-2" />
                 <p className="text-sm text-site-600">此工地尚未設定分區</p>
@@ -252,6 +267,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
                     items={items}
                     expanded={expandedSet}
                     canEdit={canEdit}
+                    hideZoneHeader={hideZoneChrome}
                     onToggle={toggle}
                     onAddRoot={() => setCreateCtx({ parent: null, zone })}
                     onUpdate={setUpdating}
@@ -406,13 +422,17 @@ function IssuesTab({
 }
 
 function ZoneSection({
-  zone, items, expanded, canEdit,
+  zone, items, expanded, canEdit, hideZoneHeader = false,
   onToggle, onAddRoot, onUpdate, onAddChild, onAssign, onHistory, onEdit, onDelete,
 }: {
   zone: Zone
   items: ProgressItem[]
   expanded: Set<string>
   canEdit: boolean
+  // autoZone types (小型工程) hide the 分區 header card entirely — there is one
+  // implicit zone, so a zone header would be noise. Editors still get a bare
+  // "加入大項" button so they can add items.
+  hideZoneHeader?: boolean
   onToggle: (id: string) => void
   onAddRoot: () => void
   onUpdate: (item: ProgressItem) => void
@@ -428,7 +448,18 @@ function ZoneSection({
 
   return (
     <section>
-      {/* Zone header */}
+      {hideZoneHeader ? (
+        // No zone chrome for autoZone types — just the add-item affordance.
+        canEdit && (
+          <button
+            onClick={onAddRoot}
+            className="mb-2 w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-safety-700 bg-safety-50 border border-safety-200 hover:bg-safety-100 py-2 rounded-lg"
+          >
+            <Plus size={16} /> 加入大項
+          </button>
+        )
+      ) : (
+      /* Zone header */
       <div className="card-md p-4 mb-2">
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex-1 min-w-0">
@@ -466,6 +497,7 @@ function ZoneSection({
           </button>
         )}
       </div>
+      )}
 
       {/* Items in this zone */}
       {zoneRoots.length === 0 ? (

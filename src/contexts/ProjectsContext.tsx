@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { cacheGet, cacheSet, getOnline, subscribeOnline } from '../lib/offline'
 import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
-import type { Project, ProjectMember, ProjectRole, Zone } from '../types'
+import type { Project, ProjectMember, ProjectRole, ProjectType, Zone } from '../types'
+import { templateFor } from '../lib/progressTemplates'
 
 interface ProjectsContextType {
   loading: boolean
@@ -12,7 +13,7 @@ interface ProjectsContextType {
   fetchError: string | null
   refetch: () => Promise<void>
   // Admin
-  createProject: (name: string, zones: Zone[]) => Promise<{ error: string | null }>
+  createProject: (name: string, zones: Zone[], projectType?: ProjectType) => Promise<{ error: string | null }>
   assignPMs: (projectId: string, pmIds: string[]) => Promise<{ error: string | null }>
   deleteProject: (projectId: string) => Promise<{ error: string | null }>
   // User
@@ -100,11 +101,18 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     return subscribeOnline(online => { if (online) void refetch() })
   }, [session, refetch])
 
-  async function createProject(name: string, zones: Zone[]) {
+  async function createProject(name: string, zones: Zone[], projectType: ProjectType = 'general') {
     if (!profile) return { error: '未登入' }
+    // small_works (autoZone) ships with one implicit zone so the operator
+    // never hits the "尚未設定分區" dead-end on a one-room job. For every
+    // other type the admin-supplied zones are used as-is. Default 'general'
+    // keeps the existing two-arg call path byte-identical.
+    const template = templateFor(projectType)
+    const effectiveZones: Zone[] = template.autoZone ? [{ id: 'A', name: '工地' }] : zones
     const { error } = await supabase.from('projects').insert({
       name: name.trim(),
-      zones,
+      zones: effectiveZones,
+      project_type: projectType,
       assigned_pm_ids: [],
       created_by: profile.id,
     })

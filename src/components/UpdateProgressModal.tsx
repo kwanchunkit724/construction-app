@@ -32,8 +32,12 @@ export function UpdateProgressModal({
 
   if (!item) return null
 
+  // 'checklist' shares the floors storage + derivation; it differs only in
+  // rendering (a vertical tick-list of 工序 rather than the 樓層 grid).
   const isFloors = item.tracking_mode === 'floors'
-  const computedActual = isFloors ? floorsToProgress(floorsCompleted, item.floor_labels) : actual
+  const isChecklist = item.tracking_mode === 'checklist'
+  const isLabelMode = isFloors || isChecklist
+  const computedActual = isLabelMode ? floorsToProgress(floorsCompleted, item.floor_labels) : actual
   const planned = plannedProgressOf(item)
   const status = deriveStatus(computedActual, planned)
 
@@ -47,7 +51,7 @@ export function UpdateProgressModal({
     if (!item) return
     setError('')
     setSubmitting(true)
-    const { error } = isFloors
+    const { error } = isLabelMode
       ? await updateFloors(item.id, floorsCompleted, notes)
       : await updateProgress(item.id, actual, notes)
     setSubmitting(false)
@@ -69,13 +73,55 @@ export function UpdateProgressModal({
       <div className="text-sm font-semibold text-site-900 mb-3 bg-site-100 rounded-lg p-2.5 flex items-center justify-between gap-2">
         <span><span className="font-mono text-site-500">{item.code}</span> · {item.title}</span>
         <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-          isFloors ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+          isLabelMode ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
         }`}>
-          {isFloors ? `樓層模式 · ${item.floor_labels.length} 層` : '百分比模式'}
+          {isChecklist
+            ? `清單模式 · ${item.floor_labels.length} 項`
+            : isFloors
+              ? `樓層模式 · ${item.floor_labels.length} 層`
+              : '百分比模式'}
         </span>
       </div>
 
-      {isFloors ? (
+      {isChecklist ? (
+        /* ── Checklist tick-list (工序) — vertical 44px rows ── */
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <label className="label mb-0">已完成工序</label>
+            <span className="text-2xl font-black text-purple-600">
+              {floorsCompleted.length}/{item.floor_labels.length}
+              <span className="text-xs font-normal text-site-400 ml-1">({computedActual}%)</span>
+            </span>
+          </div>
+          <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+            {item.floor_labels.map(label => {
+              const done = floorsCompleted.includes(label)
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => toggleFloor(label)}
+                  className={`w-full min-h-[44px] flex items-center gap-2.5 px-3 rounded-xl border-2 text-sm font-semibold transition-colors text-left ${
+                    done
+                      ? 'bg-green-50 border-green-500 text-green-800'
+                      : 'bg-white border-site-200 text-site-600 hover:border-green-300'
+                  }`}
+                >
+                  <span className={`flex-shrink-0 w-5 h-5 rounded grid place-items-center border-2 ${
+                    done ? 'bg-green-500 border-green-500 text-white' : 'border-site-300 text-transparent'
+                  }`}>
+                    <Check size={13} />
+                  </span>
+                  <span className="flex-1 min-w-0 truncate">{label}</span>
+                </button>
+              )
+            })}
+          </div>
+          <div className="mt-3">
+            <ProgressBar value={computedActual} planned={planned} status={status} />
+          </div>
+        </div>
+      ) : isFloors ? (
         /* ── Floor grid ── */
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">

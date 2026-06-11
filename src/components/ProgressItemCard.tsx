@@ -1,7 +1,7 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronRight, ChevronDown, Plus, Trash2, Edit3, MoreVertical,
-  CheckCircle2, AlertTriangle, Clock, Minus,
+  CheckCircle2, AlertTriangle, Clock, Minus, Check,
   Layers, Users, UserPlus, History, Image as ImageIcon,
 } from 'lucide-react'
 import { ProgressBar } from './ProgressBar'
@@ -159,6 +159,7 @@ export function ProgressItemCard({
   const cardBg = item.level === 1 ? 'bg-safety-50/40' : 'bg-white'
 
   const isFloors = item.tracking_mode === 'floors'
+  const isChecklist = item.tracking_mode === 'checklist'
   const assignedTo = arr(item.assigned_to)
   const delegatedTo = arr(item.delegated_to)
   const assigneeIds = [...assignedTo, ...delegatedTo]
@@ -207,6 +208,11 @@ export function ProgressItemCard({
               {isFloors && isLeaf && (
                 <span className="inline-flex items-center gap-0.5 text-[9px] bg-purple-100 text-purple-700 px-1 rounded flex-shrink-0">
                   <Layers size={8} />{arr(item.floors_completed).length}/{arr(item.floor_labels).length}
+                </span>
+              )}
+              {isChecklist && isLeaf && (
+                <span className="inline-flex items-center gap-0.5 text-[9px] bg-purple-100 text-purple-700 px-1 rounded flex-shrink-0">
+                  <Check size={8} />{arr(item.floors_completed).length}/{arr(item.floor_labels).length}項
                 </span>
               )}
             </div>
