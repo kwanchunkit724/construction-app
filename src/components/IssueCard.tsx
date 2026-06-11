@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
-import { AlertCircle, CheckCircle2, ChevronRight, ArrowUp, Camera } from 'lucide-react'
-import { ISSUE_HANDLER_ZH, ISSUE_STATUS_ZH } from '../types'
+import { AlertCircle, CheckCircle2, ChevronRight, ArrowUp, Camera, MapPin } from 'lucide-react'
+import { ISSUE_HANDLER_ZH, ISSUE_STATUS_ZH, formatIssueNo } from '../types'
 import type { Issue } from '../types'
 
 export function IssueCard({ issue, projectId }: { issue: Issue; projectId: string }) {
@@ -35,7 +35,14 @@ export function IssueCard({ issue, projectId }: { issue: Issue; projectId: strin
         )}
 
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-site-900 truncate">{issue.title}</p>
+          <p className="font-semibold text-site-900 truncate">
+            {issue.issue_no != null && (
+              <span className="font-mono text-[11px] text-site-400 mr-1.5">
+                {formatIssueNo(issue.issue_no)}
+              </span>
+            )}
+            {issue.title}
+          </p>
           {issue.description && (
             <p className="text-xs text-site-500 mt-0.5 line-clamp-1">{issue.description}</p>
           )}
@@ -43,6 +50,11 @@ export function IssueCard({ issue, projectId }: { issue: Issue; projectId: strin
             <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold ${statusStyle}`}>
               <Icon size={10} /> {ISSUE_STATUS_ZH[issue.status]}
             </span>
+            {issue.location && (
+              <span className="inline-flex items-center gap-1 text-[10px] bg-site-100 text-site-600 px-2 py-0.5 rounded-full font-medium">
+                <MapPin size={10} /> {issue.location}
+              </span>
+            )}
             {isOpen && (
               <span className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">
                 <ArrowUp size={10} /> {ISSUE_HANDLER_ZH[issue.current_handler_role]}

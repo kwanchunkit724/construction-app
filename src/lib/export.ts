@@ -13,11 +13,12 @@ import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import {
   PROGRESS_STATUS_ZH, ISSUE_STATUS_ZH, ISSUE_HANDLER_ZH, ROLE_ZH,
+  ISSUE_ACTION_ZH, formatIssueNo,
   computeRollup, getDescendantLeaves, plannedProgressOf, deriveStatus,
   isScheduled, LINE_ITEM_CATEGORY_ZH,
 } from '../types'
 import type {
-  Project, ProgressItem, Issue, UserProfile, ProgressStatus,
+  Project, ProgressItem, Issue, IssueComment, UserProfile, ProgressStatus,
   VO, VOVersion, DrawingVersion,
 } from '../types'
 import { formatHKD } from './currency'
@@ -628,18 +629,22 @@ export async function exportIssuesToExcel(
   project: Project,
   issues: Issue[],
   users: Record<string, UserProfile>,
+  comments: IssueComment[] = [],
 ) {
+  // Sheet 1 — 問題清單 (S16: 編號 + 位置 lead the columns).
   const rows = issues
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .map(i => ({
+      編號: formatIssueNo(i.issue_no),
+      位置: i.location ?? '',
       狀態: ISSUE_STATUS_ZH[i.status],
       標題: i.title,
       描述: i.description,
       照片數: i.photos.length,
       // '前成員' (ex-member) — not '—' — when an id has no resolvable name, so
       // the audit trail never fully loses who reported / resolved an issue even
-      // after they leave the project (RLS hides their profile; see the RPC merge
-      // in ProjectDetail.tsx that should already supply most of these).
+      // after they leave the project (RLS hides their profile; the v47 RPC in
+      // ProjectDetail.tsx now also resolves comment authors → most are named).
       報告者: users[i.reporter_id]?.name ?? '前成員',
       報告者角色: ROLE_ZH[i.reporter_role],
       當前處理層: ISSUE_HANDLER_ZH[i.current_handler_role],
@@ -649,11 +654,45 @@ export async function exportIssuesToExcel(
     }))
   const ws = XLSX.utils.json_to_sheet(rows)
   ws['!cols'] = [
-    { wch: 8 }, { wch: 30 }, { wch: 40 }, { wch: 6 }, { wch: 12 },
-    { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 18 },
+    { wch: 8 }, { wch: 16 }, { wch: 8 }, { wch: 30 }, { wch: 40 }, { wch: 6 },
+    { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 18 },
   ]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, '問題清單')
+
+  // Sheet 2 — 處理紀錄 (S17): one row per comment / activity event, ordered by
+  // issue number then time, so the escalation trail reads in full.
+  const issueById = new Map(issues.map(i => [i.id, i]))
+  const handlerZh = (r: string | null): string =>
+    r ? (ISSUE_HANDLER_ZH[r as keyof typeof ISSUE_HANDLER_ZH] ?? r) : ''
+  const logRows = comments
+    .slice()
+    .sort((a, b) => {
+      const ia = issueById.get(a.issue_id)?.issue_no ?? 0
+      const ib = issueById.get(b.issue_id)?.issue_no ?? 0
+      if (ia !== ib) return ia - ib
+      return a.created_at.localeCompare(b.created_at)
+    })
+    .map(c => {
+      const iss = issueById.get(c.issue_id)
+      return {
+        編號: formatIssueNo(iss?.issue_no ?? null),
+        問題標題: iss?.title ?? '',
+        時間: new Date(c.created_at).toLocaleString('zh-HK'),
+        動作: ISSUE_ACTION_ZH[c.action] ?? c.action,
+        操作人: users[c.author_id]?.name ?? '前成員',
+        內容: c.body ?? '',
+        由: handlerZh(c.from_role),
+        至: handlerZh(c.to_role),
+      }
+    })
+  const ws2 = XLSX.utils.json_to_sheet(logRows)
+  ws2['!cols'] = [
+    { wch: 8 }, { wch: 30 }, { wch: 18 }, { wch: 12 },
+    { wch: 12 }, { wch: 40 }, { wch: 12 }, { wch: 12 },
+  ]
+  XLSX.utils.book_append_sheet(wb, ws2, '處理紀錄')
+
   const blob = new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })

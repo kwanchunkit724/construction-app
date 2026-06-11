@@ -22,6 +22,11 @@ export interface UserProfile {
   sub_role: SubRole
   company: string | null
   onesignal_id: string | null
+  // ── P4 / S20 (v48): 平安咭 on the person, valid across sites. Nullable —
+  // legacy rows and signup flow leave them null; surfaced to approvers via
+  // admin_or_pm_list_applicants and editable by the owner on Profile.
+  green_card_no: string | null
+  green_card_expiry: string | null
   created_at: string
 }
 
@@ -423,10 +428,20 @@ export interface Issue {
   photos: string[]
   current_handler_role: IssueHandlerRole
   status: IssueStatus
+  // ── P3 / S16 (v47): per-project running number (trigger-assigned, clients
+  // never send it) + free-text location. Null on pre-v47 rows until backfill.
+  issue_no: number | null
+  location: string | null
   resolved_by: string | null
   resolved_at: string | null
   created_at: string
   updated_at: string
+}
+
+// S16: display an issue's running number as #007 (3-wide, zero-padded); '—'
+// for un-numbered (pre-backfill) rows.
+export function formatIssueNo(n: number | null): string {
+  return n ? '#' + String(n).padStart(3, '0') : '—'
 }
 
 export interface IssueComment {
@@ -547,10 +562,31 @@ export interface Document {
   title: string
   doc_number: string | null
   current_version_id: string | null
+  // ── P2 / S8 (v46): optional review deadline on the register header.
+  // 逾期 is derived client-side (review_due_date < today AND status submitted).
+  review_due_date: string | null
   created_by: string | null
   created_at: string
   updated_at: string
   legacy_drawing_id: string | null
+}
+
+// ── P2 / S8 (v46): cross-project "待我審批" feed row. Mirrors the
+// list_my_pending_reviews() RPC return shape one-for-one.
+export interface PendingReview {
+  project_id: string
+  project_name: string
+  document_id: string
+  doc_number: string | null
+  title: string
+  document_type: DocumentType
+  review_due_date: string | null
+  version_id: string
+  version_no: number
+  revision_label: string | null
+  submitted_by: string | null
+  submitted_by_name: string | null
+  submitted_at: string | null
 }
 
 export interface DocumentVersion {

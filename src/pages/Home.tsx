@@ -1,10 +1,12 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Building2, Clock, ChevronRight, CheckCircle2, XCircle } from 'lucide-react'
+import { Building2, Clock, ChevronRight, CheckCircle2, XCircle, FileText } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
+import { useFilesFlag } from '../contexts/FilesFlagContext'
+import { supabase } from '../lib/supabase'
 import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
 import type { Project, ProjectRole } from '../types'
 
@@ -93,6 +95,9 @@ export default function Home() {
         )}
       </div>
 
+      {/* 待我審批 — pull-side surface for the documents review queue (S8) */}
+      <PendingReviewsTile />
+
       {/* Recent membership decisions — visible even if push notification missed */}
       {recentDecisions.length > 0 && (
         <div className="mt-3 space-y-2">
@@ -167,5 +172,41 @@ export default function Home() {
         )}
       </div>
     </AppLayout>
+  )
+}
+
+// Flag-gated 待我審批 tile. Calls list_my_pending_reviews once; renders only
+// when files_enabled AND the reviewer has ≥1 document waiting. The push from
+// v41 deep-links into /project/:id/files; this is the pull-side counterpart.
+function PendingReviewsTile() {
+  const { enabled } = useFilesFlag()
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    if (!enabled) return
+    let cancelled = false
+    supabase.rpc('list_my_pending_reviews').then(({ data, error }) => {
+      if (cancelled || error || !data) return
+      setCount((data as unknown[]).length)
+    })
+    return () => { cancelled = true }
+  }, [enabled])
+
+  if (!enabled || count === 0) return null
+
+  return (
+    <Link
+      to="/reviews"
+      className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-center gap-3 hover:bg-amber-100 transition-colors"
+    >
+      <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0">
+        <FileText size={20} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-amber-800">📄 待我審批 {count} 份文件</p>
+        <p className="text-xs text-amber-700/80 mt-0.5">跨工地文件審批，撳入去逐份處理</p>
+      </div>
+      <ChevronRight size={18} className="text-amber-400" />
+    </Link>
   )
 }

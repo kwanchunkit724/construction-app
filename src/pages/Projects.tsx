@@ -10,8 +10,16 @@ import { ROLE_ZH } from '../types'
 import type { Project, ProjectMember } from '../types'
 import { supabase } from '../lib/supabase'
 
-// Subset returned by the admin_or_pm_list_applicants RPC (v30).
-type Applicant = { id: string; name: string; phone: string; company: string | null }
+// Subset returned by the admin_or_pm_list_applicants RPC (v30 → v48 adds the
+// two green-card fields).
+type Applicant = {
+  id: string
+  name: string
+  phone: string
+  company: string | null
+  green_card_no: string | null
+  green_card_expiry: string | null
+}
 
 const STATUS_STYLE: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-700',
@@ -64,6 +72,51 @@ export default function Projects() {
       return false
     })
   }, [memberships, projects, profile])
+
+  // S23a: hoist the applicants RPC. PendingApprovalCard used to call it once
+  // PER CARD, though the RPC returns ALL pending applicants of a project — so
+  // N cards on one project meant N identical round trips. Call it ONCE per
+  // distinct pending project here and hand each card its matched applicant.
+  const pendingProjectIds = useMemo(
+    () => Array.from(new Set(pendingForMe.map(m => m.project_id))),
+    [pendingForMe],
+  )
+  const [applicantsByProject, setApplicantsByProject] = useState<Record<string, Applicant[]>>({})
+  const [applicantErrors, setApplicantErrors] = useState<Record<string, boolean>>({})
+  const pendingProjectKey = pendingProjectIds.join(',')
+  useEffect(() => {
+    if (pendingProjectIds.length === 0) {
+      setApplicantsByProject({})
+      setApplicantErrors({})
+      return
+    }
+    let cancelled = false
+    Promise.all(
+      pendingProjectIds.map(pid =>
+        supabase.rpc('admin_or_pm_list_applicants', { p_project_id: pid })
+          .then(({ data, error }) => ({ pid, data, error })),
+      ),
+    ).then(results => {
+      if (cancelled) return
+      const byProject: Record<string, Applicant[]> = {}
+      const errors: Record<string, boolean> = {}
+      for (const { pid, data, error } of results) {
+        if (error) {
+          console.error('applicant rpc error:', error)
+          errors[pid] = true
+          byProject[pid] = []
+        } else {
+          byProject[pid] = (data as Applicant[] | null) ?? []
+        }
+      }
+      setApplicantsByProject(byProject)
+      setApplicantErrors(errors)
+    })
+    return () => { cancelled = true }
+    // pendingProjectKey is the stable join of the id set — avoids re-running on
+    // every memberships object identity change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingProjectKey])
 
   // Approved members in projects I manage as an assigned PM (or admin), shown
   // so the PM can designate a 安全主任 for the PTW 簽核 chain (NEW-1). Gating
@@ -122,11 +175,20 @@ export default function Projects() {
               <div className="space-y-2">
                 {pendingForMe.map(m => {
                   const project = projects.find(p => p.id === m.project_id)
+                  const list = applicantsByProject[m.project_id]
+                  const applicant = list?.find(a => a.id === m.user_id) ?? null
+                  // Loading until the project's list resolves; error if the RPC
+                  // failed OR the applicant isn't in the resolved list.
+                  const loading = list === undefined && !applicantErrors[m.project_id]
+                  const loadError = !loading && !applicant
                   return (
                     <PendingApprovalCard
                       key={m.id}
                       project={project}
                       membership={m}
+                      applicant={applicant}
+                      loading={loading}
+                      loadError={loadError}
                       onApprove={() => approveMembership(m.id)}
                       onReject={() => rejectMembership(m.id)}
                     />
@@ -213,39 +275,34 @@ function MembershipCard({ project, membership }: { project: Project | undefined;
 }
 
 function PendingApprovalCard({
-  project, membership, onApprove, onReject,
+  project, membership, applicant, loading, loadError, onApprove, onReject,
 }: {
   project: Project | undefined
   membership: ProjectMember
+  // S23a: the applicant is now resolved once at the parent and passed in,
+  // instead of each card firing its own admin_or_pm_list_applicants RPC.
+  applicant: Applicant | null
+  loading: boolean
+  loadError: boolean
   onApprove: () => Promise<{ error: string | null }>
   onReject: () => Promise<{ error: string | null }>
 }) {
-  const [applicant, setApplicant] = useState<Applicant | null>(null)
-  const [loadError, setLoadError] = useState(false)
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => {
-    // v17 narrowed the user_profiles SELECT policy so a brand-new applicant
-    // who shares no approved project with the approver is invisible to a
-    // direct SELECT (admin / subcontractor approvers in particular).
-    // Read via the SECURITY DEFINER RPC that gates on the same approver
-    // predicate as `pendingForMe`. See supabase/v30-applicant-visibility.sql.
-    supabase.rpc('admin_or_pm_list_applicants', { p_project_id: membership.project_id })
-      .then(({ data, error }) => {
-        if (error) {
-          console.error('applicant rpc error:', error)
-          setLoadError(true)
-          setApplicant(null)
-          return
-        }
-        const rows = (data as Applicant[] | null) ?? []
-        const found = rows.find(r => r.id === membership.user_id) ?? null
-        setLoadError(!found)
-        setApplicant(found)
-      })
-  }, [membership.user_id, membership.project_id])
-
   if (!project) return null
+
+  // S20: green-card line state for an informed (non-blocking) approval.
+  const greenCard: { text: string; cls: string } = (() => {
+    if (!applicant) return { text: '', cls: '' }
+    if (!applicant.green_card_no) {
+      return { text: '未登記平安咭', cls: 'text-site-400' }
+    }
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Hong_Kong' })
+    const expired = !!applicant.green_card_expiry && applicant.green_card_expiry < today
+    const label = `平安咭 ${applicant.green_card_no}` +
+      (applicant.green_card_expiry ? ` · ${expired ? '已過期' : '到期'} ${applicant.green_card_expiry}` : '')
+    return { text: label, cls: expired ? 'text-red-600 font-semibold' : 'text-site-600' }
+  })()
 
   return (
     <div className="card p-4 border-amber-200">
@@ -254,13 +311,18 @@ function PendingApprovalCard({
           {applicant?.name.slice(0, 1) ?? '?'}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-site-900 truncate">{applicant?.name ?? '載入中...'}</p>
+          <p className="font-semibold text-site-900 truncate">
+            {applicant?.name ?? (loading ? '載入中...' : '—')}
+          </p>
           <p className="text-xs text-site-500 mt-0.5">
             {applicant?.phone}{applicant?.company ? ` · ${applicant.company}` : ''}
           </p>
           <p className="text-xs text-site-700 mt-1">
             申請 <span className="font-semibold">{project.name}</span> · {ROLE_ZH[membership.role]}
           </p>
+          {applicant && greenCard.text && (
+            <p className={`text-[11px] mt-1 ${greenCard.cls}`}>{greenCard.text}</p>
+          )}
         </div>
       </div>
       {loadError && (

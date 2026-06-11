@@ -13,7 +13,7 @@ interface IssuesContextType {
   fetchError: string | null
   myRoleInProject: GlobalRole | null  // user's role in this project (for permission checks)
   refetch: () => Promise<void>
-  createIssue: (title: string, description: string, photos: string[]) => Promise<{ error: string | null; id?: string }>
+  createIssue: (title: string, description: string, photos: string[], location?: string) => Promise<{ error: string | null; id?: string }>
   uploadPhoto: (file: File) => Promise<{ url: string | null; error: string | null }>
   fetchComments: (issueId: string) => Promise<IssueComment[]>
   addComment: (issueId: string, body: string) => Promise<{ error: string | null }>
@@ -91,17 +91,19 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
   // Re-sync on reconnect: realtime doesn't replay events missed while offline.
   useEffect(() => subscribeOnline(online => { if (online) void refetch() }), [refetch])
 
-  async function createIssue(title: string, description: string, photos: string[]) {
+  async function createIssue(title: string, description: string, photos: string[], location?: string) {
     if (!profile) return { error: '未登入' }
     if (!myRoleInProject) return { error: '你不是此工地的成員' }
 
     const handler = getInitialHandler(myRoleInProject)
+    // issue_no is trigger-assigned (v47) — never sent from the client.
     const { data, error } = await supabase.from('issues').insert({
       project_id: projectId,
       reporter_id: profile.id,
       reporter_role: myRoleInProject,
       title: title.trim(),
       description: description.trim(),
+      location: location?.trim() || null,
       photos,
       current_handler_role: handler,
       status: 'open',

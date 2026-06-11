@@ -9,7 +9,7 @@ import {
   Contact as ContactIcon, FolderOpen, CalendarClock,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import type { UserProfile } from '../types'
+import type { UserProfile, IssueComment } from '../types'
 import { Spinner } from '../components/Spinner'
 import { BottomNav } from '../components/BottomNav'
 import { Sidebar } from '../components/Sidebar'
@@ -213,24 +213,30 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
             onExportProgress={() => setShowExport(true)}
             onExportIssuesXlsx={async () => {
               if (!project) return
-              const ids = Array.from(new Set(issues.flatMap(i => [i.reporter_id, i.resolved_by].filter(Boolean) as string[])))
-              let users: Record<string, UserProfile> = {}
-              if (ids.length > 0) {
-                const { data } = await supabase.from('user_profiles').select('*').in('id', ids)
-                if (data) for (const u of data as UserProfile[]) users[u.id] = u
-              }
-              // Authoritative actor names come from the RPC, not the RLS-narrowed
-              // select above: user_profiles RLS (v17) hides profiles of non/ex-members,
-              // so a reporter/resolver who has left the project would resolve to '—'.
-              // get_issue_actor_profiles (v36) is SECURITY DEFINER and gated on the
-              // same can_view_project predicate as the issues SELECT policy — it returns
-              // only the names of actors on issues the caller can already see.
+              // S23b: the v47 get_issue_actor_profiles RPC now also resolves
+              // comment authors, so it alone is authoritative — drop the old
+              // RLS-narrowed user_profiles pre-query (it hid ex-members anyway).
+              // SECURITY DEFINER, gated on the same can_view_project predicate as
+              // the issues SELECT policy → only names of actors the caller can see.
+              const users: Record<string, UserProfile> = {}
               const { data: actors } = await supabase.rpc('get_issue_actor_profiles', { p_project_id: project.id })
               if (actors) for (const a of actors as Array<{ id: string; name: string }>) {
-                users[a.id] = { ...(users[a.id] ?? {} as UserProfile), id: a.id, name: a.name }
+                users[a.id] = { id: a.id, name: a.name } as UserProfile
+              }
+              // S17: one comments query for the 處理紀錄 sheet (issue counts are
+              // small; chunk the .in() at 200 ids if it ever grows).
+              let comments: IssueComment[] = []
+              const issueIds = issues.map(i => i.id)
+              if (issueIds.length > 0) {
+                const { data: cs } = await supabase
+                  .from('issue_comments')
+                  .select('*')
+                  .in('issue_id', issueIds)
+                  .order('created_at', { ascending: true })
+                if (cs) comments = cs as IssueComment[]
               }
               const { exportIssuesToExcel } = await import('../lib/export')
-              await exportIssuesToExcel(project, issues, users)
+              await exportIssuesToExcel(project, issues, users, comments)
             }}
           />
           <button onClick={manualRefresh} disabled={refreshing} className="text-site-500 hover:text-site-800 p-2" aria-label="刷新">

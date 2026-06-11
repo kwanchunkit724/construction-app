@@ -15,12 +15,42 @@ import { useAuth } from './AuthContext'
 export const WEATHER_OPTIONS = ['晴', '陰', '雨', '暴雨', '熱', '凍', '大風'] as const
 export type Weather = typeof WEATHER_OPTIONS[number]
 
+// S2: HKO warning signals. ⚠ LOCKSTEP — must equal the v45
+// dailies_warning_signals_chk list string-for-string, or the upsert 400s.
+export const WARNING_SIGNAL_OPTIONS = [
+  '一號風球', '三號風球', '八號或以上風球',
+  '黃雨', '紅雨', '黑雨', '雷暴警告',
+  '酷熱天氣警告', '寒冷天氣警告',
+] as const
+export type WarningSignal = typeof WARNING_SIGNAL_OPTIONS[number]
+
+// S1: structured labour / plant counts. jsonb arrays in the DB; the shape is
+// NOT server-validated (same posture as freeform_items) — the UI drops empty /
+// zero rows on save.
+export interface ManpowerRow {
+  trade: string
+  count: number
+}
+export interface PlantRow {
+  type: string
+  count: number
+}
+
 export interface Daily {
   id: string
   project_id: string
   user_id: string
   date: string
   weather: Weather
+  // S2 (v45): AM required in the new UI; PM optional. Legacy `weather` is kept
+  // written = weather_am so old iOS clients still render a value and the
+  // NOT NULL / check on `weather` holds. Pre-v45 rows read weather_am/pm null.
+  weather_am: Weather | null
+  weather_pm: Weather | null
+  warning_signals: string[]
+  // S1 (v45)
+  manpower: ManpowerRow[]
+  plant: PlantRow[]
   progress_item_ids: string[]
   freeform_items: string[]
   notes: string
@@ -30,6 +60,11 @@ export interface Daily {
 
 export interface DailyPayload {
   weather: Weather
+  weather_am: Weather | null
+  weather_pm: Weather | null
+  warning_signals: string[]
+  manpower: ManpowerRow[]
+  plant: PlantRow[]
   progress_item_ids: string[]
   freeform_items: string[]
   notes: string
@@ -38,6 +73,14 @@ export interface DailyPayload {
 // Today in HKT as YYYY-MM-DD (uses Intl `en-CA` to get ISO-format date).
 export function todayHKT(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Hong_Kong' })
+}
+
+// Yesterday in HKT (S5 「複製琴日」). HK has no DST, so a fixed −86 400 000 ms
+// shift never lands on the wrong calendar day.
+export function yesterdayHKT(): string {
+  return new Date(Date.now() - 86400000).toLocaleDateString('en-CA', {
+    timeZone: 'Asia/Hong_Kong',
+  })
 }
 
 interface DailiesContextValue {
@@ -49,6 +92,9 @@ interface DailiesContextValue {
   refresh: () => Promise<void>
   upsertMyDaily: (payload: DailyPayload) => Promise<{ id: string | null; error: string | null }>
   deleteMyDaily: (id: string) => Promise<{ error: string | null }>
+  // S5: fetch my own daily for an arbitrary date (read allowed to all approved
+  // members by RLS; filtered to own row). Used by 「複製琴日」.
+  fetchMyDailyFor: (date: string) => Promise<Daily | null>
 }
 
 const DailiesContext = createContext<DailiesContextValue | null>(null)
@@ -126,7 +172,14 @@ export function DailiesProvider({
             project_id: projectId,
             user_id: profile.id,
             date,
-            weather: payload.weather,
+            // Compat: keep legacy `weather` = the AM choice so old iOS clients
+            // still render a value and the NOT NULL / check on `weather` holds.
+            weather: payload.weather_am ?? payload.weather,
+            weather_am: payload.weather_am,
+            weather_pm: payload.weather_pm,
+            warning_signals: payload.warning_signals,
+            manpower: payload.manpower,
+            plant: payload.plant,
             progress_item_ids: payload.progress_item_ids,
             freeform_items: payload.freeform_items,
             notes: payload.notes,
@@ -140,6 +193,25 @@ export function DailiesProvider({
         return { id: null, error: error.message }
       }
       return { id: (data as { id: string }).id, error: null }
+    },
+    [profile, projectId],
+  )
+
+  const fetchMyDailyFor = useCallback(
+    async (date: string): Promise<Daily | null> => {
+      if (!profile) return null
+      const { data, error } = await supabase
+        .from('dailies')
+        .select('*')
+        .eq('project_id', projectId)
+        .eq('user_id', profile.id)
+        .eq('date', date)
+        .maybeSingle()
+      if (error) {
+        console.error('dailies fetchMyDailyFor error:', error)
+        return null
+      }
+      return (data as Daily | null) ?? null
     },
     [profile, projectId],
   )
@@ -166,8 +238,9 @@ export function DailiesProvider({
       refresh,
       upsertMyDaily,
       deleteMyDaily,
+      fetchMyDailyFor,
     }),
-    [dailies, selectedDate, loading, fetchError, refresh, upsertMyDaily, deleteMyDaily],
+    [dailies, selectedDate, loading, fetchError, refresh, upsertMyDaily, deleteMyDaily, fetchMyDailyFor],
   )
 
   return <DailiesContext.Provider value={value}>{children}</DailiesContext.Provider>

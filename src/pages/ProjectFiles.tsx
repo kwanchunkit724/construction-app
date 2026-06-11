@@ -17,7 +17,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ChevronLeft, RefreshCw, Search, Plus, FileText, ChevronRight,
-  HardDrive, FolderOpen, History as HistoryIcon, X,
+  HardDrive, FolderOpen, History as HistoryIcon, X, CalendarClock, RotateCcw,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { Sidebar } from '../components/Sidebar'
@@ -95,6 +95,17 @@ function fmtDateTime(iso: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+// Today in HKT (YYYY-MM-DD) for 死線 overdue comparison.
+function todayHKTDate(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Hong_Kong' })
+}
+
+// S8: a review deadline counts as 逾期 only while the doc is still 待審 (submitted)
+// and its due date has passed.
+function isReviewOverdue(dueDate: string | null, status: DocumentStatus): boolean {
+  return !!dueDate && status === 'submitted' && dueDate < todayHKTDate()
+}
+
 // ── Page shell (providers) ────────────────────────────────────
 export default function ProjectFilesPage() {
   const { id: projectId } = useParams<{ id: string }>()
@@ -128,6 +139,7 @@ function ProjectFilesInner({ projectId }: { projectId: string }) {
 
   const [searchParams, setSearchParams] = useSearchParams()
   const deepLinkItem = searchParams.get('item')
+  const deepLinkDoc = searchParams.get('doc')
 
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
@@ -273,6 +285,19 @@ function ProjectFilesInner({ projectId }: { projectId: string }) {
       scrolledRef.current = true
     }
   }, [deepLinkItem, loading, groups])
+
+  // Deep-link: ?doc=<id> (from the 待我審批 cross-project feed) opens the matching
+  // document's detail sheet once the documents have loaded.
+  const appliedDocRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!deepLinkDoc || loading) return
+    if (appliedDocRef.current === deepLinkDoc) return
+    const match = documents.find(d => d.id === deepLinkDoc)
+    if (match) {
+      setDetail(match)
+      appliedDocRef.current = deepLinkDoc
+    }
+  }, [deepLinkDoc, loading, documents])
 
   // Storage meter — aggregate size_bytes across this project's versions. One
   // pass over versionsByDocument (already loaded) so no extra query is needed.
@@ -481,9 +506,10 @@ function ProjectFilesInner({ projectId }: { projectId: string }) {
           versions={versionsByDocument[detail.id] ?? []}
           onClose={() => setDetail(null)}
           onClearDeepLink={() => {
-            if (deepLinkItem) {
+            if (deepLinkItem || deepLinkDoc) {
               const next = new URLSearchParams(searchParams)
               next.delete('item')
+              next.delete('doc')
               setSearchParams(next, { replace: true })
             }
           }}
@@ -524,6 +550,7 @@ function DocumentRow({
 }) {
   const status: DocumentStatus = version?.status ?? 'withdrawn'
   const revLabel = revisionLabelOrDefault(version?.revision_label, version?.version_no ?? 1)
+  const overdue = isReviewOverdue(document.review_due_date, status)
   return (
     <button
       type="button"
@@ -543,11 +570,23 @@ function DocumentRow({
           </span>
         </div>
         <div className="text-sm font-medium text-site-900 truncate">{document.title}</div>
-        <div className="text-[11px] text-site-500">{revLabel}</div>
+        <div className="text-[11px] text-site-500 flex items-center gap-2 flex-wrap">
+          <span>{revLabel}</span>
+          {document.review_due_date && (
+            <span className={`inline-flex items-center gap-0.5 ${overdue ? 'text-red-600 font-semibold' : 'text-site-400'}`}>
+              <CalendarClock size={11} /> 死線 {document.review_due_date}
+            </span>
+          )}
+        </div>
       </div>
-      <span className={`flex-shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full ${STATUS_PILL[status]}`}>
-        {DOCUMENT_STATUS_ZH[status]}
-      </span>
+      <div className="flex-shrink-0 flex flex-col items-end gap-1">
+        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${STATUS_PILL[status]}`}>
+          {DOCUMENT_STATUS_ZH[status]}
+        </span>
+        {overdue && (
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">逾期</span>
+        )}
+      </div>
       <ChevronRight size={16} className="text-site-300 flex-shrink-0" />
     </button>
   )
@@ -580,16 +619,23 @@ function DocumentDetailSheet({
   const {
     uploaderNameById,
     canUpload,
+    canReview,
     canUploadDrawingType,
     withdrawVersion,
+    setReviewDueDate,
   } = useDocuments()
 
   const [events, setEvents] = useState<DocumentEvent[]>([])
   const [eventsLoading, setEventsLoading] = useState(true)
   const [actorNames, setActorNames] = useState<Record<string, string>>({})
   const [uploadVersionOpen, setUploadVersionOpen] = useState(false)
+  const [resubmitOpen, setResubmitOpen] = useState(false)
   const [viewing, setViewing] = useState<DocumentVersion | null>(null)
   const [busy, setBusy] = useState(false)
+  // S8: inline 死線 edit (creator or reviewer).
+  const [dueEditOpen, setDueEditOpen] = useState(false)
+  const [dueInput, setDueInput] = useState(doc.review_due_date ?? '')
+  const [dueSaving, setDueSaving] = useState(false)
 
   // Sort versions newest-first for display.
   const sortedVersions = useMemo(
@@ -673,6 +719,24 @@ function DocumentDetailSheet({
   const allowVersionUpload =
     canUpload && (doc.document_type !== 'drawing' || canUploadDrawingType)
 
+  // S9: the current version is rejected → offer 重新送審 (resubmit as a new
+  // version). Seed the label as the next version number + carry the reason.
+  const isRejected = currentVersion?.status === 'rejected'
+  const maxVersionNo = sortedVersions.reduce((m, v) => Math.max(m, v.version_no), 0)
+  const overdue = currentVersion
+    ? isReviewOverdue(doc.review_due_date, currentVersion.status)
+    : false
+  // S8: creator or any reviewer may set / change the 死線.
+  const canEditDue = canReview || doc.created_by === profile?.id
+
+  async function saveDue() {
+    setDueSaving(true)
+    const { error } = await setReviewDueDate(doc.id, dueInput || null)
+    setDueSaving(false)
+    if (error) { window.alert(error); return }
+    setDueEditOpen(false)
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center sm:p-4"
@@ -709,8 +773,70 @@ function DocumentDetailSheet({
         </div>
 
         <div className="px-4 py-4 overflow-y-auto flex-1 space-y-4">
+          {/* 死線 (review deadline) — show + inline edit for creator / reviewer */}
+          <div className="rounded-xl border border-site-200 px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-site-500 inline-flex items-center gap-1">
+                <CalendarClock size={13} /> 送審死線
+              </span>
+              <div className="flex items-center gap-2">
+                <span className={`text-sm font-medium ${overdue ? 'text-red-600' : 'text-site-800'}`}>
+                  {doc.review_due_date ?? '未設定'}
+                </span>
+                {overdue && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">逾期</span>
+                )}
+                {canEditDue && !dueEditOpen && (
+                  <button
+                    type="button"
+                    onClick={() => { setDueInput(doc.review_due_date ?? ''); setDueEditOpen(true) }}
+                    className="text-xs font-semibold text-blue-700 hover:underline"
+                  >
+                    {doc.review_due_date ? '更改' : '設定'}
+                  </button>
+                )}
+              </div>
+            </div>
+            {dueEditOpen && (
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  type="date"
+                  value={dueInput}
+                  onChange={e => setDueInput(e.target.value)}
+                  className="input flex-1"
+                />
+                <button
+                  type="button"
+                  onClick={saveDue}
+                  disabled={dueSaving}
+                  className="btn-primary !min-h-[40px] !px-3 text-sm"
+                >
+                  {dueSaving ? <Spinner size={14} className="text-white" /> : '儲存'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDueEditOpen(false)}
+                  className="btn-ghost !min-h-[40px] !px-3 text-sm"
+                >
+                  取消
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Inline reviewer controls on the current submitted version */}
           {currentVersion && <DocumentReviewBar version={currentVersion} />}
+
+          {/* S9: 重新送審 — primary action when the current version was rejected */}
+          {allowVersionUpload && isRejected && (
+            <button
+              type="button"
+              onClick={() => setResubmitOpen(true)}
+              className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-bold text-white bg-safety-500 hover:bg-safety-600 py-2.5 rounded-lg"
+            >
+              <RotateCcw size={16} /> 重新送審
+            </button>
+          )}
 
           {/* 上載新版本 */}
           {allowVersionUpload && (
@@ -824,6 +950,17 @@ function DocumentDetailSheet({
           progressItemId={doc.progress_item_id ?? undefined}
           existingDocumentId={doc.id}
           onClose={() => setUploadVersionOpen(false)}
+        />
+      )}
+
+      {resubmitOpen && (
+        <DocumentUploadSheet
+          open
+          progressItemId={doc.progress_item_id ?? undefined}
+          existingDocumentId={doc.id}
+          suggestedRevisionLabel={`v${maxVersionNo + 1}`}
+          rejectionNote={currentVersion?.review_note ?? undefined}
+          onClose={() => setResubmitOpen(false)}
         />
       )}
 

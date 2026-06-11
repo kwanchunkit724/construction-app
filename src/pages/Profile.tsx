@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { LogOut, Bell, Trash2, UserCog, Plus, Mail } from 'lucide-react'
+import { LogOut, Bell, Trash2, UserCog, Plus, Mail, ShieldCheck } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { useAuth } from '../contexts/AuthContext'
@@ -201,6 +201,9 @@ function ProfileInner() {
         <Row label="加入時間" value={new Date(profile.created_at).toLocaleDateString('zh-HK')} />
       </div>
 
+      {/* 平安咭 (green card) ─────────────────────────────── */}
+      <GreenCardSection />
+
       {/* Delegations section ─────────────────────────────── */}
       <DelegationsSection />
 
@@ -310,6 +313,100 @@ function ProfileInner() {
         </div>
       )}
     </AppLayout>
+  )
+}
+
+// ── 平安咭 (green card) ─────────────────────────────────────
+// S20: the card lives on the PERSON (valid across sites). Owner-editable here;
+// surfaced to approvers via admin_or_pm_list_applicants. Days-to-expiry hint:
+// amber within 30 days, red once expired.
+function GreenCardSection() {
+  const { profile, refreshProfile } = useAuth()
+  const [no, setNo] = useState(profile?.green_card_no ?? '')
+  const [expiry, setExpiry] = useState(profile?.green_card_expiry ?? '')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
+
+  if (!profile) return null
+
+  const dirty = no !== (profile.green_card_no ?? '') || expiry !== (profile.green_card_expiry ?? '')
+
+  const expiryHint: { text: string; cls: string } | null = (() => {
+    if (!expiry) return null
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Hong_Kong' })
+    if (expiry < today) return { text: '已過期', cls: 'bg-red-50 text-red-600 border-red-200' }
+    const days = Math.round((new Date(expiry + 'T00:00:00').getTime() - new Date(today + 'T00:00:00').getTime()) / 86400000)
+    if (days <= 30) return { text: `將於 ${days} 日內到期`, cls: 'bg-amber-100 text-amber-700 border-amber-200' }
+    return null
+  })()
+
+  async function save() {
+    setError('')
+    setSaving(true)
+    const { error: e } = await supabase
+      .from('user_profiles')
+      .update({
+        green_card_no: no.trim() || null,
+        green_card_expiry: expiry || null,
+      })
+      .eq('id', profile!.id)
+    setSaving(false)
+    if (e) { setError(e.message); return }
+    setSaved(true)
+    await refreshProfile()
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  return (
+    <div className="card mt-3 p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <ShieldCheck size={16} className="text-site-500" />
+        <span className="text-sm font-semibold text-site-900">平安咭（建造業安全卡）</span>
+      </div>
+      <p className="text-xs text-site-500 mb-3 leading-relaxed">
+        登記後，工地審批人喺批核你嘅申請時可以見到，免得逐個問。
+      </p>
+
+      <div className="space-y-2">
+        <div>
+          <label className="text-[11px] font-semibold text-site-500 block mb-1">證書號碼</label>
+          <input
+            value={no}
+            onChange={e => setNo(e.target.value)}
+            placeholder="例如：S123456"
+            className="input"
+          />
+        </div>
+        <div>
+          <label className="text-[11px] font-semibold text-site-500 block mb-1">到期日</label>
+          <input
+            type="date"
+            value={expiry}
+            onChange={e => setExpiry(e.target.value)}
+            className="input"
+          />
+        </div>
+      </div>
+
+      {expiryHint && (
+        <p className={`mt-2 text-xs border rounded-lg px-2 py-1.5 ${expiryHint.cls}`}>
+          {expiryHint.text}
+        </p>
+      )}
+      {error && (
+        <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">{error}</p>
+      )}
+
+      <button
+        onClick={save}
+        disabled={saving || !dirty}
+        className="mt-3 w-full bg-safety-500 hover:bg-safety-600 disabled:opacity-50 text-white font-semibold rounded-lg py-2 flex items-center justify-center gap-1.5"
+      >
+        {saving ? <Spinner size={14} className="text-white" /> : null}
+        {saved ? '已儲存' : '儲存'}
+      </button>
+    </div>
   )
 }
 

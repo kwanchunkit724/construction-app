@@ -37,6 +37,10 @@ export interface DocumentUploadSheetProps {
   existingDocumentId?: string
   // Leaf items for the optional 進度項目 picker (only used when NOT pre-linked).
   leafItems?: DocumentUploadLeafItem[]
+  // S9 重新送審: seed the version-label field (e.g. 'v3') and show the previous
+  // rejection reason as a banner so the resubmitter knows what to fix.
+  suggestedRevisionLabel?: string
+  rejectionNote?: string
   onClose(): void
   onUploaded?(documentId: string): void
 }
@@ -94,6 +98,8 @@ export function DocumentUploadSheet({
   progressItemId,
   existingDocumentId,
   leafItems,
+  suggestedRevisionLabel,
+  rejectionNote,
   onClose,
   onUploaded,
 }: DocumentUploadSheetProps) {
@@ -103,7 +109,8 @@ export function DocumentUploadSheet({
   const galleryInputRef = useRef<HTMLInputElement>(null)
   const [slots, setSlots] = useState<FileSlot[]>([])
   const [title, setTitle] = useState('')
-  const [revisionLabel, setRevisionLabel] = useState('')
+  const [revisionLabel, setRevisionLabel] = useState(suggestedRevisionLabel ?? '')
+  const [reviewDueDate, setReviewDueDate] = useState('')
   const [docType, setDocType] = useState<DocumentType>('material_submission')
   const [pickedItemId, setPickedItemId] = useState<string>(progressItemId ?? '')
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -130,7 +137,8 @@ export function DocumentUploadSheet({
   function reset() {
     setSlots([])
     setTitle('')
-    setRevisionLabel('')
+    setRevisionLabel(suggestedRevisionLabel ?? '')
+    setReviewDueDate('')
     setDocType('material_submission')
     setPickedItemId(progressItemId ?? '')
     setSubmitError(null)
@@ -262,6 +270,7 @@ export function DocumentUploadSheet({
         file: slot.file,
         progressItemId: effectiveItemId,
         revisionLabel: revisionLabel.trim() || undefined,
+        reviewDueDate: reviewDueDate || undefined,
         onProgress,
       })
       setSlots(prev =>
@@ -313,6 +322,12 @@ export function DocumentUploadSheet({
         </div>
 
         <div className="px-4 py-4 overflow-y-auto flex-1 space-y-3">
+          {rejectionNote && (
+            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+              <p className="font-semibold mb-0.5">上次拒絕原因</p>
+              <p className="whitespace-pre-wrap break-words">{rejectionNote}</p>
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-2">
             <button
               type="button"
@@ -411,6 +426,16 @@ export function DocumentUploadSheet({
                   onChange={e => setTitle(e.target.value)}
                   placeholder="文件名稱"
                   maxLength={120}
+                  className="input"
+                />
+              </div>
+
+              <div>
+                <label className="label">送審死線 (選填)</label>
+                <input
+                  type="date"
+                  value={reviewDueDate}
+                  onChange={e => setReviewDueDate(e.target.value)}
                   className="input"
                 />
               </div>

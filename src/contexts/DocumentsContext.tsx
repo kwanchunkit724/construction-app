@@ -46,8 +46,13 @@ interface DocumentsContextType {
     file: File
     progressItemId?: string
     revisionLabel?: string
+    reviewDueDate?: string
     onProgress?: (pct: number) => void
   }): Promise<{ documentId: string | null; error: string | null }>
+
+  // S8: set / clear a review deadline on the register header (creator-or-reviewer
+  // policy covers a plain update — no RPC).
+  setReviewDueDate(documentId: string, date: string | null): Promise<{ error: string | null }>
 
   uploadVersion(args: {
     documentId: string
@@ -265,6 +270,7 @@ export function DocumentsProvider({
     file,
     progressItemId,
     revisionLabel,
+    reviewDueDate,
     onProgress,
   }: {
     documentType: DocumentType
@@ -272,6 +278,7 @@ export function DocumentsProvider({
     file: File
     progressItemId?: string
     revisionLabel?: string
+    reviewDueDate?: string
     onProgress?: (pct: number) => void
   }): Promise<{ documentId: string | null; error: string | null }> {
     if (!profile) return { documentId: null, error: '未登入' }
@@ -311,6 +318,7 @@ export function DocumentsProvider({
         document_type: documentType,
         title: title.trim(),
         doc_number: (docNumber as string) ?? null,
+        review_due_date: reviewDueDate || null,
         created_by: profile.id,
       })
       .select()
@@ -507,6 +515,20 @@ export function DocumentsProvider({
     return { error: null }
   }
 
+  async function setReviewDueDate(
+    documentId: string,
+    date: string | null,
+  ): Promise<{ error: string | null }> {
+    if (!profile) return { error: '未登入' }
+    const { error } = await supabase
+      .from('documents')
+      .update({ review_due_date: date, updated_at: new Date().toISOString() })
+      .eq('id', documentId)
+    if (error) return { error: error.message }
+    await refetch()
+    return { error: null }
+  }
+
   async function getViewerUrl(
     version: DocumentVersion,
   ): Promise<{ url: string | null; error: string | null }> {
@@ -545,6 +567,7 @@ export function DocumentsProvider({
         canReview,
         canUploadDrawingType,
         uploadDocument,
+        setReviewDueDate,
         uploadVersion,
         reviewVersion,
         withdrawVersion,

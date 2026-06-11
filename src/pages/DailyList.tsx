@@ -28,6 +28,20 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString('zh-HK')
 }
 
+// Weather pill: 上晝X · 下晝Y when the new AM field is present (v45+ rows);
+// otherwise the single legacy `weather` value (pre-v45 / old-client rows).
+function weatherLabel(d: Daily): string {
+  if (d.weather_am) {
+    return d.weather_pm ? `上晝${d.weather_am} · 下晝${d.weather_pm}` : `上晝${d.weather_am}`
+  }
+  return d.weather
+}
+
+// Severe HKO signals get a red badge; the rest are amber.
+function isSevereSignal(sig: string): boolean {
+  return sig === '八號或以上風球' || sig === '黑雨' || sig === '紅雨'
+}
+
 function DailyListInner({ projectId }: { projectId: string }) {
   const navigate = useNavigate()
   const { profile } = useAuth()
@@ -201,10 +215,28 @@ function DailyListInner({ projectId }: { projectId: string }) {
                       更新於 {relativeTime(d.updated_at)}
                     </p>
                   </div>
-                  <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 whitespace-nowrap">
-                    <CloudSun size={12} />
-                    {d.weather}
-                  </span>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 whitespace-nowrap">
+                      <CloudSun size={12} />
+                      {weatherLabel(d)}
+                    </span>
+                    {d.warning_signals && d.warning_signals.length > 0 && (
+                      <div className="flex flex-wrap justify-end gap-1 max-w-[160px]">
+                        {d.warning_signals.map(sig => (
+                          <span
+                            key={sig}
+                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap ${
+                              isSevereSignal(sig)
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-amber-100 text-amber-700'
+                            }`}
+                          >
+                            {sig}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <DailyBody daily={d} itemsById={itemsById} zoneNameById={zoneNameById} />
@@ -251,14 +283,38 @@ function DailyBody({
   itemsById: Record<string, Pick<ProgressItem, 'id' | 'code' | 'title' | 'zone_id'>>
   zoneNameById: Record<string, string>
 }) {
+  const manpower = daily.manpower ?? []
+  const plant = daily.plant ?? []
+  const hasManpower = manpower.length > 0
+  const hasPlant = plant.length > 0
   const hasProgress = daily.progress_item_ids.length > 0
   const hasFreeform = daily.freeform_items.length > 0
   const hasNotes = daily.notes.trim().length > 0
-  if (!hasProgress && !hasFreeform && !hasNotes) {
+  if (!hasManpower && !hasPlant && !hasProgress && !hasFreeform && !hasNotes) {
     return <p className="text-sm text-site-500">未有內容</p>
   }
+  const manpowerTotal = manpower.reduce((s, r) => s + (r.count || 0), 0)
+  const plantTotal = plant.reduce((s, r) => s + (r.count || 0), 0)
   return (
     <div className="space-y-2">
+      {hasManpower && (
+        <div>
+          <p className="label mb-1">出勤</p>
+          <p className="text-sm text-site-800 break-words">
+            {manpower.map(r => `${r.trade} ${r.count}人`).join(' · ')}
+            <span className="text-site-400"> ・合共 {manpowerTotal} 人</span>
+          </p>
+        </div>
+      )}
+      {hasPlant && (
+        <div>
+          <p className="label mb-1">機械</p>
+          <p className="text-sm text-site-800 break-words">
+            {plant.map(r => `${r.type} ${r.count}部`).join(' · ')}
+            <span className="text-site-400"> ・合共 {plantTotal} 部</span>
+          </p>
+        </div>
+      )}
       {hasProgress && (
         <div>
           <p className="label mb-1">已處理進度項目</p>

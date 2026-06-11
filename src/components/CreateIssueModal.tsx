@@ -29,6 +29,7 @@ export function CreateIssueModal({
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState('')
+  const [location, setLocation] = useState('')
   const [description, setDescription] = useState('')
   const [photos, setPhotos] = useState<PhotoSlot[]>([])
   const [error, setError] = useState('')
@@ -39,6 +40,7 @@ export function CreateIssueModal({
   function reset() {
     photos.forEach(p => URL.revokeObjectURL(p.preview))
     setTitle('')
+    setLocation('')
     setDescription('')
     setPhotos([])
     setError('')
@@ -97,7 +99,7 @@ export function CreateIssueModal({
 
     const urls = photos.map(p => p.url!)
     setSubmitting(true)
-    const { error, id } = await createIssue(title, description, urls)
+    const { error, id } = await createIssue(title, description, urls, location)
     setSubmitting(false)
     if (error) {
       setError(error)
@@ -133,6 +135,17 @@ export function CreateIssueModal({
             placeholder="例：1F 砂漿不足"
             className="input"
             autoFocus
+          />
+        </div>
+
+        <div>
+          <label className="label">位置</label>
+          <input
+            value={location}
+            onChange={e => setLocation(e.target.value)}
+            placeholder="例如：3樓 A室 / 天台"
+            maxLength={60}
+            className="input"
           />
         </div>
 

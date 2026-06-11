@@ -35,6 +35,8 @@ const PtwVerifyPage = lazy(() => import('./pages/PtwVerify'))
 // FilesGate redirects to /home so the route is unreachable and the surface is
 // pixel-identical to today.
 const ProjectFilesPage = lazy(() => import('./pages/ProjectFiles'))
+// 待我審批 cross-project review feed (S8) — gated like the register.
+const PendingReviewsPage = lazy(() => import('./pages/PendingReviews'))
 
 // v1.2 feature pages — lazy so the entry chunk stays under the 800 KB CI
 // guard. None of these load until the user actually opens the route.
@@ -101,6 +103,7 @@ export default function App() {
           <Route path="/verify/:token" element={<ProtectedRoute><PtwGate>{lazyRoute(<PtwVerifyPage />)}</PtwGate></ProtectedRoute>} />
           {/* Phase D documents register — gated like PTW (FilesGate → /home when files_enabled is off). */}
           <Route path="/project/:id/files" element={<ProtectedRoute><FilesGate>{lazyRoute(<ProjectFilesPage />)}</FilesGate></ProtectedRoute>} />
+          <Route path="/reviews" element={<ProtectedRoute><FilesGate>{lazyRoute(<PendingReviewsPage />)}</FilesGate></ProtectedRoute>} />
           {/* v1.2: site diary, on-site materials, and the unified timetable. */}
           <Route path="/project/:id/daily" element={<ProtectedRoute>{lazyRoute(<DailyListPage />)}</ProtectedRoute>} />
           <Route path="/project/:id/daily/edit" element={<ProtectedRoute>{lazyRoute(<DailyEditPage />)}</ProtectedRoute>} />
