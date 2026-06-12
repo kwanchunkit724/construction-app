@@ -34,7 +34,8 @@ export default function Signup() {
     setError('')
     if (!isValidHKPhone(phone)) return setError('請輸入有效的 8 位香港手機號碼')
     if (!name.trim()) return setError('請輸入姓名')
-    if (password.length < 6) return setError('密碼至少 6 個字符')
+    if (password.length < 8) return setError('密碼至少 8 個字符')
+    if (/^(.)\1+$/.test(password)) return setError('密碼太簡單，請勿使用全部相同嘅字符')
     if (password !== password2) return setError('兩次密碼不一致')
     if (globalRole === 'main_contractor' && !subRole) return setError('請選擇職位')
 
@@ -133,7 +134,7 @@ export default function Signup() {
 
           <div>
             <label className="label">密碼 *</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="至少 6 個字符" className="input" />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="至少 8 個字符" className="input" />
           </div>
 
           <div>
