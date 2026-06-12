@@ -37,6 +37,8 @@ const PtwVerifyPage = lazy(() => import('./pages/PtwVerify'))
 const ProjectFilesPage = lazy(() => import('./pages/ProjectFiles'))
 // 待我審批 cross-project review feed (S8) — gated like the register.
 const PendingReviewsPage = lazy(() => import('./pages/PendingReviews'))
+// 資料完整性 — admin tamper-evident ledger verify/export (Security Phase 1).
+const DataIntegrityPage = lazy(() => import('./pages/DataIntegrity'))
 
 // v1.2 feature pages — lazy so the entry chunk stays under the 800 KB CI
 // guard. None of these load until the user actually opens the route.
@@ -91,6 +93,7 @@ export default function App() {
           <Route path="/help" element={<ProtectedRoute>{lazyRoute(<HelpPage />)}</ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminProjects /></ProtectedRoute>} />
           <Route path="/admin/users" element={<ProtectedRoute requireAdmin><AdminUsers /></ProtectedRoute>} />
+          <Route path="/admin/integrity" element={<ProtectedRoute requireAdmin>{lazyRoute(<DataIntegrityPage />)}</ProtectedRoute>} />
           <Route path="/admin/projects/:id/chains" element={<ProtectedRoute requireAdmin><AdminProjectChainsPage /></ProtectedRoute>} />
           <Route path="/project/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
           <Route path="/project/:id/issue/:issueId" element={<ProtectedRoute><IssueDetail /></ProtectedRoute>} />
