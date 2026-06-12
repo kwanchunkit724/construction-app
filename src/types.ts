@@ -956,6 +956,200 @@ export const PTW_STATUS_ZH: Record<PtwStatus, string> = {
   revision_requested: '已退回',
 }
 
+// ── 地盤表格管理 (statutory site forms + mobile e-signing, v55) ──
+// Mirrors the v55-equipment-forms-schema.sql contract. Field names mirror the
+// DB columns verbatim (no camelCase), same as the PTW block above. The forms
+// domain layers on the PTW pattern: equipment_register + form_instances +
+// form_signoffs (append-only, RPC-only insert via record_form_signoff),
+// user_credentials (the qualified-person gate), form_templates (seeded
+// reference data). FORM_STATUS_* badge classes follow the CLAUDE.md badge
+// conventions (green-100 / amber-100 / red-50 / site-100).
+
+// Kinds of plant / structure a form attaches to (form_templates.equipment_kind
+// + equipment_register.kind). String-typed in the DB; this is the v1 set.
+export type EquipmentKind =
+  | 'scaffold'
+  | 'excavation'
+  | 'lifting_appliance'
+  | 'swp'
+  | 'other'
+
+export const EQUIPMENT_KIND_ZH: Record<EquipmentKind, string> = {
+  scaffold: '棚架',
+  excavation: '挖掘工程',
+  lifting_appliance: '起重機械',
+  swp: '吊船',
+  other: '其他',
+}
+
+// equipment_register.status — operational state of the plant item.
+export type EquipmentStatus = 'active' | 'idle' | 'offsite' | 'retired'
+
+export const EQUIPMENT_STATUS_ZH: Record<EquipmentStatus, string> = {
+  active: '使用中',
+  idle: '閒置',
+  offsite: '已離場',
+  retired: '已退役',
+}
+
+// Sign-off result (form_signoffs.result + record_form_signoff p_result).
+export type FormSignoffResult = 'pass' | 'pass_with_remarks' | 'fail'
+
+export const FORM_RESULT_ZH: Record<FormSignoffResult, string> = {
+  pass: '合格',
+  pass_with_remarks: '合格 (有備註)',
+  fail: '不合格',
+}
+
+// Derived per-instance validity status (server computes the same five buckets
+// in get_forms_dashboard). NOT a stored column — computed from valid_until +
+// suspended + template.remind_before_days.
+export type FormStatus = 'valid' | 'expiring' | 'expired' | 'missing' | 'suspended'
+
+export const FORM_STATUS_ZH: Record<FormStatus, string> = {
+  valid: '有效',
+  expiring: '即將到期',
+  expired: '過期',
+  missing: '未簽',
+  suspended: '停用',
+}
+
+// Badge classes per CLAUDE.md conventions: success green-100, warning amber-100,
+// error red-50, neutral site-100.
+export const FORM_STATUS_BADGE_CLASS: Record<FormStatus, string> = {
+  valid: 'bg-green-100 text-green-700',
+  expiring: 'bg-amber-100 text-amber-700',
+  expired: 'bg-red-50 text-red-600 border border-red-200',
+  missing: 'bg-site-100 text-site-500',
+  suspended: 'bg-red-50 text-red-600 border border-red-200',
+}
+
+// A single tickable line on a form (mirrors PtwChecklistItem, but the template
+// rows have no `value` — the signer supplies values in the signoff payload).
+export interface FormChecklistItem {
+  key: string
+  label_zh: string
+  required: boolean
+}
+
+export interface FormTemplate {
+  id: string
+  code: string
+  name_zh: string
+  slang_zh: string | null
+  statutory_ref: string | null
+  equipment_kind: string
+  frequency_days: number | null
+  remind_before_days: number
+  required_credential: string
+  checklist: FormChecklistItem[]
+  active: boolean
+}
+
+// The register row. Named `Equipment` per the plan (the DB table is
+// equipment_register).
+export interface Equipment {
+  id: string
+  project_id: string
+  kind: string
+  ref_no: string
+  name_zh: string
+  brand_model: string | null
+  serial_no: string | null
+  location_zh: string | null
+  photo_path: string | null
+  status: EquipmentStatus
+  created_by: string
+  created_at: string
+}
+
+export interface FormInstance {
+  id: string
+  project_id: string
+  equipment_id: string | null
+  template_id: string
+  location_zh: string | null
+  assigned_signer_id: string | null
+  last_signoff_id: string | null
+  valid_until: string | null
+  suspended: boolean
+  created_by: string
+  created_at: string
+}
+
+export interface FormSignoff {
+  id: string
+  instance_id: string
+  project_id: string
+  result: FormSignoffResult
+  payload: Record<string, unknown>
+  signed_by: string
+  signed_at: string
+  valid_until: string | null
+  signature_b64: string
+  credential_id: string | null
+  credential_snapshot: Record<string, unknown> | null
+  pdf_path: string | null
+}
+
+export interface UserCredential {
+  id: string
+  user_id: string
+  credential_type: string
+  cert_name_zh: string
+  cert_no: string | null
+  issuer: string | null
+  valid_from: string | null
+  valid_until: string | null
+  doc_path: string | null
+  verified_by: string | null
+  verified_at: string | null
+  created_at: string
+}
+
+// One row in get_forms_dashboard().rows — flattened instance + template +
+// equipment for the boss dashboard. status is the server-derived bucket above.
+export interface FormsDashboardRow {
+  instance_id: string
+  equipment_id: string | null
+  template_code: string
+  template_name: string
+  equipment_name: string | null
+  location: string | null
+  status: FormStatus
+  valid_until: string | null
+  suspended: boolean
+}
+
+export interface FormsDashboardCounts {
+  valid: number
+  expiring: number
+  expired: number
+  missing: number
+  suspended: number
+}
+
+export interface FormsDashboard {
+  counts: FormsDashboardCounts
+  rows: FormsDashboardRow[]
+}
+
+// Client-side mirror of get_forms_dashboard's CASE expression so EquipmentDetail
+// can label an instance without a round-trip. Keep in lock-step with the SQL.
+export function deriveFormStatus(
+  instance: Pick<FormInstance, 'valid_until' | 'suspended'>,
+  remindBeforeDays: number,
+): FormStatus {
+  if (instance.suspended) return 'suspended'
+  if (!instance.valid_until) return 'missing'
+  const now = Date.now()
+  const until = new Date(instance.valid_until).getTime()
+  if (Number.isNaN(until)) return 'missing'
+  if (until < now) return 'expired'
+  if (until <= now + remindBeforeDays * 86400000) return 'expiring'
+  return 'valid'
+}
+
 // ── v1.2 forwards ────────────────────────────────────────────
 // Daily, Material, Event/Timetable shapes live alongside their
 // owning context files so the lane that authored them stays the

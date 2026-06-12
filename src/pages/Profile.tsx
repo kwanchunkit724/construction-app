@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { LogOut, Bell, Trash2, UserCog, Plus, Mail, ShieldCheck, ChevronRight } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
+import { CredentialsSection } from '../components/CredentialsSection'
 import { useAuth } from '../contexts/AuthContext'
 import { useStepUp } from '../contexts/StepUpContext'
 import { DelegationsProvider, useDelegations } from '../contexts/DelegationsContext'
@@ -222,6 +223,9 @@ function ProfileInner() {
 
       {/* 平安咭 (green card) ─────────────────────────────── */}
       <GreenCardSection />
+
+      {/* 合資格人士證明 (qualified-person credentials) ───────── */}
+      <CredentialsSection />
 
       {/* Delegations section ─────────────────────────────── */}
       <DelegationsSection />

@@ -37,7 +37,7 @@ import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH, deriveStatus, planned
 import type { ProgressItem, ProgressStatus, Zone } from '../types'
 import { templateFor } from '../lib/progressTemplates'
 
-type Tab = 'progress' | 'issues' | 'si-vo' | 'tools'
+type Tab = 'progress' | 'issues' | 'si-vo' | 'tools' | 'equipment'
 
 const STATUS_ICON: Record<ProgressStatus, typeof Minus> = {
   'not-started': Minus,
@@ -621,15 +621,50 @@ function SiVoSwitcher({ projectId }: { projectId: string }) {
 function ToolsSwitcher({ projectId }: { projectId: string }) {
   const navigate = useNavigate()
   const { profile } = useAuth()
+  const { projects, memberships } = useProjects()
   const { enabled: filesEnabled } = useFilesFlag()
   // 文件 card appears only when files_enabled is ON (admins bypass to pilot),
   // matching the route gate (FilesGate) — flag OFF = no new surface.
   const showFiles = filesEnabled || profile?.global_role === 'admin'
+
+  // 機械/表格 (地盤表格管理) entry. The v55 migration ships forms_enabled=false but
+  // exposes NO get_forms_enabled RPC, so there is no flag hook to mirror
+  // useFilesFlag. Per the F2 plan we gate the ENTRY on the same canManage role
+  // set the equipment_register INSERT RLS uses (admin OR assigned PM OR approved
+  // pm/main_contractor/safety_officer). Read-only members reach the surface only
+  // via a reminder deep-link; managers get the card here. (A future migration
+  // can add get_forms_enabled + a FormsFlagContext to gate this like files/ptw.)
+  const showEquipment = (() => {
+    if (!profile) return false
+    if (profile.global_role === 'admin') return true
+    const project = projects.find(p => p.id === projectId)
+    if (project?.assigned_pm_ids.includes(profile.id)) return true
+    const m = memberships.find(
+      mb => mb.user_id === profile.id && mb.project_id === projectId && mb.status === 'approved',
+    )
+    return !!m && ['pm', 'main_contractor', 'safety_officer'].includes(m.role)
+  })()
+
   return (
     <div className="space-y-3">
       <p className="text-sm text-site-600 px-1">
         工地工具：選擇要使用的功能
       </p>
+      {showEquipment && (
+        <button
+          onClick={() => navigate(`/project/${projectId}/equipment`)}
+          className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
+        >
+          <div className="w-11 h-11 rounded-xl bg-red-50 text-red-700 flex items-center justify-center flex-shrink-0">
+            <Wrench size={22} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-site-900">機械 / 表格</p>
+            <p className="text-xs text-site-500 mt-0.5">棚架 · 吊機 · 吊船法定週期檢查 · 手機簽署</p>
+          </div>
+          <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
+        </button>
+      )}
       {showFiles && (
         <button
           onClick={() => navigate(`/project/${projectId}/files`)}

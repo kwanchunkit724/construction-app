@@ -1,10 +1,12 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { Home, Building2, User, Shield, ShieldCheck, HardHat, LogOut, LayoutDashboard, Users, FileText, Receipt, BookOpen, Package, CalendarDays, Contact as ContactIcon, GraduationCap, FolderOpen } from 'lucide-react'
+import { Home, Building2, User, Shield, ShieldCheck, HardHat, LogOut, LayoutDashboard, Users, FileText, Receipt, BookOpen, Package, CalendarDays, Contact as ContactIcon, GraduationCap, FolderOpen, Wrench } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { usePtwFlag } from '../contexts/PtwFlagContext'
 import { useFilesFlag } from '../contexts/FilesFlagContext'
 import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
+
+const FORMS_MANAGE_ROLES = ['pm', 'main_contractor', 'safety_officer']
 
 /**
  * Desktop-only sidebar nav. Hidden below md (768px).
@@ -12,7 +14,7 @@ import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
  */
 export function Sidebar() {
   const { profile, signOut } = useAuth()
-  const { projects } = useProjects()
+  const { projects, memberships } = useProjects()
   const { enabled: ptwEnabled } = usePtwFlag()
   const { enabled: filesEnabled } = useFilesFlag()
   const location = useLocation()
@@ -29,6 +31,17 @@ export function Sidebar() {
   const projectMatch = location.pathname.match(/^\/project\/([^/]+)/)
   const projectId = projectMatch?.[1] ?? null
 
+  // 機械/表格 entry: manager-gated (no forms_enabled flag RPC in v55 — see
+  // EquipmentList route note). admin OR assigned PM OR approved
+  // pm/main_contractor/safety_officer member of THIS project.
+  const showEquipment = !!profile && !!projectId && (
+    isAdmin
+    || projects.some(p => p.id === projectId && p.assigned_pm_ids.includes(profile.id))
+    || memberships.some(m =>
+      m.user_id === profile.id && m.project_id === projectId
+      && m.status === 'approved' && FORMS_MANAGE_ROLES.includes(m.role))
+  )
+
   const tabs = [
     { to: '/home', label: '首頁', icon: Home },
     ...(showDashboard ? [{ to: '/dashboard', label: '儀表板', icon: LayoutDashboard }] : []),
@@ -37,6 +50,7 @@ export function Sidebar() {
       { to: `/project/${projectId}/si`, label: '工地指令', icon: FileText },
       { to: `/project/${projectId}/vo`, label: '變更指令', icon: Receipt },
       ...(showPtw ? [{ to: `/project/${projectId}/ptw`, label: '工作許可證', icon: HardHat }] : []),
+      ...(showEquipment ? [{ to: `/project/${projectId}/equipment`, label: '機械/表格', icon: Wrench }] : []),
       { to: `/project/${projectId}/daily`, label: '每日日誌', icon: BookOpen },
       { to: `/project/${projectId}/materials`, label: '物料', icon: Package },
       { to: `/project/${projectId}/timetable`, label: '行事曆', icon: CalendarDays },

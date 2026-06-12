@@ -49,6 +49,14 @@ const MaterialListPage = lazy(() => import('./pages/MaterialList'))
 const TimetablePage = lazy(() => import('./pages/TimetablePage'))
 const ContactListPage = lazy(() => import('./pages/ContactList'))
 
+// 地盤表格管理 (statutory site forms + mobile e-signing, v55) — lazy + entry-
+// gated. The migration ships forms_enabled=false; v55 ships no get_forms_enabled
+// RPC, so (per the F2 plan) the surface is gated on canManage at the tab level
+// rather than a dedicated route gate. The pages themselves load (RLS still
+// enforces every read/write), so deep links work for credentialed signers.
+const EquipmentListPage = lazy(() => import('./pages/EquipmentList'))
+const EquipmentDetailPage = lazy(() => import('./pages/EquipmentDetail'))
+
 // 教學 (tutorial) catalogue — lazy so the 80KB tutorial dataset stays out of
 // the entry chunk; only loaded when a user opens the help page.
 const HelpPage = lazy(() => import('./pages/Help'))
@@ -120,6 +128,9 @@ export default function App() {
           <Route path="/project/:id/materials" element={<ProtectedRoute>{lazyRoute(<MaterialListPage />)}</ProtectedRoute>} />
           <Route path="/project/:id/timetable" element={<ProtectedRoute>{lazyRoute(<TimetablePage />)}</ProtectedRoute>} />
           <Route path="/project/:id/contacts" element={<ProtectedRoute>{lazyRoute(<ContactListPage />)}</ProtectedRoute>} />
+          {/* 地盤表格管理 — register + per-equipment forms / mobile e-signing. */}
+          <Route path="/project/:id/equipment" element={<ProtectedRoute>{lazyRoute(<EquipmentListPage />)}</ProtectedRoute>} />
+          <Route path="/project/:id/equipment/:equipmentId" element={<ProtectedRoute>{lazyRoute(<EquipmentDetailPage />)}</ProtectedRoute>} />
           {/* Public sales surfaces — WEB-ONLY, never in the native app. */}
           {!isNativeApp && (
             <>

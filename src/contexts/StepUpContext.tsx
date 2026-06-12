@@ -28,6 +28,7 @@ export type StepUpActionClass =
   | 'document'
   | 'progress_delete'
   | 'account_delete'
+  | 'form_signoff'
 
 // Friendly zh-HK labels surfaced in the modal so the user knows WHY they are
 // being asked to confirm. Falls back to a generic line for any future class.
@@ -37,6 +38,7 @@ const ACTION_CLASS_ZH: Record<StepUpActionClass, string> = {
   document: '文件審閱 / 撤回',
   progress_delete: '刪除進度項目',
   account_delete: '刪除帳戶',
+  form_signoff: '法定表格簽署',
 }
 
 interface StepUpContextType {

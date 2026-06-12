@@ -886,3 +886,104 @@ export async function exportVOToPDF(
   const blob = doc.output('blob') as Blob
   await downloadBlob(blob, `${safeName(project.name)}_${vo.number}_${dateStr()}.pdf`)
 }
+
+// ── 地盤表格 approved-form PDF replica (v55) ───────────────────
+// §5 step 7 (paper bridge): after a successful record_form_signoff, generate the
+// statutory approved-form replica embedding the rendered checklist + the drawn
+// signature, so the qualified person can print and post it on the scaffold /
+// machine as the displayed copy. Returns the Blob so the caller can BOTH share
+// it AND upload it to storage to populate form_signoffs.pdf_path.
+//
+// WHERE pdf_path WOULD BE WIRED: the v55 schema reserves form_signoffs.pdf_path
+// but ships no storage bucket + no setter RPC (form_signoffs INSERT is RPC-only
+// via record_form_signoff, which does not yet accept a pdf_path; an UPDATE is
+// blocked by the append-only posture). So a future migration must add a
+// `form-pdfs` bucket + a `set_form_signoff_pdf(p_signoff_id, p_path)` definer
+// RPC; the client would then `supabase.storage.from('form-pdfs').upload(path,
+// blob)` and call that RPC. Until then we generate + share/download the replica
+// (fully functional for the print-and-post statutory flow) and leave pdf_path
+// null. See EquipmentContext.signOff caller.
+
+export interface FormPdfInput {
+  projectName: string
+  templateName: string
+  templateCode: string
+  statutoryRef: string | null
+  equipmentName: string
+  equipmentRef: string
+  location: string | null
+  resultZh: string
+  // The rendered checklist: each row's label + the signer's tick (true/false/null)
+  // + optional remark, read out of the signoff payload.
+  checklist: Array<{ label_zh: string; value: boolean | null; remark?: string }>
+  signerName: string
+  signedAt: string
+  validUntil: string | null
+  certNo: string | null
+  // Pure base64 PNG (no data: prefix) from PtwSignaturePad.
+  signatureB64: string
+}
+
+export async function generateFormSignoffPdf(input: FormPdfInput): Promise<Blob> {
+  const jspdfMod = await import('jspdf')
+  const jsPDFCtor = (jspdfMod as any).default
+  const doc: any = new jsPDFCtor({ unit: 'pt', format: 'a4' })
+  await ensureChineseFont(doc)
+
+  // Header
+  doc.setFontSize(16)
+  doc.text(input.templateName, 40, 50)
+  doc.setFontSize(10)
+  let y = 74
+  const line = (label: string, val: string) => { doc.text(`${label}：${val}`, 40, y); y += 16 }
+  line('表格編號', input.templateCode)
+  if (input.statutoryRef) line('法定依據', input.statutoryRef)
+  line('項目', input.projectName)
+  line('機械 / 結構', `${input.equipmentRef} ${input.equipmentName}`)
+  if (input.location) line('位置', input.location)
+  line('檢查結果', input.resultZh)
+
+  // Checklist
+  y += 8
+  doc.setFontSize(12)
+  doc.text('檢查項目', 40, y); y += 18
+  doc.setFontSize(10)
+  for (const row of input.checklist) {
+    const mark = row.value === true ? '[合格]' : row.value === false ? '[不合格]' : '[—]'
+    doc.text(`${mark}  ${row.label_zh}`, 48, y, { maxWidth: 500 })
+    y += 16
+    if (row.remark) { doc.text(`        備註：${row.remark}`, 48, y, { maxWidth: 500 }); y += 16 }
+    if (y > 720) { doc.addPage(); y = 50 }
+  }
+
+  // Signature block
+  y += 12
+  if (y > 680) { doc.addPage(); y = 50 }
+  doc.setFontSize(12)
+  doc.text('簽署', 40, y); y += 8
+  try {
+    doc.addImage(`data:image/png;base64,${input.signatureB64}`, 'PNG', 40, y, 180, 70)
+  } catch {
+    // A malformed signature shouldn't kill the PDF — leave the box empty.
+  }
+  doc.setFontSize(10)
+  doc.text(`合資格人士：${input.signerName}`, 240, y + 24)
+  if (input.certNo) doc.text(`證書編號：${input.certNo}`, 240, y + 40)
+  doc.text(`簽署時間：${new Date(input.signedAt).toLocaleString('zh-HK')}`, 240, y + 56)
+  if (input.validUntil) {
+    doc.text(`有效至：${new Date(input.validUntil).toLocaleString('zh-HK')}`, 240, y + 72)
+  }
+
+  // Footer
+  doc.setFontSize(8)
+  doc.text(`產生時間：${new Date().toLocaleString('zh-HK')} — 由 CK工程系統產生`, 40, 820)
+
+  return doc.output('blob') as Blob
+}
+
+// Convenience wrapper: generate + share/download (print-and-post flow).
+export async function shareFormSignoffPdf(input: FormPdfInput): Promise<void> {
+  const blob = await generateFormSignoffPdf(input)
+  const filename = `${safeName(input.projectName)}_${input.templateCode}_${safeName(input.equipmentName)}_${dateStr()}.pdf`
+  await shareOrDownloadBlob(blob, filename, `${input.templateName} — ${input.equipmentName}`)
+}
