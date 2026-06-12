@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Plus, PenLine, ShieldAlert, X, Check } from 'lucide-react'
+import { ChevronLeft, Plus, PenLine, ShieldAlert, X, Check, QrCode } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { Modal } from '../components/Modal'
 import { PtwSignaturePad } from '../components/ptw/PtwSignaturePad'
+import { EquipmentQrCard } from '../components/equipment/EquipmentQrCard'
+import { EquipmentQrPrintSheet, type QrPrintCard } from '../components/equipment/EquipmentQrPrintSheet'
+import { mintEquipmentQrToken } from '../lib/equipment-jwt'
 import { EquipmentProvider, useEquipment } from '../contexts/EquipmentContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
@@ -48,6 +51,20 @@ function EquipmentDetailInner() {
   const [signing, setSigning] = useState<FormInstance | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
 
+  // Equipment QR (managers only). Minted on demand via mint_equipment_jwt.
+  const [showQr, setShowQr] = useState(false)
+  const [qrToken, setQrToken] = useState<string | null>(null)
+  const [qrError, setQrError] = useState<string | null>(null)
+  const [showPrint, setShowPrint] = useState(false)
+
+  useEffect(() => {
+    if (!showQr || !equipmentId || qrToken !== null || qrError) return
+    mintEquipmentQrToken(equipmentId).then(({ token, error }) => {
+      if (error) setQrError(error)
+      else setQrToken(token)
+    })
+  }, [showQr, equipmentId, qrToken, qrError])
+
   if (!projectId || !equipmentId) return null
 
   if (loading) {
@@ -82,19 +99,45 @@ function EquipmentDetailInner() {
 
       {/* Equipment header */}
       <div className="card p-4 mb-4">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-xs text-site-500">{eq.ref_no}</span>
-          <span className="text-[10px] bg-site-100 text-site-600 px-1.5 py-0.5 rounded-full">
-            {EQUIPMENT_KIND_ZH[eq.kind as EquipmentKind] ?? eq.kind}
-          </span>
-        </div>
-        <h2 className="text-lg font-bold text-site-900 mt-1">{eq.name_zh}</h2>
-        <div className="text-[11px] text-site-500 mt-1 space-y-0.5">
-          {eq.location_zh && <p>位置：{eq.location_zh}</p>}
-          {eq.brand_model && <p>型號：{eq.brand_model}</p>}
-          {eq.serial_no && <p>機身編號：{eq.serial_no}</p>}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs text-site-500">{eq.ref_no}</span>
+              <span className="text-[10px] bg-site-100 text-site-600 px-1.5 py-0.5 rounded-full">
+                {EQUIPMENT_KIND_ZH[eq.kind as EquipmentKind] ?? eq.kind}
+              </span>
+            </div>
+            <h2 className="text-lg font-bold text-site-900 mt-1">{eq.name_zh}</h2>
+            <div className="text-[11px] text-site-500 mt-1 space-y-0.5">
+              {eq.location_zh && <p>位置：{eq.location_zh}</p>}
+              {eq.brand_model && <p>型號：{eq.brand_model}</p>}
+              {eq.serial_no && <p>機身編號：{eq.serial_no}</p>}
+            </div>
+          </div>
+          {canManage && (
+            <button
+              type="button"
+              className="btn-ghost text-sm flex-shrink-0"
+              onClick={() => setShowQr(v => !v)}
+            >
+              <QrCode size={14} className="inline mr-1" /> QR
+            </button>
+          )}
         </div>
       </div>
+
+      {/* QR card (managers, on demand) */}
+      {canManage && showQr && (
+        <div className="mb-4">
+          <EquipmentQrCard
+            token={qrToken}
+            error={qrError}
+            refNo={eq.ref_no}
+            nameZh={eq.name_zh}
+            onPrint={() => setShowPrint(true)}
+          />
+        </div>
+      )}
 
       {/* Form instances */}
       <div className="flex items-center justify-between mb-2">
@@ -201,6 +244,14 @@ function EquipmentDetailInner() {
           templates={availableTemplates}
           onAdd={addInstance}
           onClose={() => setShowAddForm(false)}
+        />
+      )}
+
+      {showPrint && (
+        <EquipmentQrPrintSheet
+          title={`列印 QR — ${eq.ref_no}`}
+          cards={[{ equipmentId: eq.id, refNo: eq.ref_no, nameZh: eq.name_zh, token: qrToken, error: qrError } as QrPrintCard]}
+          onClose={() => setShowPrint(false)}
         />
       )}
     </AppLayout>

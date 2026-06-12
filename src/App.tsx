@@ -56,6 +56,10 @@ const ContactListPage = lazy(() => import('./pages/ContactList'))
 // enforces every read/write), so deep links work for credentialed signers.
 const EquipmentListPage = lazy(() => import('./pages/EquipmentList'))
 const EquipmentDetailPage = lazy(() => import('./pages/EquipmentDetail'))
+// Equipment QR scan/verify (F3). Mirrors /verify/:token but forms has no flag
+// gate (v55 ships no get_forms_enabled RPC) — just ProtectedRoute + RLS. The
+// phone camera opens #/equipment-verify/<token> which deep-links here.
+const EquipmentVerifyPage = lazy(() => import('./pages/EquipmentVerify'))
 
 // 教學 (tutorial) catalogue — lazy so the 80KB tutorial dataset stays out of
 // the entry chunk; only loaded when a user opens the help page.
@@ -131,6 +135,8 @@ export default function App() {
           {/* 地盤表格管理 — register + per-equipment forms / mobile e-signing. */}
           <Route path="/project/:id/equipment" element={<ProtectedRoute>{lazyRoute(<EquipmentListPage />)}</ProtectedRoute>} />
           <Route path="/project/:id/equipment/:equipmentId" element={<ProtectedRoute>{lazyRoute(<EquipmentDetailPage />)}</ProtectedRoute>} />
+          {/* Equipment QR verify — login-gated only (no forms flag gate). */}
+          <Route path="/equipment-verify/:token" element={<ProtectedRoute>{lazyRoute(<EquipmentVerifyPage />)}</ProtectedRoute>} />
           {/* Public sales surfaces — WEB-ONLY, never in the native app. */}
           {!isNativeApp && (
             <>

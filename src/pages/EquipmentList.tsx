@@ -1,9 +1,11 @@
 import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Plus, Wrench, ChevronRight, X } from 'lucide-react'
+import { Plus, Wrench, ChevronRight, X, QrCode } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { EquipmentProvider, useEquipment } from '../contexts/EquipmentContext'
+import { EquipmentQrPrintSheet, type QrPrintCard } from '../components/equipment/EquipmentQrPrintSheet'
+import { mintEquipmentQrToken } from '../lib/equipment-jwt'
 import { VerifyCredentialsPanel } from '../components/VerifyCredentialsPanel'
 import {
   EQUIPMENT_KIND_ZH, FORM_STATUS_ZH, FORM_STATUS_BADGE_CLASS, deriveFormStatus,
@@ -36,6 +38,28 @@ function EquipmentListInner() {
     equipment, instances, templateById, dashboard, loading, fetchError, canManage,
   } = useEquipment()
   const [showAdd, setShowAdd] = useState(false)
+
+  // 列印全部 QR (managers): mint a token per equipment, then open the print
+  // sheet. Cards start token=null and stream in as each mint resolves so the
+  // sheet can show its own spinner until ready.
+  const [printCards, setPrintCards] = useState<QrPrintCard[] | null>(null)
+  const [minting, setMinting] = useState(false)
+
+  async function printAllQr() {
+    if (minting || equipment.length === 0) return
+    setMinting(true)
+    setPrintCards(equipment.map(eq => ({
+      equipmentId: eq.id, refNo: eq.ref_no, nameZh: eq.name_zh, token: null, error: null,
+    })))
+    const minted = await Promise.all(
+      equipment.map(async eq => {
+        const { token, error } = await mintEquipmentQrToken(eq.id)
+        return { equipmentId: eq.id, refNo: eq.ref_no, nameZh: eq.name_zh, token, error } as QrPrintCard
+      }),
+    )
+    setPrintCards(minted)
+    setMinting(false)
+  }
 
   // Instances grouped by equipment for the per-card status chips.
   const instancesByEquipment = useMemo(() => {
@@ -73,13 +97,28 @@ function EquipmentListInner() {
         {/* Managers: verify members' uploaded credentials. Hidden when none. */}
         {canManage && <VerifyCredentialsPanel />}
 
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <h2 className="text-base font-semibold text-site-900">機械登記冊</h2>
           {canManage && (
-            <button type="button" className="btn-primary" onClick={() => setShowAdd(true)}>
-              <Plus size={16} className="inline mr-1" />
-              新增機械
-            </button>
+            <div className="flex items-center gap-2">
+              {equipment.length > 0 && (
+                <button
+                  type="button"
+                  className="btn-ghost text-sm"
+                  disabled={minting}
+                  onClick={printAllQr}
+                >
+                  {minting
+                    ? <Spinner size={14} className="inline mr-1" />
+                    : <QrCode size={14} className="inline mr-1" />}
+                  列印全部 QR
+                </button>
+              )}
+              <button type="button" className="btn-primary" onClick={() => setShowAdd(true)}>
+                <Plus size={16} className="inline mr-1" />
+                新增機械
+              </button>
+            </div>
           )}
         </div>
 
@@ -151,6 +190,14 @@ function EquipmentListInner() {
 
       {showAdd && (
         <AddEquipmentModal onClose={() => setShowAdd(false)} />
+      )}
+
+      {printCards && (
+        <EquipmentQrPrintSheet
+          title="列印全部機械 QR"
+          cards={printCards}
+          onClose={() => setPrintCards(null)}
+        />
       )}
     </AppLayout>
   )
