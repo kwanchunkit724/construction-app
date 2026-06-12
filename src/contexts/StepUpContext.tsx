@@ -75,6 +75,17 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
   }
 
   async function requireStepUp(actionClass: StepUpActionClass): Promise<boolean> {
+    // (a0) Rollout gate (v54): while server enforcement is OFF, assert_step_up is
+    // a no-op — so demanding a code would be pointless friction. Skip the whole
+    // flow when the flag reads false. On true / read-error we fall through and
+    // prompt (fail-closed), so flipping the flag on takes effect immediately.
+    try {
+      const { data: enforced } = await supabase.rpc('get_step_up_enforced')
+      if (enforced === false) return true
+    } catch {
+      // fall through — prompt rather than silently skip
+    }
+
     // (a) Warm grant? step_up_remaining returns seconds left on the freshest
     // grant for this class (0 = none). Multi-use within TTL → zero friction.
     try {
