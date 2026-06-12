@@ -6,6 +6,7 @@ import { Spinner } from '../components/Spinner'
 import { ChainStepRow } from '../components/admin/ChainStepRow'
 import { ApprovalChainProvider, useApprovalChain } from '../contexts/ApprovalChainContext'
 import type { DocType } from '../contexts/ApprovalChainContext'
+import { useStepUp } from '../contexts/StepUpContext'
 import { supabase } from '../lib/supabase'
 import type { ChainStep, UserProfile, GlobalRole } from '../types'
 
@@ -45,6 +46,7 @@ export default function AdminProjectChainsPage() {
 function AdminProjectChainsInner({ projectId }: { projectId: string }) {
   const navigate = useNavigate()
   const { stepsByDocType, loading, canEdit, projectName, saveChain } = useApprovalChain()
+  const { requireStepUp } = useStepUp()
   const [activeTab, setActiveTab] = useState<DocType>('si')
   const [workingSteps, setWorkingSteps] = useState<ChainStep[]>([])
   const [members, setMembers] = useState<UserProfile[]>([])
@@ -128,6 +130,7 @@ function AdminProjectChainsInner({ projectId }: { projectId: string }) {
       setToast({ kind: 'err', msg: '至少要有一個簽核步驟' })
       return
     }
+    if (!(await requireStepUp('approval'))) return
     setSaving(true)
     setToast(null)
     const { error } = await saveChain(activeTab, workingSteps)

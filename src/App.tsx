@@ -2,6 +2,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { lazy, Suspense } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { AuthProvider } from './contexts/AuthContext'
+import { StepUpProvider } from './contexts/StepUpContext'
 import { ProjectsProvider } from './contexts/ProjectsContext'
 import { PtwFlagProvider } from './contexts/PtwFlagContext'
 import { FilesFlagProvider } from './contexts/FilesFlagContext'
@@ -52,6 +53,10 @@ const ContactListPage = lazy(() => import('./pages/ContactList'))
 // the entry chunk; only loaded when a user opens the help page.
 const HelpPage = lazy(() => import('./pages/Help'))
 
+// 二步驗證 (TOTP step-up) enrolment — lazy so the QR/MFA enrolment code only
+// loads when a user opens /security-setup.
+const SecuritySetupPage = lazy(() => import('./pages/SecuritySetup'))
+
 // Mission control panel — public-read sales dashboard at /#/mission.
 // Lazy so the entry chunk isn't bloated for users who never open it.
 const MissionPage = lazy(() => import('./pages/Mission'))
@@ -79,6 +84,7 @@ const isNativeApp = Capacitor.isNativePlatform()
 export default function App() {
   return (
     <AuthProvider>
+      <StepUpProvider>
       <ProjectsProvider>
         <PtwFlagProvider>
         <FilesFlagProvider>
@@ -90,6 +96,7 @@ export default function App() {
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/security-setup" element={<ProtectedRoute>{lazyRoute(<SecuritySetupPage />)}</ProtectedRoute>} />
           <Route path="/help" element={<ProtectedRoute>{lazyRoute(<HelpPage />)}</ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminProjects /></ProtectedRoute>} />
           <Route path="/admin/users" element={<ProtectedRoute requireAdmin><AdminUsers /></ProtectedRoute>} />
@@ -127,6 +134,7 @@ export default function App() {
         </FilesFlagProvider>
         </PtwFlagProvider>
       </ProjectsProvider>
+      </StepUpProvider>
     </AuthProvider>
   )
 }

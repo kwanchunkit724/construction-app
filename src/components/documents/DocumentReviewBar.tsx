@@ -9,6 +9,7 @@
 import { useState } from 'react'
 import { Check, X } from 'lucide-react'
 import { useDocuments } from '../../contexts/DocumentsContext'
+import { useStepUp } from '../../contexts/StepUpContext'
 import { Spinner } from '../Spinner'
 import type { DocumentVersion } from '../../types'
 
@@ -20,6 +21,7 @@ export interface DocumentReviewBarProps {
 
 export function DocumentReviewBar({ version, compact }: DocumentReviewBarProps) {
   const { canReview, reviewVersion } = useDocuments()
+  const { requireStepUp } = useStepUp()
   const [rejectOpen, setRejectOpen] = useState(false)
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
@@ -29,6 +31,7 @@ export function DocumentReviewBar({ version, compact }: DocumentReviewBarProps) 
   if (!canReview || version.status !== 'submitted') return null
 
   async function approve() {
+    if (!(await requireStepUp('document'))) return
     setBusy(true)
     setError(null)
     const { error } = await reviewVersion(version.id, 'approve')
@@ -41,6 +44,7 @@ export function DocumentReviewBar({ version, compact }: DocumentReviewBarProps) 
       setError('拒絕文件必須填寫原因')
       return
     }
+    if (!(await requireStepUp('document'))) return
     setBusy(true)
     setError(null)
     const { error } = await reviewVersion(version.id, 'reject', note.trim())

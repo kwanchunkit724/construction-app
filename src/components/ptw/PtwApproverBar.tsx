@@ -5,6 +5,7 @@ import { PtwSignaturePad } from './PtwSignaturePad'
 import { usePtw } from '../../contexts/PtwContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { useProjects } from '../../contexts/ProjectsContext'
+import { useStepUp } from '../../contexts/StepUpContext'
 import { useIsOnline } from '../../hooks/useIsOnline'
 import { OfflineBanner } from '../OfflineBanner'
 import { supabase } from '../../lib/supabase'
@@ -21,6 +22,7 @@ export function PtwApproverBar({ ptw, onAction }: Props) {
   const { profile } = useAuth()
   const { projects, memberships } = useProjects()
   const { approve, requestRevision, reject, adminOverride } = usePtw()
+  const { requireStepUp } = useStepUp()
   const online = useIsOnline()
   const [activeAction, setActiveAction] = useState<Action>(null)
   const [reason, setReason] = useState('')
@@ -99,6 +101,7 @@ export function PtwApproverBar({ ptw, onAction }: Props) {
   if (!canAct && !isAdmin) return null
 
   async function handleSign(b64: string) {
+    if (!(await requireStepUp('approval'))) return
     setSubmitting(true)
     setError(null)
     try {
@@ -123,6 +126,7 @@ export function PtwApproverBar({ ptw, onAction }: Props) {
       setError('需要至少 10 個字元嘅原因')
       return
     }
+    if (!(await requireStepUp('approval'))) return
     setSubmitting(true)
     setError(null)
     try {

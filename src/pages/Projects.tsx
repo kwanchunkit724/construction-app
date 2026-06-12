@@ -6,6 +6,7 @@ import { Modal } from '../components/Modal'
 import { ApplyToProjectModal } from '../components/ApplyToProjectModal'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
+import { useStepUp } from '../contexts/StepUpContext'
 import { ROLE_ZH } from '../types'
 import type { Project, ProjectMember } from '../types'
 import { supabase } from '../lib/supabase'
@@ -287,6 +288,7 @@ function PendingApprovalCard({
   onApprove: () => Promise<{ error: string | null }>
   onReject: () => Promise<{ error: string | null }>
 }) {
+  const { requireStepUp } = useStepUp()
   const [busy, setBusy] = useState(false)
 
   if (!project) return null
@@ -330,14 +332,14 @@ function PendingApprovalCard({
       )}
       <div className="flex gap-2 mt-3 pt-3 border-t border-site-100">
         <button
-          onClick={async () => { setBusy(true); await onReject(); setBusy(false) }}
+          onClick={async () => { if (!(await requireStepUp('membership'))) return; setBusy(true); await onReject(); setBusy(false) }}
           disabled={busy}
           className="flex-1 text-sm font-semibold border border-site-200 text-site-600 hover:bg-site-50 py-2 rounded-lg disabled:opacity-50"
         >
           拒絕
         </button>
         <button
-          onClick={async () => { setBusy(true); await onApprove(); setBusy(false) }}
+          onClick={async () => { if (!(await requireStepUp('membership'))) return; setBusy(true); await onApprove(); setBusy(false) }}
           disabled={busy || !applicant}
           className="flex-1 text-sm font-semibold bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg disabled:opacity-50"
         >
@@ -355,6 +357,7 @@ function DesignateSafetyOfficerCard({
   membership: ProjectMember
   onDone: () => Promise<void>
 }) {
+  const { requireStepUp } = useStepUp()
   const [name, setName] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -372,6 +375,7 @@ function DesignateSafetyOfficerCard({
   if (!project) return null
 
   async function handleAssign() {
+    if (!(await requireStepUp('approval'))) return
     setBusy(true)
     setError(null)
     const { error: rpcErr } = await supabase.rpc('pm_assign_safety_officer', {

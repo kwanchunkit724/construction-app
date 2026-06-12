@@ -24,6 +24,7 @@ import { Sidebar } from '../components/Sidebar'
 import { BottomNav } from '../components/BottomNav'
 import { Spinner, FullPageSpinner } from '../components/Spinner'
 import { useAuth } from '../contexts/AuthContext'
+import { useStepUp } from '../contexts/StepUpContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { useProgress, ProgressProvider } from '../contexts/ProgressContext'
 import { DocumentsProvider, useDocuments } from '../contexts/DocumentsContext'
@@ -616,6 +617,7 @@ function DocumentDetailSheet({
   onClearDeepLink: () => void
 }) {
   const { profile } = useAuth()
+  const { requireStepUp } = useStepUp()
   const {
     uploaderNameById,
     canUpload,
@@ -705,6 +707,7 @@ function DocumentDetailSheet({
 
   async function onWithdraw(v: DocumentVersion) {
     if (!window.confirm('確定撤回此版本?')) return
+    if (!(await requireStepUp('document'))) return
     setBusy(true)
     const { error } = await withdrawVersion(v.id)
     setBusy(false)

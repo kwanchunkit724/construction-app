@@ -3,6 +3,7 @@ import { Check, Edit3, CornerUpLeft, X, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useProjects } from '../../contexts/ProjectsContext'
 import { useVo } from '../../contexts/VoContext'
+import { useStepUp } from '../../contexts/StepUpContext'
 import { supabase } from '../../lib/supabase'
 import { Spinner } from '../Spinner'
 import { VoLineItemsEditor, validateLineItems } from './VoLineItemsEditor'
@@ -31,6 +32,7 @@ export function VoApproverBar({ vo, latestVersion, progressItems }: VoApproverBa
   const { profile } = useAuth()
   const { projects, memberships } = useProjects()
   const { approve, requestRevision, reject, adminOverride } = useVo()
+  const { requireStepUp } = useStepUp()
 
   const requiredRole = vo.chain_snapshot?.[vo.current_step]?.required_role
   const optionalUser = vo.chain_snapshot?.[vo.current_step]?.optional_user_id ?? null
@@ -123,6 +125,7 @@ export function VoApproverBar({ vo, latestVersion, progressItems }: VoApproverBa
   }
 
   async function runAction(fn: () => Promise<{ error: string | null }>) {
+    if (!(await requireStepUp('approval'))) return
     setBusy(true)
     setError(null)
     try {

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { LogOut, Bell, Trash2, UserCog, Plus, Mail, ShieldCheck } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { LogOut, Bell, Trash2, UserCog, Plus, Mail, ShieldCheck, ChevronRight } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { useAuth } from '../contexts/AuthContext'
+import { useStepUp } from '../contexts/StepUpContext'
 import { DelegationsProvider, useDelegations } from '../contexts/DelegationsContext'
 import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
 import type { UserProfile } from '../types'
@@ -27,6 +29,7 @@ export default function Profile() {
 
 function ProfileInner() {
   const { profile, signOut, refreshProfile } = useAuth()
+  const { requireStepUp } = useStepUp()
   const [pushBusy, setPushBusy] = useState(false)
   const [pushMsg, setPushMsg] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -38,6 +41,7 @@ function ProfileInner() {
   if (!profile) return null
 
   async function deleteAccount() {
+    if (!(await requireStepUp('account_delete'))) return
     setDeleteBusy(true)
     setDeleteError('')
     setDeleteBlocked(null)
@@ -200,6 +204,21 @@ function ProfileInner() {
         <Row label="公司" value={profile.company || '—'} />
         <Row label="加入時間" value={new Date(profile.created_at).toLocaleDateString('zh-HK')} />
       </div>
+
+      {/* 二步驗證 (step-up 2FA) ─────────────────────────────── */}
+      <Link
+        to="/security-setup"
+        className="card mt-3 p-4 flex items-center gap-3 hover:bg-site-50"
+      >
+        <div className="w-9 h-9 rounded-full bg-safety-50 text-safety-500 flex items-center justify-center shrink-0">
+          <ShieldCheck size={18} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-site-900">二步驗證</p>
+          <p className="text-xs text-site-500">保護簽核 / 審批等高風險操作，即使密碼外洩亦安全。</p>
+        </div>
+        <ChevronRight size={18} className="text-site-400 shrink-0" />
+      </Link>
 
       {/* 平安咭 (green card) ─────────────────────────────── */}
       <GreenCardSection />

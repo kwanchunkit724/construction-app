@@ -3,6 +3,7 @@ import { Check, Edit3, CornerUpLeft, X, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useProjects } from '../../contexts/ProjectsContext'
 import { useSi } from '../../contexts/SiContext'
+import { useStepUp } from '../../contexts/StepUpContext'
 import { supabase } from '../../lib/supabase'
 import { Spinner } from '../Spinner'
 import type { SI, SIVersion, SiPayload } from '../../types'
@@ -29,6 +30,7 @@ export function SiApproverBar({ si, latestVersion }: SiApproverBarProps) {
   const { profile } = useAuth()
   const { projects, memberships } = useProjects()
   const { approve, requestRevision, reject, adminOverride } = useSi()
+  const { requireStepUp } = useStepUp()
 
   const requiredRole = si.chain_snapshot?.[si.current_step]?.required_role
   const optionalUser = si.chain_snapshot?.[si.current_step]?.optional_user_id ?? null
@@ -131,6 +133,7 @@ export function SiApproverBar({ si, latestVersion }: SiApproverBarProps) {
   }
 
   async function runAction(fn: () => Promise<{ error: string | null }>) {
+    if (!(await requireStepUp('approval'))) return
     setBusy(true)
     setError(null)
     try {

@@ -30,6 +30,7 @@ import { DocumentsProvider } from '../contexts/DocumentsContext'
 import { MaterialsProvider } from '../contexts/MaterialsContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useStepUp } from '../contexts/StepUpContext'
 import { usePtwFlag } from '../contexts/PtwFlagContext'
 import { useFilesFlag } from '../contexts/FilesFlagContext'
 import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH, deriveStatus, plannedProgressOf } from '../types'
@@ -81,6 +82,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const { projects } = useProjects()
   const { loading, items, fetchError, canEdit, refetch, deleteItem } = useProgress()
   const { issues, myRoleInProject } = useIssues()
+  const { requireStepUp } = useStepUp()
 
   const project = projects.find(p => p.id === projectId)
 
@@ -305,7 +307,10 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
                     onAssign={setAssigning}
                     onHistory={setHistoryItem}
                     onEdit={setEditing}
-                    onDelete={item => deleteItem(item.id)}
+                    onDelete={async item => {
+                      if (!(await requireStepUp('progress_delete'))) return
+                      await deleteItem(item.id)
+                    }}
                   />
                 ))}
               </div>

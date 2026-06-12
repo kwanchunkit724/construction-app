@@ -6,6 +6,7 @@ import { Modal } from '../components/Modal'
 import { InFlightApprovalsModal } from '../components/admin/InFlightApprovalsModal'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useStepUp } from '../contexts/StepUpContext'
 import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
 import type { UserProfile, GlobalRole, SubRole } from '../types'
 
@@ -209,12 +210,14 @@ function EditRoleModal({
   onClose: () => void
   onUpdated: () => void
 }) {
+  const { requireStepUp } = useStepUp()
   const [role, setRole] = useState<GlobalRole>(user.global_role)
   const [subRole, setSubRole] = useState<SubRole>(user.sub_role)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
   async function save() {
+    if (!(await requireStepUp('membership'))) return
     setSubmitting(true)
     setError('')
     // v17: user_profiles UPDATE policy + trigger blocks direct role changes.
