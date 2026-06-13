@@ -24,6 +24,7 @@ import { IssueCard } from '../components/IssueCard'
 import { CreateIssueModal } from '../components/CreateIssueModal'
 import { ExportProgressModal } from '../components/ExportProgressModal'
 import { useAiAssistantEnabled } from '../components/assistant/useAiAssistantEnabled'
+import { WeatherBanner } from '../components/WeatherBanner'
 // Lazy so the 助理 chat panel (+ SSE client) stays out of the eager entry chunk.
 const AssistantPanel = lazy(() => import('../components/assistant/AssistantPanel').then(m => ({ default: m.AssistantPanel })))
 import { ProgressProvider, useProgress } from '../contexts/ProgressContext'
@@ -283,6 +284,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
       </div>
 
       <main className="flex-1 max-w-2xl md:max-w-7xl w-full mx-auto px-4 md:px-6 py-4 md:py-6 pb-24 md:pb-10">
+        <WeatherBanner />
         {fetchError && (
           <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-3">
             ⚠ 讀取失敗：{fetchError}
