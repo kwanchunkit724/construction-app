@@ -1,20 +1,32 @@
 import { useEffect, useRef, useState } from 'react'
-import { Bot, Send, User, Loader2 } from 'lucide-react'
+import { Bot, Send, User, Loader2, Check, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
-// 助理 (AI 站長) chat panel — Phase 1 (read-only). Streams from the
-// `ai-assistant` Edge Function over SSE (raw fetch + ReadableStream, NOT
-// supabase.functions.invoke which buffers). The function runs the tool loop
-// as the user, so answers are RLS-bounded to what they may see.
+// 助理 (AI 站長) chat panel.
+// Phase 1: read-only Q&A (streams from the ai-assistant Edge Function over SSE).
+// Phase 2: mutate tools land as a confirm card — the function PROPOSES a write
+// (proposed_action) and stops; the user taps 確認 and we round-trip back with
+// {action_id, tool_use_id, args_hash} so the function executes it as the user
+// (RLS-bounded) and streams the reply. Args are stored server-side, so the
+// confirm can only run the exact action shown on the card.
 
 const FN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-assistant`
 
-type ChatMsg = { role: 'user' | 'assistant'; text: string; tools?: string[] }
+type ChatMsg = { role: 'user' | 'assistant'; text: string }
+type ApiMsg = { role: 'user' | 'assistant'; content: any }
+type Pending = { action_id: string; tool_use_id: string; args_hash: string; summary: string; risk: string; assistant_content: any }
 
 const TOOL_ZH: Record<string, string> = {
   get_progress_tree: '查緊進度表…', get_timetable_window: '睇緊時間表…', list_materials: '查緊物料…',
   list_open_issues: '查緊問題…', search_documents: '搵緊文件…', get_document_link: '攞緊文件連結…',
   list_pending_reviews: '查緊待審批…', list_contacts: '查緊聯絡人…', get_dailies: '查緊施工日誌…',
+}
+
+const RISK_BADGE: Record<string, { cls: string; label: string }> = {
+  low: { cls: 'bg-site-100 text-site-600', label: '一般' },
+  medium: { cls: 'bg-blue-50 text-blue-700', label: '需要確認' },
+  high: { cls: 'bg-amber-100 text-amber-700', label: '需要確認' },
+  destructive: { cls: 'bg-red-50 text-red-600', label: '不可還原' },
 }
 
 export function AssistantPanel({ projectId }: { projectId: string }) {
@@ -23,60 +35,89 @@ export function AssistantPanel({ projectId }: { projectId: string }) {
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState<Pending | null>(null)
+  const api = useRef<ApiMsg[]>([])           // authoritative API history (incl. assistant tool_use turns)
   const endRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [msgs, status])
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [msgs, status, pending])
+
+  // Run one request/response stream. Returns the assistant text streamed this turn,
+  // and whether a mutate action was proposed (so the caller knows not to commit
+  // the assistant turn to api history yet).
+  async function runStream(body: object): Promise<{ text: string; proposed: boolean }> {
+    const { data: sess } = await supabase.auth.getSession()
+    const token = sess.session?.access_token
+    if (!token) throw new Error('未登入')
+    const res = await fetch(FN_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok || !res.body) {
+      const e = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+      throw new Error(e.error || `HTTP ${res.status}`)
+    }
+    let text = ''
+    let proposed = false
+    setMsgs(cur => [...cur, { role: 'assistant', text: '' }])   // fresh bubble for this turn
+    await readSse(res.body, (event, data) => {
+      if (event === 'text') {
+        text += data.delta ?? ''
+        setMsgs(cur => { const n = [...cur]; const last = n[n.length - 1]; if (last?.role === 'assistant') last.text = text; return n })
+        setStatus(null)
+      } else if (event === 'tool') {
+        setStatus(TOOL_ZH[data.name] ?? (data.status === 'executing' ? '執行緊…' : '處理緊…'))
+      } else if (event === 'proposed_action') {
+        proposed = true
+        setPending({ action_id: data.action_id, tool_use_id: data.tool_use_id, args_hash: data.args_hash, summary: data.summary, risk: data.risk, assistant_content: data.assistant_content })
+        setStatus(null)
+      } else if (event === 'action_result') {
+        if (!data.ok) setError('動作執行失敗：' + (data.result?.error ?? ''))
+      } else if (event === 'error') {
+        setError(data.message || '出錯')
+      }
+    })
+    // drop an empty trailing assistant bubble (e.g. a pure-proposal turn with no lead-in text)
+    setMsgs(cur => (cur[cur.length - 1]?.role === 'assistant' && !cur[cur.length - 1].text ? cur.slice(0, -1) : cur))
+    return { text, proposed }
+  }
 
   async function send() {
     const text = input.trim()
     if (!text || busy) return
-    setInput('')
-    setError(null)
-    const history = [...msgs, { role: 'user' as const, text }]
-    setMsgs([...history, { role: 'assistant', text: '' }])
-    setBusy(true)
-    setStatus(null)
+    setInput(''); setError(null); setPending(null)
+    setMsgs(cur => [...cur, { role: 'user', text }])
+    api.current.push({ role: 'user', content: text })
+    setBusy(true); setStatus(null)
     try {
-      const { data: sess } = await supabase.auth.getSession()
-      const token = sess.session?.access_token
-      if (!token) throw new Error('未登入')
-      const res = await fetch(FN_URL, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          project_id: projectId,
-          messages: history.map(m => ({ role: m.role, content: m.text })),
-        }),
-      })
-      if (!res.ok || !res.body) {
-        const e = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
-        throw new Error(e.error || `HTTP ${res.status}`)
-      }
-      await readSse(res.body, (event, data) => {
-        if (event === 'text') {
-          setMsgs(cur => {
-            const next = [...cur]
-            const last = next[next.length - 1]
-            if (last?.role === 'assistant') last.text += data.delta ?? ''
-            return next
-          })
-          setStatus(null)
-        } else if (event === 'tool') {
-          setStatus(TOOL_ZH[data.name] ?? '處理緊…')
-        } else if (event === 'error') {
-          setError(data.message || '出錯')
-        } else if (event === 'done') {
-          setStatus(null)
-        }
-      })
+      const { text: out, proposed } = await runStream({ project_id: projectId, messages: api.current })
+      if (!proposed && out) api.current.push({ role: 'assistant', content: out })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
-      // drop the empty assistant bubble on hard failure
       setMsgs(cur => (cur[cur.length - 1]?.role === 'assistant' && !cur[cur.length - 1].text ? cur.slice(0, -1) : cur))
-    } finally {
-      setBusy(false)
-      setStatus(null)
-    }
+    } finally { setBusy(false); setStatus(null) }
+  }
+
+  async function confirmAction() {
+    if (!pending || busy) return
+    const p = pending
+    setPending(null); setBusy(true); setError(null)
+    // replay the assistant turn that carried the tool_use, then ask the function to execute it
+    api.current.push({ role: 'assistant', content: p.assistant_content })
+    try {
+      const { text: out, proposed } = await runStream({
+        project_id: projectId, messages: api.current,
+        confirm: { action_id: p.action_id, tool_use_id: p.tool_use_id, args_hash: p.args_hash },
+      })
+      if (!proposed && out) api.current.push({ role: 'assistant', content: out })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally { setBusy(false); setStatus(null) }
+  }
+
+  function cancelAction() {
+    setPending(null)
+    setMsgs(cur => [...cur, { role: 'assistant', text: '好，唔做住。' }])
   }
 
   return (
@@ -86,8 +127,8 @@ export function AssistantPanel({ projectId }: { projectId: string }) {
           <div className="card p-6 text-center">
             <Bot size={32} className="mx-auto text-safety-500 mb-2" />
             <p className="text-sm font-semibold text-site-900">AI 站長</p>
-            <p className="text-xs text-site-500 mt-1">問我地盤嘅嘢，例如「邊啲工序落後?」「有咩料未到?」「俾我天面最新嘅圖紙」。</p>
-            <p className="text-[10px] text-site-400 mt-2">只會見到你有權睇嘅資料。Phase 1：暫時淨係讀取。</p>
+            <p className="text-xs text-site-500 mt-1">問我或者叫我做嘢，例如「邊啲工序落後?」「俾我天面最新嘅圖紙」「聽朝 9 點加個地盤巡查」「落單叫 50 包英泥」。</p>
+            <p className="text-[10px] text-site-400 mt-2">只會見到/做到你有權嘅嘢。改動會先彈確認卡。</p>
           </div>
         )}
         {msgs.map((m, i) => (
@@ -99,6 +140,19 @@ export function AssistantPanel({ projectId }: { projectId: string }) {
             {m.role === 'user' && <div className="w-7 h-7 rounded-full bg-site-200 text-site-600 flex items-center justify-center flex-shrink-0"><User size={15} /></div>}
           </div>
         ))}
+        {pending && (
+          <div className="ml-9 card p-3 border-safety-200">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-semibold text-site-700">確認動作</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full ${(RISK_BADGE[pending.risk] ?? RISK_BADGE.medium).cls}`}>{(RISK_BADGE[pending.risk] ?? RISK_BADGE.medium).label}</span>
+            </div>
+            <p className="text-sm text-site-900 mb-2.5">{pending.summary}</p>
+            <div className="flex gap-2">
+              <button className="btn-primary flex-1 py-2 text-sm" onClick={confirmAction} disabled={busy}><Check size={16} className="inline mr-1" />確認</button>
+              <button className="btn-ghost flex-1 py-2 text-sm" onClick={cancelAction} disabled={busy}><X size={16} className="inline mr-1" />取消</button>
+            </div>
+          </div>
+        )}
         {status && <div className="text-xs text-site-400 pl-9 flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" />{status}</div>}
         {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">⚠ {error}</div>}
         <div ref={endRef} />
@@ -106,13 +160,13 @@ export function AssistantPanel({ projectId }: { projectId: string }) {
       <div className="border-t border-site-200 pt-3 flex gap-2">
         <input
           className="input flex-1"
-          placeholder="問 AI 站長…"
+          placeholder={pending ? '請先確認或取消上面嘅動作' : '問 AI 站長…'}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-          disabled={busy}
+          disabled={busy || !!pending}
         />
-        <button className="btn-primary px-4" onClick={send} disabled={busy || !input.trim()} aria-label="傳送">
+        <button className="btn-primary px-4" onClick={send} disabled={busy || !!pending || !input.trim()} aria-label="傳送">
           {busy ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
         </button>
       </div>
