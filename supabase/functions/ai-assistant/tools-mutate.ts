@@ -131,8 +131,11 @@ const SPECS: Record<string, MutateSpec> = {
       if (!iss) return { data: null, error: { message: '搵唔到問題或者你冇權' } }
       const next = nextHandler((iss as any).current_handler_role)
       if (!next) return { data: null, error: { message: '已到最高層，無法再上呈' } }
-      const { error: e2 } = await s.from('issues').update({ current_handler_role: next, updated_at: new Date().toISOString() }).eq('id', a.issue_id)
+      // .select('id') so an RLS-filtered UPDATE (member can SEE but not handle) lands
+      // as 0 rows -> a real denial, not a silent false success.
+      const { data: u2, error: e2 } = await s.from('issues').update({ current_handler_role: next, updated_at: new Date().toISOString() }).eq('id', a.issue_id).select('id')
       if (e2) return { data: null, error: e2 }
+      if (!u2 || !u2.length) return { data: null, error: { message: '只有現任處理人或報告人先可以上呈呢個問題' } }
       await s.from('issue_comments').insert({ issue_id: a.issue_id, author_id: uid, action: 'escalated', body: a.comment, from_role: (iss as any).current_handler_role, to_role: next })
       return { data: { issue_id: a.issue_id, to: next }, error: null }
     },
@@ -142,8 +145,9 @@ const SPECS: Record<string, MutateSpec> = {
     def: { name: 'resolve_issue', description: '標記一個問題為已解決。需要 issue_id + 一句說明。只有現任處理人/報告人/管理員先做到。', input_schema: { type: 'object', properties: { issue_id: { type: 'string' }, comment: { type: 'string' } }, required: ['issue_id', 'comment'], additionalProperties: false } },
     summary: (a) => `✅ 解決問題：「${trunc(a.comment)}」`,
     run: async (s, _p, uid, a) => {
-      const { error: e1 } = await s.from('issues').update({ status: 'resolved', resolved_by: uid, resolved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', a.issue_id)
+      const { data: u, error: e1 } = await s.from('issues').update({ status: 'resolved', resolved_by: uid, resolved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', a.issue_id).select('id')
       if (e1) return { data: null, error: e1 }
+      if (!u || !u.length) return { data: null, error: { message: '搵唔到問題，或者你冇權處理（只限現任處理人/報告人）' } }
       await s.from('issue_comments').insert({ issue_id: a.issue_id, author_id: uid, action: 'resolved', body: a.comment })
       return { data: { issue_id: a.issue_id, status: 'resolved' }, error: null }
     },
@@ -153,8 +157,9 @@ const SPECS: Record<string, MutateSpec> = {
     def: { name: 'reopen_issue', description: '重開一個已解決嘅問題。需要 issue_id + 一句原因。', input_schema: { type: 'object', properties: { issue_id: { type: 'string' }, comment: { type: 'string' } }, required: ['issue_id', 'comment'], additionalProperties: false } },
     summary: (a) => `🔄 重開問題：「${trunc(a.comment)}」`,
     run: async (s, _p, uid, a) => {
-      const { error: e1 } = await s.from('issues').update({ status: 'open', resolved_by: null, resolved_at: null, updated_at: new Date().toISOString() }).eq('id', a.issue_id)
+      const { data: u, error: e1 } = await s.from('issues').update({ status: 'open', resolved_by: null, resolved_at: null, updated_at: new Date().toISOString() }).eq('id', a.issue_id).select('id')
       if (e1) return { data: null, error: e1 }
+      if (!u || !u.length) return { data: null, error: { message: '搵唔到問題，或者你冇權重開' } }
       await s.from('issue_comments').insert({ issue_id: a.issue_id, author_id: uid, action: 'reopened', body: a.comment })
       return { data: { issue_id: a.issue_id, status: 'open' }, error: null }
     },
