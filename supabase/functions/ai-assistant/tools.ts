@@ -70,6 +70,11 @@ export const READ_TOOLS: ToolDef[] = [
     description: '讀取最近嘅施工日誌。預設最近 7 日。',
     input_schema: { type: 'object', properties: { days: { type: 'integer' } }, additionalProperties: false },
   },
+  {
+    name: 'get_weather_outlook',
+    description: '讀取香港天文台未來 9 日天氣預測 + 現時警告 + 大致天氣情況/熱帶氣旋消息。用嚟提前提醒地盤預防（大雨→清渠/物料加蓋/停批盪；大風或颱風→綁棚架網/收起易吹落街物件/固定塔吊；酷熱→防中暑調工時）。',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
 ]
 
 // All read tools are exposed to every role in Phase 1 (RLS does the narrowing).
@@ -164,6 +169,27 @@ export async function executeReadTool(supa: Supa, projectId: string, name: strin
         .select('id, date, weather, notes, freeform_items, progress_item_ids, user_id')
         .eq('project_id', projectId).gte('date', since).order('date', { ascending: false }).limit(CAP)
       return error ? { error: error.message } : data
+    }
+    case 'get_weather_outlook': {
+      const base = 'https://data.weather.gov.hk/weatherAPI/opendata/weather.php'
+      const [fnd, flw, ws] = await Promise.all([
+        fetch(`${base}?dataType=fnd&lang=tc`).then((r) => r.json()).catch(() => ({})),
+        fetch(`${base}?dataType=flw&lang=tc`).then((r) => r.json()).catch(() => ({})),
+        fetch(`${base}?dataType=warnsum&lang=tc`).then((r) => r.json()).catch(() => ({})),
+      ])
+      const forecast = (fnd?.weatherForecast ?? []).slice(0, 9).map((d: any) => ({
+        date: d.forecastDate, week: d.week, weather: d.forecastWeather, wind: d.forecastWind,
+        max: d.forecastMaxtemp?.value, min: d.forecastMintemp?.value, psr: d.PSR,
+      }))
+      const today_warnings = Object.values(ws ?? {}).filter((w: any) => w && w.actionCode !== 'CANCEL').map((w: any) => w.name)
+      return {
+        today_warnings,
+        general_situation: fnd?.generalSituation ?? flw?.generalSituation ?? '',
+        tc_info: flw?.tcInfo ?? '',
+        outlook: flw?.outlook ?? '',
+        forecast,
+        updated: fnd?.updateTime ?? null,
+      }
     }
     default:
       return { error: `unknown read tool ${name}` }
