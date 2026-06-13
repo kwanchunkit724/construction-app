@@ -127,6 +127,16 @@ export type CategoryStream = 'civil' | 'bs'
 export const CATEGORY_DOMAIN_ZH: Record<CategoryDomain, string> = { building: '大樓', external: '外圍' }
 export const CATEGORY_STREAM_ZH: Record<CategoryStream, string> = { civil: '土建', bs: '屋宇裝備 (BS)' }
 
+// ── v58: extreme-weather record (EOT) ──
+export type WeatherKind = 't8' | 't9' | 't10' | 'black_rain' | 'red_rain' | 'amber_rain' | 'rainfall_20mm' | 'very_hot' | 'cold' | 'other'
+export const WEATHER_KIND_ZH: Record<WeatherKind, string> = {
+  t8: '八號風球', t9: '九號風球', t10: '十號風球',
+  black_rain: '黑色暴雨', red_rain: '紅色暴雨', amber_rain: '黃色暴雨',
+  rainfall_20mm: '24h雨量>20mm', very_hot: '酷熱', cold: '寒冷', other: '其他',
+}
+export interface WeatherEvent { id: string; hkt_date: string; kind: WeatherKind; station: string | null; evidence: any; created_at: string }
+export interface WeatherClaim { id: string; project_id: string; hkt_date: string; trigger: string; on_critical_path: boolean | null; ready_to_work: boolean | null; tidy_days: number | null; claim_days: number | null; note: string | null; recorded_by: string | null; updated_at: string }
+
 // Suggested 大項 per (domain, stream), from the HKSMM5 trade sections — used to
 // seed the category picker + an optional "套用標準大項" template. zh-HK terms.
 export const CATEGORY_TEMPLATES: Record<CategoryDomain, Record<CategoryStream, string[]>> = {

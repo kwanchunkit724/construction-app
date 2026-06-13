@@ -51,6 +51,7 @@ const DailyEditPage = lazy(() => import('./pages/DailyEdit'))
 const MaterialListPage = lazy(() => import('./pages/MaterialList'))
 const TimetablePage = lazy(() => import('./pages/TimetablePage'))
 const ContactListPage = lazy(() => import('./pages/ContactList'))
+const WeatherRecordPage = lazy(() => import('./pages/WeatherRecord'))
 
 // 地盤表格管理 (statutory site forms + mobile e-signing, v55) — lazy + entry-
 // gated. The migration ships forms_enabled=false; v55 ships no get_forms_enabled
@@ -135,6 +136,7 @@ export default function App() {
           <Route path="/project/:id/materials" element={<ProtectedRoute>{lazyRoute(<MaterialListPage />)}</ProtectedRoute>} />
           <Route path="/project/:id/timetable" element={<ProtectedRoute>{lazyRoute(<TimetablePage />)}</ProtectedRoute>} />
           <Route path="/project/:id/contacts" element={<ProtectedRoute>{lazyRoute(<ContactListPage />)}</ProtectedRoute>} />
+          <Route path="/project/:id/weather" element={<ProtectedRoute>{lazyRoute(<WeatherRecordPage />)}</ProtectedRoute>} />
           {/* 地盤表格管理 — register + per-equipment forms / mobile e-signing. */}
           <Route path="/project/:id/equipment" element={<ProtectedRoute>{lazyRoute(<EquipmentListPage />)}</ProtectedRoute>} />
           <Route path="/project/:id/equipment/:equipmentId" element={<ProtectedRoute>{lazyRoute(<EquipmentDetailPage />)}</ProtectedRoute>} />

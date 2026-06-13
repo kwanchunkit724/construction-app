@@ -4,7 +4,7 @@ import {
   ChevronLeft, Plus, Building2, RefreshCw,
   CheckCircle2, AlertTriangle, Clock, Minus,
   ListChecks, AlertCircle, Download, FileCheck2,
-  FileText, Receipt, Shield, Bot,
+  FileText, Receipt, Shield, Bot, CloudRain,
   Wrench, BookOpen, Package, CalendarDays,
   Contact as ContactIcon, FolderOpen, CalendarClock,
 } from 'lucide-react'
@@ -696,6 +696,19 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
       <p className="text-sm text-site-600 px-1">
         工地工具：選擇要使用的功能
       </p>
+      <button
+        onClick={() => navigate(`/project/${projectId}/weather`)}
+        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
+      >
+        <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center flex-shrink-0">
+          <CloudRain size={22} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-site-900">天氣記錄</p>
+          <p className="text-xs text-site-500 mt-0.5">實時警告 · 極端天氣日 · EOT 延期申索（天文台數據）</p>
+        </div>
+        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
+      </button>
       {showEquipment && (
         <button
           onClick={() => navigate(`/project/${projectId}/equipment`)}
