@@ -121,6 +121,7 @@ Deno.serve(async (req) => {
       role = prof?.global_role ?? null
     }
   }
+  if (!uid) return json({ error: '未登入' }, 401)   // never let a null uid reach a uuid column
 
   const model = pickModel(messages, body.model)
 
@@ -137,12 +138,14 @@ Deno.serve(async (req) => {
         // propose and confirm), append the tool_result, then let the loop reply.
         if (confirm?.action_id) {
           const { data: act } = await supa.from('ai_actions')
-            .select('id, tool_name, args, args_hash, status').eq('id', confirm.action_id).eq('user_id', uid ?? '').maybeSingle()
-          if (!act || act.status !== 'proposed') { sse(controller, 'error', { message: '呢個動作搵唔到或者已處理' }); controller.close(); return }
-          if (confirm.args_hash && confirm.args_hash !== act.args_hash) { sse(controller, 'error', { message: '動作內容已變更，請重新嘗試' }); controller.close(); return }
-          if (!confirm.tool_use_id) { sse(controller, 'error', { message: '缺少 tool_use_id' }); controller.close(); return }
+            .select('id, tool_name, args, args_hash, status').eq('id', confirm.action_id).eq('user_id', uid).maybeSingle()
+          // early-return here lets the single `finally` close the controller (a
+          // second controller.close() would throw out of finally).
+          if (!act || act.status !== 'proposed') { sse(controller, 'error', { message: '呢個動作搵唔到或者已處理' }); return }
+          if (confirm.args_hash && confirm.args_hash !== act.args_hash) { sse(controller, 'error', { message: '動作內容已變更，請重新嘗試' }); return }
+          if (!confirm.tool_use_id) { sse(controller, 'error', { message: '缺少 tool_use_id' }); return }
           sse(controller, 'tool', { name: act.tool_name, status: 'executing' })
-          const out = await executeMutateTool(supa, projectId!, uid ?? '', act.tool_name, act.args)
+          const out = await executeMutateTool(supa, projectId!, uid, act.tool_name, act.args)
           const ok = !(out as any)?.error
           await supa.from('ai_actions').update({ status: ok ? 'executed' : 'failed', result: out, executed_at: new Date().toISOString() }).eq('id', act.id)
           sse(controller, 'action_result', { action_id: act.id, ok, result: out })
@@ -173,12 +176,18 @@ Deno.serve(async (req) => {
               const risk = mutateRisk(mutate.name)
               const summary = mutateSummary(mutate.name, mutate.input)
               const args_hash = hashArgs(mutate.name, mutate.input)
-              const { data: actRow } = await supa.from('ai_actions')
+              const { data: actRow, error: insErr } = await supa.from('ai_actions')
                 .insert({ user_id: uid, project_id: projectId, tool_name: mutate.name, args: mutate.input, args_hash, risk, model })
                 .select('id').single()
+              if (insErr || !actRow) { sse(controller, 'error', { message: '未能建立動作：' + (insErr?.message ?? '') }); break }
+              // The replayed assistant turn must carry ONLY this mutate's tool_use:
+              // if the model batched a read + this mutate in one turn, keeping both
+              // tool_use blocks would need two tool_results on confirm (Anthropic
+              // 400). Drop any other tool_use blocks; text blocks are kept.
+              const proposeContent = res.assistantContent.filter((b: any) => b.type !== 'tool_use' || b.id === mutate.id)
               sse(controller, 'proposed_action', {
-                action_id: actRow?.id, tool_use_id: mutate.id, tool: mutate.name,
-                args: mutate.input, summary, risk, args_hash, assistant_content: res.assistantContent,
+                action_id: actRow.id, tool_use_id: mutate.id, tool: mutate.name,
+                args: mutate.input, summary, risk, args_hash, assistant_content: proposeContent,
               })
               break // wait for the human confirm round-trip
             }

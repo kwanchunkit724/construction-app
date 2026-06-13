@@ -118,7 +118,12 @@ export async function executeReadTool(supa: Supa, projectId: string, name: strin
         .select('id, title, doc_number, document_type, current_version_id, review_due_date')
         .eq('project_id', projectId).limit(CAP)
       if (input?.document_type) q = q.eq('document_type', input.document_type)
-      if (input?.query) q = q.or(`title.ilike.%${input.query}%,doc_number.ilike.%${input.query}%`)
+      if (input?.query) {
+        // strip PostgREST or-grammar metachars (, ( ) * %) so a query like
+        // "天面 (排水)" can't corrupt the filter list.
+        const term = String(input.query).replace(/[,()*%]/g, ' ').trim()
+        if (term) q = q.or(`title.ilike.%${term}%,doc_number.ilike.%${term}%`)
+      }
       const { data: docs, error } = await q
       if (error) return { error: error.message }
       const verIds = (docs ?? []).map((d: any) => d.current_version_id).filter(Boolean)

@@ -77,12 +77,11 @@ const SPECS: Record<string, MutateSpec> = {
     summary: (a) => `📇 加聯絡人：${a.name}（${a.trade}）${a.phone}`,
     run: (s, p, uid, a) => s.from('contacts').insert({ project_id: p, name: a.name, trade: a.trade, phone: a.phone, notes: a.notes ?? null, created_by: uid }).select('id, name').single(),
   },
-  log_daily: {
-    risk: 'medium', allow: [...PLUS_SAFETY, 'subcontractor_worker'],
-    def: { name: 'log_daily', description: '寫今日施工日誌（只可以寫今日，覆蓋你自己今日嗰份）。', input_schema: { type: 'object', properties: { weather: { type: 'string', enum: ['晴', '陰', '雨', '暴雨', '熱', '凍', '大風'] }, notes: { type: 'string' }, freeform_items: { type: 'array', items: { type: 'string' }, description: '今日工作項目（每項一句）' } }, required: ['weather'], additionalProperties: false } },
-    summary: (a) => `📔 今日施工日誌：${a.weather}${a.freeform_items?.length ? ' · ' + a.freeform_items.length + ' 項' : ''}`,
-    run: (s, p, uid, a) => { const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10); return s.from('dailies').upsert({ project_id: p, user_id: uid, date: today, weather: a.weather, notes: a.notes ?? null, freeform_items: a.freeform_items ?? [] }, { onConflict: 'project_id,user_id,date' }).select('id, date').single() },
-  },
+  // log_daily deferred: the dailies INSERT RLS gates on global_role='main_contractor'
+  // AND sub_role IN ('foreman','engineer'), which doesn't map to the membership-role
+  // exposure filter — it would offer a confirm card most roles' RLS then denies.
+  // Re-add once the dailies policy is membership-role-aligned or the filter resolves
+  // global_role + sub_role.
   set_progress_blocked: {
     risk: 'medium', allow: [...MANAGERS, 'subcontractor_worker'],
     def: { name: 'set_progress_blocked', description: '把一個進度項目標記為受阻（連原因），或者解除受阻（reason 留空）。唔會改變百分比。需要 item_id（先用 get_progress_tree 搵）。', input_schema: { type: 'object', properties: { item_id: { type: 'string' }, reason: { type: 'string', description: '受阻原因；留空 = 解除受阻' } }, required: ['item_id'], additionalProperties: false } },
@@ -139,7 +138,11 @@ export async function executeMutateTool(supa: Supa, projectId: string, uid: stri
 
 function fmt(iso?: string): string {
   if (!iso) return ''
-  try { const d = new Date(iso); return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` } catch { return iso }
+  try {
+    // Edge runtime is UTC — shift to HKT (+8) so the confirm card shows local time.
+    const d = new Date(new Date(iso).getTime() + 8 * 3600e3)
+    return `${d.getUTCMonth() + 1}月${d.getUTCDate()}日 ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`
+  } catch { return iso }
 }
 function trunc(s?: string, n = 20): string { return s && s.length > n ? s.slice(0, n) + '…' : (s ?? '') }
 
