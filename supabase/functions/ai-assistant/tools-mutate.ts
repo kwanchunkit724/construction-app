@@ -83,6 +83,39 @@ const SPECS: Record<string, MutateSpec> = {
     summary: (a) => `📔 今日施工日誌：${a.weather}${a.freeform_items?.length ? ' · ' + a.freeform_items.length + ' 項' : ''}`,
     run: (s, p, uid, a) => { const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10); return s.from('dailies').upsert({ project_id: p, user_id: uid, date: today, weather: a.weather, notes: a.notes ?? null, freeform_items: a.freeform_items ?? [] }, { onConflict: 'project_id,user_id,date' }).select('id, date').single() },
   },
+  set_progress_blocked: {
+    risk: 'medium', allow: [...MANAGERS, 'subcontractor_worker'],
+    def: { name: 'set_progress_blocked', description: '把一個進度項目標記為受阻（連原因），或者解除受阻（reason 留空）。唔會改變百分比。需要 item_id（先用 get_progress_tree 搵）。', input_schema: { type: 'object', properties: { item_id: { type: 'string' }, reason: { type: 'string', description: '受阻原因；留空 = 解除受阻' } }, required: ['item_id'], additionalProperties: false } },
+    summary: (a) => a.reason && String(a.reason).trim() ? `🚧 標記受阻：${trunc(a.reason)}` : '✅ 解除受阻',
+    run: async (s, _p, uid, a) => {
+      const { data: item, error: e1 } = await s.from('progress_items').select('actual_progress').eq('id', a.item_id).maybeSingle()
+      if (e1) return { data: null, error: e1 }
+      if (!item) return { data: null, error: { message: '搵唔到項目或者你冇權' } }
+      const reason = a.reason && String(a.reason).trim() ? String(a.reason).trim() : null
+      const { error: e2 } = await s.from('progress_items').update({ blocked_reason: reason, last_updated_by: uid, last_updated_at: new Date().toISOString() }).eq('id', a.item_id)
+      if (e2) return { data: null, error: e2 }
+      await s.from('progress_history').insert({ item_id: a.item_id, actual_progress: (item as any).actual_progress, floors_completed: [], notes: reason ? `受阻：${reason}` : '解除受阻', updated_by: uid })
+      return { data: { item_id: a.item_id, blocked: !!reason }, error: null }
+    },
+  },
+  update_progress_percent: {
+    risk: 'medium', allow: [...MANAGERS, 'subcontractor_worker'],
+    def: { name: 'update_progress_percent', description: '更新一個百分比追蹤項目嘅完成度（0-100）。只適用於百分比追蹤；樓層/數量/單位追蹤嘅項目會拒絕（叫使用者喺進度表手動改）。需要 item_id。', input_schema: { type: 'object', properties: { item_id: { type: 'string' }, percent: { type: 'number', minimum: 0, maximum: 100 } }, required: ['item_id', 'percent'], additionalProperties: false } },
+    summary: (a) => `📊 更新進度 → ${Math.round(Number(a.percent))}%`,
+    run: async (s, _p, uid, a) => {
+      const pct = Math.max(0, Math.min(100, Math.round(Number(a.percent))))
+      const { data: item, error: e1 } = await s.from('progress_items').select('tracking_mode, planned_start, planned_end').eq('id', a.item_id).maybeSingle()
+      if (e1) return { data: null, error: e1 }
+      if (!item) return { data: null, error: { message: '搵唔到項目或者你冇權' } }
+      const mode = (item as any).tracking_mode
+      if (mode && mode !== 'percentage') return { data: null, error: { message: '呢項用緊樓層/數量/單位追蹤，請喺進度表手動更新' } }
+      const status = deriveStatus(pct, plannedProgress((item as any).planned_start, (item as any).planned_end))
+      const { error: e2 } = await s.from('progress_items').update({ actual_progress: pct, status, last_updated_by: uid, last_updated_at: new Date().toISOString() }).eq('id', a.item_id)
+      if (e2) return { data: null, error: e2 }
+      await s.from('progress_history').insert({ item_id: a.item_id, actual_progress: pct, floors_completed: [], notes: '', updated_by: uid })
+      return { data: { item_id: a.item_id, percent: pct, status }, error: null }
+    },
+  },
 }
 
 export function exposedMutateTools(role: string | null): ToolDef[] {
@@ -109,3 +142,25 @@ function fmt(iso?: string): string {
   try { const d = new Date(iso); return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` } catch { return iso }
 }
 function trunc(s?: string, n = 20): string { return s && s.length > n ? s.slice(0, n) + '…' : (s ?? '') }
+
+// Faithful ports of plannedProgressOf + deriveStatus from src/types.ts so an AI
+// percentage tick stores the same status the human UI would (incl. 'delayed').
+const MS_PER_DAY = 86400000
+function plannedProgress(ps: string | null, pe: string | null): number {
+  if (!ps || !pe) return 0
+  const s = new Date(ps + 'T00:00:00').getTime(); const e = new Date(pe + 'T00:00:00').getTime()
+  if (Number.isNaN(s) || Number.isNaN(e)) return 0
+  const t = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00').getTime()
+  if (t < s) return 0
+  const totalDays = Math.floor((e - s) / MS_PER_DAY) + 1
+  if (totalDays <= 1) return t >= e ? 100 : 0
+  const elapsed = Math.floor((t - s) / MS_PER_DAY) + 1
+  if (elapsed >= totalDays) return 100
+  return Math.round((elapsed / totalDays) * 100)
+}
+function deriveStatus(actual: number, planned: number): string {
+  if (actual >= 100) return 'completed'
+  if (actual === 0) return 'not-started'
+  if (actual < planned - 5) return 'delayed'
+  return 'in-progress'
+}

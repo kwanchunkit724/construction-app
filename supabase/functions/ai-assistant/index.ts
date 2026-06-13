@@ -46,7 +46,7 @@ function systemPrompt(role: string | null): string {
 2) 答問題前先用工具攞真實數據，唔好靠估。攞到數據就引用實數（例如「落後 3 項」「2 單料過期」）。
 3) 想開啟文件/圖紙時，先 search_documents 搵到 current_version，再用 get_document_link 攞連結。
 4) 改動類工具（加事件、開問題、落料、加聯絡人、寫日誌…）唔會即刻執行——系統會彈一張「確認卡」俾使用者撳「確認」先做。所以你 call 完改動工具之後，唔好當已經做咗；等使用者確認。如果使用者嘅角色冇權做某個改動，你就唔會見到嗰個工具，照實話佢冇權、可以叫 PM/老總幫手。
-5) 進度表嘅剔項/標 blocked（P3/P4）暫時仲未開放（Phase 2.5），如果有人叫你改進度，照實話呢個功能仲整緊。`
+5) 進度：你可以標記/解除受阻（set_progress_blocked），同埋更新「百分比追蹤」項目嘅完成度（update_progress_percent）。但樓層/數量/單位追蹤嘅項目就要叫使用者自己去進度表改（嗰啲工具會自動拒絕）。改進度一樣會彈確認卡。`
 }
 
 // Model router: 分析/報告/規劃-class questions go to opus; everything else sonnet.
