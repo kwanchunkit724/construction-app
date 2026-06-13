@@ -25,11 +25,16 @@ export type Risk = 'low' | 'medium' | 'high' | 'destructive'
 const MANAGERS = ['admin', 'pm', 'main_contractor', 'general_foreman', 'subcontractor']
 const PLUS_SAFETY = [...MANAGERS, 'safety_officer']
 const EVERYONE = [...PLUS_SAFETY, 'subcontractor_worker', 'owner']
+// can_review_document / can_manage_project_progress exclude 判頭 (v15/v27).
+const REVIEWERS = ['admin', 'pm', 'main_contractor', 'general_foreman']
+
+export type StepUpClass = 'approval' | 'document' | 'progress_delete'
 
 interface MutateSpec {
   def: ToolDef
   risk: Risk
   allow: string[]                                   // membership roles permitted (admin always allowed)
+  step_up?: StepUpClass                              // if set, the client runs requireStepUp(class) before confirming
   summary: (a: any) => string                        // zh-HK confirm-card line
   run: (supa: Supa, projectId: string, uid: string, a: any) => Promise<unknown>
 }
@@ -115,6 +120,74 @@ const SPECS: Record<string, MutateSpec> = {
       return { data: { item_id: a.item_id, percent: pct, status }, error: null }
     },
   },
+  // ── Phase 3: high-risk decision actions (existing well-tested RPCs / RLS) ───
+  escalate_issue: {
+    risk: 'high', allow: EVERYONE,
+    def: { name: 'escalate_issue', description: '把一個問題上呈俾上一級處理人（判頭→總承建商→PM）。需要 issue_id（先用 list_open_issues 搵）+ 一句說明。只有現任處理人或報告人先做到。', input_schema: { type: 'object', properties: { issue_id: { type: 'string' }, comment: { type: 'string' } }, required: ['issue_id', 'comment'], additionalProperties: false } },
+    summary: (a) => `⬆️ 上呈問題：「${trunc(a.comment)}」`,
+    run: async (s, _p, uid, a) => {
+      const { data: iss, error: e1 } = await s.from('issues').select('current_handler_role').eq('id', a.issue_id).maybeSingle()
+      if (e1) return { data: null, error: e1 }
+      if (!iss) return { data: null, error: { message: '搵唔到問題或者你冇權' } }
+      const next = nextHandler((iss as any).current_handler_role)
+      if (!next) return { data: null, error: { message: '已到最高層，無法再上呈' } }
+      const { error: e2 } = await s.from('issues').update({ current_handler_role: next, updated_at: new Date().toISOString() }).eq('id', a.issue_id)
+      if (e2) return { data: null, error: e2 }
+      await s.from('issue_comments').insert({ issue_id: a.issue_id, author_id: uid, action: 'escalated', body: a.comment, from_role: (iss as any).current_handler_role, to_role: next })
+      return { data: { issue_id: a.issue_id, to: next }, error: null }
+    },
+  },
+  resolve_issue: {
+    risk: 'high', allow: EVERYONE,
+    def: { name: 'resolve_issue', description: '標記一個問題為已解決。需要 issue_id + 一句說明。只有現任處理人/報告人/管理員先做到。', input_schema: { type: 'object', properties: { issue_id: { type: 'string' }, comment: { type: 'string' } }, required: ['issue_id', 'comment'], additionalProperties: false } },
+    summary: (a) => `✅ 解決問題：「${trunc(a.comment)}」`,
+    run: async (s, _p, uid, a) => {
+      const { error: e1 } = await s.from('issues').update({ status: 'resolved', resolved_by: uid, resolved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', a.issue_id)
+      if (e1) return { data: null, error: e1 }
+      await s.from('issue_comments').insert({ issue_id: a.issue_id, author_id: uid, action: 'resolved', body: a.comment })
+      return { data: { issue_id: a.issue_id, status: 'resolved' }, error: null }
+    },
+  },
+  reopen_issue: {
+    risk: 'medium', allow: EVERYONE,
+    def: { name: 'reopen_issue', description: '重開一個已解決嘅問題。需要 issue_id + 一句原因。', input_schema: { type: 'object', properties: { issue_id: { type: 'string' }, comment: { type: 'string' } }, required: ['issue_id', 'comment'], additionalProperties: false } },
+    summary: (a) => `🔄 重開問題：「${trunc(a.comment)}」`,
+    run: async (s, _p, uid, a) => {
+      const { error: e1 } = await s.from('issues').update({ status: 'open', resolved_by: null, resolved_at: null, updated_at: new Date().toISOString() }).eq('id', a.issue_id)
+      if (e1) return { data: null, error: e1 }
+      await s.from('issue_comments').insert({ issue_id: a.issue_id, author_id: uid, action: 'reopened', body: a.comment })
+      return { data: { issue_id: a.issue_id, status: 'open' }, error: null }
+    },
+  },
+  approve_document: {
+    risk: 'high', allow: REVIEWERS, step_up: 'document',
+    def: { name: 'approve_document', description: '批准一個文件版本。需要 version_id。判頭冇權審批；唔可以批自己提交嘅文件。', input_schema: { type: 'object', properties: { version_id: { type: 'string' }, note: { type: 'string' } }, required: ['version_id'], additionalProperties: false } },
+    summary: (a) => `📄✅ 批准文件版本${a.note ? '：「' + trunc(a.note) + '」' : ''}`,
+    run: (s, _p, _uid, a) => s.rpc('review_document_version', { p_version_id: a.version_id, p_action: 'approve', p_note: a.note?.trim() ?? null }).then((r: any) => ({ data: { version_id: a.version_id, action: 'approve' }, error: r.error })),
+  },
+  reject_document: {
+    risk: 'high', allow: REVIEWERS, step_up: 'document',
+    def: { name: 'reject_document', description: '拒絕一個文件版本（必須填原因）。需要 version_id + note。', input_schema: { type: 'object', properties: { version_id: { type: 'string' }, note: { type: 'string' } }, required: ['version_id', 'note'], additionalProperties: false } },
+    summary: (a) => `📄❌ 拒絕文件版本：「${trunc(a.note)}」`,
+    run: (s, _p, _uid, a) => s.rpc('review_document_version', { p_version_id: a.version_id, p_action: 'reject', p_note: a.note?.trim() ?? null }).then((r: any) => ({ data: { version_id: a.version_id, action: 'reject' }, error: r.error })),
+  },
+  submit_approval_decision: {
+    risk: 'high', allow: PLUS_SAFETY, step_up: 'approval',
+    def: { name: 'submit_approval_decision', description: '喺審批鏈對一張 SI/VO/PTW 落審批決定。只有現任審批步驟嘅持有人先做到。reject / request_revision 嘅 reason 要 ≥10 字。', input_schema: { type: 'object', properties: { doc_type: { type: 'string', enum: ['si', 'vo', 'ptw'] }, doc_id: { type: 'string' }, action: { type: 'string', enum: ['approve', 'reject', 'request_revision'] }, reason: { type: 'string' } }, required: ['doc_type', 'doc_id', 'action'], additionalProperties: false } },
+    summary: (a) => `🖊️ ${String(a.doc_type).toUpperCase()} ${a.action === 'approve' ? '批准' : a.action === 'reject' ? '拒絕' : '要求修改'}${a.reason ? '：「' + trunc(a.reason) + '」' : ''}`,
+    run: (s, _p, _uid, a) => s.rpc('submit_approval', { p_doc_type: a.doc_type, p_doc_id: a.doc_id, p_action_type: a.action, p_reason: a.reason?.trim() ?? null, p_edits_jsonb: null }).then((r: any) => ({ data: { doc_type: a.doc_type, doc_id: a.doc_id, action: a.action }, error: r.error })),
+  },
+  delete_progress_item: {
+    risk: 'destructive', allow: REVIEWERS, step_up: 'progress_delete',
+    def: { name: 'delete_progress_item', description: '刪除一個進度項目（連同子項目，不可還原）。需要 item_id。只有管理員/PM/老總/總承建商先做到；判頭冇權。', input_schema: { type: 'object', properties: { item_id: { type: 'string' } }, required: ['item_id'], additionalProperties: false } },
+    summary: () => `🗑️ 刪除進度項目（連子項，不可還原）`,
+    run: async (s, _p, _uid, a) => {
+      const { data, error } = await s.from('progress_items').delete().eq('id', a.item_id).select('id')
+      if (error) return { data: null, error }
+      if (!data || !data.length) return { data: null, error: { message: '搵唔到項目或者你冇權刪除' } }
+      return { data: { deleted: a.item_id }, error: null }
+    },
+  },
 }
 
 export function exposedMutateTools(role: string | null): ToolDef[] {
@@ -128,6 +201,7 @@ export function mutateAllowed(name: string, role: string | null): boolean {
   if (role === 'admin') return true
   return !!role && !!SPECS[name] && SPECS[name].allow.includes(role)
 }
+export function mutateStepUp(name: string): StepUpClass | undefined { return SPECS[name]?.step_up }
 export async function executeMutateTool(supa: Supa, projectId: string, uid: string, name: string, args: any): Promise<unknown> {
   const spec = SPECS[name]
   if (!spec) return { error: `unknown mutate tool ${name}` }
@@ -166,4 +240,12 @@ function deriveStatus(actual: number, planned: number): string {
   if (actual === 0) return 'not-started'
   if (actual < planned - 5) return 'delayed'
   return 'in-progress'
+}
+// Port of getNextHandler (src/types.ts) — the issue escalation chain.
+function nextHandler(current: string): string | null {
+  switch (current) {
+    case 'subcontractor': return 'main_contractor'
+    case 'main_contractor': return 'pm'
+    default: return null   // pm / admin are terminal
+  }
 }

@@ -21,7 +21,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { streamAssistant, type ChatMessage } from './provider.ts'
 import { exposedTools, executeReadTool } from './tools.ts'
-import { exposedMutateTools, isMutateTool, mutateAllowed, mutateRisk, mutateSummary, executeMutateTool } from './tools-mutate.ts'
+import { exposedMutateTools, isMutateTool, mutateAllowed, mutateRisk, mutateSummary, mutateStepUp, executeMutateTool } from './tools-mutate.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
@@ -188,6 +188,7 @@ Deno.serve(async (req) => {
               sse(controller, 'proposed_action', {
                 action_id: actRow.id, tool_use_id: mutate.id, tool: mutate.name,
                 args: mutate.input, summary, risk, args_hash, assistant_content: proposeContent,
+                step_up_class: mutateStepUp(mutate.name),   // client runs requireStepUp(class) before confirming
               })
               break // wait for the human confirm round-trip
             }

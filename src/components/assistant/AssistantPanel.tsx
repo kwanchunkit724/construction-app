@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Bot, Send, User, Loader2, Check, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useStepUp } from '../../contexts/StepUpContext'
+import type { StepUpActionClass } from '../../contexts/StepUpContext'
 
 // 助理 (AI 站長) chat panel.
 // Phase 1: read-only Q&A (streams from the ai-assistant Edge Function over SSE).
@@ -14,7 +16,7 @@ const FN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-assistant`
 
 type ChatMsg = { role: 'user' | 'assistant'; text: string }
 type ApiMsg = { role: 'user' | 'assistant'; content: any }
-type Pending = { action_id: string; tool_use_id: string; args_hash: string; summary: string; risk: string; assistant_content: any }
+type Pending = { action_id: string; tool_use_id: string; args_hash: string; summary: string; risk: string; assistant_content: any; step_up_class?: StepUpActionClass }
 
 const TOOL_ZH: Record<string, string> = {
   get_progress_tree: '查緊進度表…', get_timetable_window: '睇緊時間表…', list_materials: '查緊物料…',
@@ -36,6 +38,8 @@ export function AssistantPanel({ projectId }: { projectId: string }) {
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState<Pending | null>(null)
+  const [delConfirm, setDelConfirm] = useState('')   // typed-confirm gate for destructive actions
+  const { requireStepUp } = useStepUp()
   const api = useRef<ApiMsg[]>([])           // authoritative API history (incl. assistant tool_use turns)
   const endRef = useRef<HTMLDivElement>(null)
 
@@ -69,7 +73,8 @@ export function AssistantPanel({ projectId }: { projectId: string }) {
         setStatus(TOOL_ZH[data.name] ?? (data.status === 'executing' ? '執行緊…' : '處理緊…'))
       } else if (event === 'proposed_action') {
         proposed = true
-        setPending({ action_id: data.action_id, tool_use_id: data.tool_use_id, args_hash: data.args_hash, summary: data.summary, risk: data.risk, assistant_content: data.assistant_content })
+        setDelConfirm('')
+        setPending({ action_id: data.action_id, tool_use_id: data.tool_use_id, args_hash: data.args_hash, summary: data.summary, risk: data.risk, assistant_content: data.assistant_content, step_up_class: data.step_up_class })
         setStatus(null)
       } else if (event === 'action_result') {
         if (!data.ok) setError('動作執行失敗：' + (data.result?.error ?? ''))
@@ -101,6 +106,13 @@ export function AssistantPanel({ projectId }: { projectId: string }) {
   async function confirmAction() {
     if (!pending || busy) return
     const p = pending
+    // step-up gate: mints an AAL2 grant when app_config.step_up_enforced is on;
+    // a no-op (returns true immediately) while it's off — so this is friction-free
+    // today and ready when enforcement flips on.
+    if (p.step_up_class) {
+      const okStepUp = await requireStepUp(p.step_up_class)
+      if (!okStepUp) { setPending(null); setMsgs(cur => [...cur, { role: 'assistant', text: '二步驗證未完成，已取消動作。' }]); return }
+    }
     setPending(null); setBusy(true); setError(null)
     // replay the assistant turn that carried the tool_use, then ask the function to execute it
     api.current.push({ role: 'assistant', content: p.assistant_content })
@@ -144,11 +156,14 @@ export function AssistantPanel({ projectId }: { projectId: string }) {
           <div className="ml-9 card p-3 border-safety-200">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-xs font-semibold text-site-700">確認動作</span>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full ${(RISK_BADGE[pending.risk] ?? RISK_BADGE.medium).cls}`}>{(RISK_BADGE[pending.risk] ?? RISK_BADGE.medium).label}</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full ${pending.step_up_class ? 'bg-red-50 text-red-600' : (RISK_BADGE[pending.risk] ?? RISK_BADGE.medium).cls}`}>{pending.step_up_class ? '需要二步驗證' : (RISK_BADGE[pending.risk] ?? RISK_BADGE.medium).label}</span>
             </div>
             <p className="text-sm text-site-900 mb-2.5">{pending.summary}</p>
+            {pending.risk === 'destructive' && (
+              <input className="input mb-2 text-sm" placeholder="輸入「刪除」以確認" value={delConfirm} onChange={e => setDelConfirm(e.target.value)} />
+            )}
             <div className="flex gap-2">
-              <button className="btn-primary flex-1 py-2 text-sm" onClick={confirmAction} disabled={busy}><Check size={16} className="inline mr-1" />確認</button>
+              <button className="btn-primary flex-1 py-2 text-sm" onClick={confirmAction} disabled={busy || (pending.risk === 'destructive' && delConfirm.trim() !== '刪除')}><Check size={16} className="inline mr-1" />確認</button>
               <button className="btn-ghost flex-1 py-2 text-sm" onClick={cancelAction} disabled={busy}><X size={16} className="inline mr-1" />取消</button>
             </div>
           </div>

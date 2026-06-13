@@ -90,6 +90,7 @@ eq('sanitize plain term', sanitize('天面'), '天面')
 const MANAGERS = ['admin', 'pm', 'main_contractor', 'general_foreman', 'subcontractor']
 const PLUS_SAFETY = [...MANAGERS, 'safety_officer']
 const EVERYONE = [...PLUS_SAFETY, 'subcontractor_worker', 'owner']
+const REVIEWERS = ['admin', 'pm', 'main_contractor', 'general_foreman']
 const ALLOW = {
   create_event: PLUS_SAFETY, update_event: PLUS_SAFETY,
   create_issue: EVERYONE, add_issue_comment: EVERYONE,
@@ -97,20 +98,42 @@ const ALLOW = {
   add_contact: PLUS_SAFETY,
   set_progress_blocked: [...MANAGERS, 'subcontractor_worker'],
   update_progress_percent: [...MANAGERS, 'subcontractor_worker'],
+  // Phase 3
+  escalate_issue: EVERYONE, resolve_issue: EVERYONE, reopen_issue: EVERYONE,
+  approve_document: REVIEWERS, reject_document: REVIEWERS,
+  submit_approval_decision: PLUS_SAFETY,
+  delete_progress_item: REVIEWERS,
 }
+const STEPUP = { approve_document: 'document', reject_document: 'document', submit_approval_decision: 'approval', delete_progress_item: 'progress_delete' }
 function mutateAllowed(name, role) { if (role === 'admin') return true; return !!role && !!ALLOW[name] && ALLOW[name].includes(role) }
 function exposedCount(role) { if (role === 'admin') return Object.keys(ALLOW).length; return Object.keys(ALLOW).filter((n) => ALLOW[n].includes(role)).length }
 ok('worker CANNOT order_material', mutateAllowed('order_material', 'subcontractor_worker') === false)
 ok('worker CANNOT create_event', mutateAllowed('create_event', 'subcontractor_worker') === false)
 ok('worker CAN create_issue', mutateAllowed('create_issue', 'subcontractor_worker') === true)
 ok('worker CAN set_progress_blocked', mutateAllowed('set_progress_blocked', 'subcontractor_worker') === true)
-ok('owner only issue tools', mutateAllowed('create_issue', 'owner') === true && mutateAllowed('order_material', 'owner') === false && mutateAllowed('create_event', 'owner') === false)
 ok('safety CANNOT order_material', mutateAllowed('order_material', 'safety_officer') === false)
 ok('safety CAN create_event', mutateAllowed('create_event', 'safety_officer') === true)
 ok('判頭 CAN order_material', mutateAllowed('order_material', 'subcontractor') === true)
-ok('admin sees all 9 mutate tools', exposedCount('admin') === 9)
-ok('owner sees only 2', exposedCount('owner') === 2)
-ok('worker sees 4', exposedCount('subcontractor_worker') === 4)  // create_issue, add_issue_comment, set_progress_blocked, update_progress_percent
+// Phase 3 role-exposure
+ok('判頭 CANNOT approve_document (reviewers exclude 判頭)', mutateAllowed('approve_document', 'subcontractor') === false)
+ok('判頭 CANNOT delete_progress_item', mutateAllowed('delete_progress_item', 'subcontractor') === false)
+ok('PM CAN approve_document', mutateAllowed('approve_document', 'pm') === true)
+ok('PM CAN delete_progress_item', mutateAllowed('delete_progress_item', 'pm') === true)
+ok('worker CAN escalate_issue (RLS gates)', mutateAllowed('escalate_issue', 'subcontractor_worker') === true)
+ok('owner CAN resolve_issue (RLS gates)', mutateAllowed('resolve_issue', 'owner') === true)
+ok('safety CAN submit_approval_decision', mutateAllowed('submit_approval_decision', 'safety_officer') === true)
+ok('worker CANNOT submit_approval_decision', mutateAllowed('submit_approval_decision', 'subcontractor_worker') === false)
+// step-up class mapping
+ok('approve_document -> document step-up', STEPUP['approve_document'] === 'document')
+ok('submit_approval_decision -> approval step-up', STEPUP['submit_approval_decision'] === 'approval')
+ok('delete_progress_item -> progress_delete step-up', STEPUP['delete_progress_item'] === 'progress_delete')
+ok('create_event has NO step-up', STEPUP['create_event'] === undefined)
+// exposure counts (16 mutate tools)
+ok('admin sees all 16 mutate tools', exposedCount('admin') === 16)
+ok('owner sees 5 (issue tools only)', exposedCount('owner') === 5)
+ok('worker sees 7', exposedCount('subcontractor_worker') === 7)
+ok('safety sees 9', exposedCount('safety_officer') === 9)
+ok('判頭 sees 13 (all but reviewer-only)', exposedCount('subcontractor') === 13)
 ok('null role sees 0', exposedCount(null) === 0)
 
 console.log(`\n${fails === 0 ? 'ALL PASS' : fails + ' FAILED'}`)
