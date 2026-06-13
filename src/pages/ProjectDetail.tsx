@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, lazy, Suspense } from 'react'
 import { useParams, useNavigate, Navigate } from 'react-router-dom'
 import {
   ChevronLeft, Plus, Building2, RefreshCw,
   CheckCircle2, AlertTriangle, Clock, Minus,
   ListChecks, AlertCircle, Download, FileCheck2,
-  FileText, Receipt, Shield,
+  FileText, Receipt, Shield, Bot,
   Wrench, BookOpen, Package, CalendarDays,
   Contact as ContactIcon, FolderOpen, CalendarClock,
 } from 'lucide-react'
@@ -23,6 +23,9 @@ import { HistoryModal } from '../components/HistoryModal'
 import { IssueCard } from '../components/IssueCard'
 import { CreateIssueModal } from '../components/CreateIssueModal'
 import { ExportProgressModal } from '../components/ExportProgressModal'
+import { useAiAssistantEnabled } from '../components/assistant/useAiAssistantEnabled'
+// Lazy so the 助理 chat panel (+ SSE client) stays out of the eager entry chunk.
+const AssistantPanel = lazy(() => import('../components/assistant/AssistantPanel').then(m => ({ default: m.AssistantPanel })))
 import { ProgressProvider, useProgress } from '../contexts/ProgressContext'
 import { IssuesProvider, useIssues } from '../contexts/IssuesContext'
 import { DrawingsProvider } from '../contexts/DrawingsContext'
@@ -37,7 +40,7 @@ import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH, deriveStatus, planned
 import type { ProgressItem, ProgressStatus, Zone } from '../types'
 import { templateFor } from '../lib/progressTemplates'
 
-type Tab = 'progress' | 'issues' | 'si-vo' | 'tools' | 'equipment'
+type Tab = 'progress' | 'issues' | 'si-vo' | 'tools' | 'equipment' | 'assistant'
 
 const STATUS_ICON: Record<ProgressStatus, typeof Minus> = {
   'not-started': Minus,
@@ -86,6 +89,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
 
   const project = projects.find(p => p.id === projectId)
 
+  const aiEnabled = useAiAssistantEnabled(projectId)
   const [tab, setTab] = useState<Tab>('progress')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [createCtx, setCreateCtx] = useState<CreateContext | null>(null)
@@ -254,6 +258,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
           <TabButton active={tab === 'issues'} onClick={() => setTab('issues')} icon={AlertCircle} label="問題" badge={openIssueCount} />
           <TabButton active={tab === 'si-vo'} onClick={() => setTab('si-vo')} icon={FileCheck2} label="簽核" />
           <TabButton active={tab === 'tools'} onClick={() => setTab('tools')} icon={Wrench} label="工具" />
+          {aiEnabled && <TabButton active={tab === 'assistant'} onClick={() => setTab('assistant')} icon={Bot} label="助理" />}
         </div>
       </div>
       </div>
@@ -331,6 +336,11 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
         )}
         {tab === 'tools' && (
           <ToolsSwitcher projectId={projectId} />
+        )}
+        {tab === 'assistant' && aiEnabled && (
+          <Suspense fallback={<div className="py-10 flex justify-center"><Spinner size={28} /></div>}>
+            <AssistantPanel projectId={projectId} />
+          </Suspense>
         )}
       </main>
       </div>

@@ -16,7 +16,6 @@ import Home from './pages/Home'
 import Projects from './pages/Projects'
 import Profile from './pages/Profile'
 import AdminProjects from './pages/AdminProjects'
-import ProjectDetail from './pages/ProjectDetail'
 import IssueDetail from './pages/IssueDetail'
 import Dashboard from './pages/Dashboard'
 import AdminUsers from './pages/AdminUsers'
@@ -30,6 +29,10 @@ import AdminProjectChainsPage from './pages/AdminProjectChains'
 const PtwListPage = lazy(() => import('./pages/PtwList'))
 const PtwDetailPage = lazy(() => import('./pages/PtwDetail'))
 const PtwVerifyPage = lazy(() => import('./pages/PtwVerify'))
+
+// ProjectDetail is the heaviest authed screen (progress tree + all its modals +
+// the 助理 AI chat). Lazy-loaded so it stays out of the entry chunk (CI 800 KB guard).
+const ProjectDetail = lazy(() => import('./pages/ProjectDetail'))
 
 // Phase D documents register — lazy + flag-gated (app_config.files_enabled).
 // Only resolves when files_enabled (admins bypass via FilesGate); when OFF the
@@ -114,7 +117,7 @@ export default function App() {
           <Route path="/admin/users" element={<ProtectedRoute requireAdmin><AdminUsers /></ProtectedRoute>} />
           <Route path="/admin/integrity" element={<ProtectedRoute requireAdmin>{lazyRoute(<DataIntegrityPage />)}</ProtectedRoute>} />
           <Route path="/admin/projects/:id/chains" element={<ProtectedRoute requireAdmin><AdminProjectChainsPage /></ProtectedRoute>} />
-          <Route path="/project/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
+          <Route path="/project/:id" element={<ProtectedRoute>{lazyRoute(<ProjectDetail />)}</ProtectedRoute>} />
           <Route path="/project/:id/issue/:issueId" element={<ProtectedRoute><IssueDetail /></ProtectedRoute>} />
           <Route path="/project/:id/si" element={<ProtectedRoute><SiListPage /></ProtectedRoute>} />
           <Route path="/project/:id/si/:siId" element={<ProtectedRoute><SiDetailPage /></ProtectedRoute>} />
