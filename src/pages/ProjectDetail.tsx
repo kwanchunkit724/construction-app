@@ -36,8 +36,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { useStepUp } from '../contexts/StepUpContext'
 import { usePtwFlag } from '../contexts/PtwFlagContext'
 import { useFilesFlag } from '../contexts/FilesFlagContext'
-import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH, deriveStatus, plannedProgressOf } from '../types'
-import type { ProgressItem, ProgressStatus, Zone } from '../types'
+import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH, deriveStatus, plannedProgressOf, CATEGORY_DOMAIN_ZH, CATEGORY_STREAM_ZH } from '../types'
+import type { ProgressItem, ProgressStatus, Zone, CategoryDomain, CategoryStream } from '../types'
 import { templateFor } from '../lib/progressTemplates'
 
 type Tab = 'progress' | 'issues' | 'si-vo' | 'tools' | 'equipment' | 'assistant'
@@ -91,6 +91,9 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
 
   const aiEnabled = useAiAssistantEnabled(projectId)
   const [tab, setTab] = useState<Tab>('progress')
+  // v57: progress category filter (大樓/外圍 × 土建/BS)
+  const [catDomain, setCatDomain] = useState<CategoryDomain | 'all'>('all')
+  const [catStream, setCatStream] = useState<CategoryStream | 'all'>('all')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [createCtx, setCreateCtx] = useState<CreateContext | null>(null)
   const [updating, setUpdating] = useState<ProgressItem | null>(null)
@@ -144,8 +147,24 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const template = templateFor(project.project_type)
   const hideZoneChrome = template.autoZone
 
-  // Stats — leaves only (across whole project)
-  const leaves = items.filter(i => !items.some(c => c.parent_id === i.id))
+  // v57: narrow the tree + tiles to the selected category. The tag lives on the
+  // 大項 (root); an item is visible iff its root matches. A 未分類 root only shows
+  // under 全部/全部.
+  const rootCategoryOf = (i: ProgressItem): { d: CategoryDomain | null; s: CategoryStream | null } => {
+    let cur: ProgressItem | undefined = i
+    while (cur && cur.parent_id) cur = items.find(x => x.id === cur!.parent_id)
+    return { d: cur?.category_domain ?? null, s: cur?.category_stream ?? null }
+  }
+  const filterActive = catDomain !== 'all' || catStream !== 'all'
+  const visibleItems = !filterActive ? items : items.filter(i => {
+    const { d, s } = rootCategoryOf(i)
+    return (catDomain === 'all' || d === catDomain) && (catStream === 'all' || s === catStream)
+  })
+  const visibleZones = !filterActive ? project.zones
+    : project.zones.filter(z => visibleItems.some(i => i.parent_id === null && i.zone_id === z.id))
+
+  // Stats — leaves only (within the current category view)
+  const leaves = visibleItems.filter(i => !visibleItems.some(c => c.parent_id === i.id))
   // Derive status live (schedule-vs-today) to match the cards + zone rollups
   // below — the stored i.status column freezes at save time and goes stale, so
   // tiles would otherwise contradict the cards right under them.
@@ -275,6 +294,17 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
             {isMaintenance && statutoryDeadline && (
               <DeadlineTile date={statutoryDeadline.date} days={statutoryDeadline.days} />
             )}
+            {items.some(i => i.category_domain || i.category_stream) && (
+              <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                {([['all', '全部範疇'], ['building', CATEGORY_DOMAIN_ZH.building], ['external', CATEGORY_DOMAIN_ZH.external]] as [CategoryDomain | 'all', string][]).map(([k, l]) => (
+                  <button key={k} onClick={() => setCatDomain(k)} className={`text-xs px-2.5 py-1 rounded-full font-medium ${catDomain === k ? 'bg-safety-500 text-white' : 'bg-site-100 text-site-600 hover:bg-site-200'}`}>{l}</button>
+                ))}
+                <span className="text-site-300">·</span>
+                {([['all', '全工種'], ['civil', CATEGORY_STREAM_ZH.civil], ['bs', CATEGORY_STREAM_ZH.bs]] as [CategoryStream | 'all', string][]).map(([k, l]) => (
+                  <button key={k} onClick={() => setCatStream(k)} className={`text-xs px-2.5 py-1 rounded-full font-medium ${catStream === k ? 'bg-site-700 text-white' : 'bg-site-100 text-site-600 hover:bg-site-200'}`}>{l}</button>
+                ))}
+              </div>
+            )}
             {leaves.length > 0 && (
               <div className="grid grid-cols-4 gap-2 mb-4">
                 <Stat label="已完成" count={completed} color="text-green-700 bg-green-50 border-green-200" />
@@ -297,11 +327,15 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
               </div>
             ) : (
               <div className="space-y-5 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-4">
-                {project.zones.map(zone => (
+                {(filterActive ? visibleZones : project.zones).length === 0 ? (
+                  <div className="card p-8 text-center md:col-span-2 lg:col-span-3">
+                    <p className="text-sm text-site-500">呢個分類冇項目。</p>
+                  </div>
+                ) : (filterActive ? visibleZones : project.zones).map(zone => (
                   <ZoneSection
                     key={zone.id}
                     zone={zone}
-                    items={items}
+                    items={visibleItems}
                     expanded={expandedSet}
                     canEdit={canEdit}
                     hideZoneHeader={hideZoneChrome}

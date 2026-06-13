@@ -121,6 +121,25 @@ export const UNIT_STATE_ZH: Record<UnitState, string> = {
   signed_off: '已簽收',
 }
 
+// ── v57: progress-table 2-axis categorization (HKSMM5-aligned) ──
+export type CategoryDomain = 'building' | 'external'
+export type CategoryStream = 'civil' | 'bs'
+export const CATEGORY_DOMAIN_ZH: Record<CategoryDomain, string> = { building: '大樓', external: '外圍' }
+export const CATEGORY_STREAM_ZH: Record<CategoryStream, string> = { civil: '土建', bs: '屋宇裝備 (BS)' }
+
+// Suggested 大項 per (domain, stream), from the HKSMM5 trade sections — used to
+// seed the category picker + an optional "套用標準大項" template. zh-HK terms.
+export const CATEGORY_TEMPLATES: Record<CategoryDomain, Record<CategoryStream, string[]>> = {
+  building: {
+    civil: ['結構（混凝土/紮鐵/釘板）', '鋼結構', '砌磚', '防水', '幕牆/外牆', '門窗', '間隔', '批盪', '天花', '地台/鋪砌', '木器/油漆', '玻璃'],
+    bs: ['給排水（水喉/驗水）', '消防', '通風空調 (MVAC)', '升降機/電梯', '電力（電線井/上升總線）', 'ELV/BMS', '預留預埋 (BWIC)'],
+  },
+  external: {
+    civil: ['地基/打樁', '連續牆/ELS', '開挖及填土', '道路/路面', '雨水及污水渠', '園境/綠化'],
+    bs: ['外部給排水', '外部電力/街燈', '化糞池/泵房', '室外消防'],
+  },
+}
+
 export interface ProgressItem {
   id: string
   project_id: string
@@ -159,6 +178,11 @@ export interface ProgressItem {
   // signed-off labels are mirrored into floors_completed so legacy consumers
   // (export / history floor chips) degrade gracefully.
   label_status: Record<string, UnitState>
+  // ── v57: 2-axis categorization (set on the 大項 / top-level item only) ──
+  // domain = 大樓(building/superstructure) vs 外圍(external/site works);
+  // stream = 土建(civil) vs 屋宇裝備 BS(E&M). NULL on existing rows → '未分類'.
+  category_domain: CategoryDomain | null
+  category_stream: CategoryStream | null
   assigned_to: string[]
   delegated_to: string[]
   last_updated_by: string | null

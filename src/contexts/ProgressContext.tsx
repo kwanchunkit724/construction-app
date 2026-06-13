@@ -5,7 +5,7 @@ import { useProjects } from './ProjectsContext'
 import { cacheGet, cacheSet, getOnline, subscribeOnline } from '../lib/offline'
 import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import { deriveStatus, floorsToProgress, plannedProgressOf, qtyToProgress, unitStatusToProgress } from '../types'
-import type { ProgressItem, ProgressStatus, TrackingMode, ProgressHistoryEntry, UnitState } from '../types'
+import type { ProgressItem, ProgressStatus, TrackingMode, ProgressHistoryEntry, UnitState, CategoryDomain, CategoryStream } from '../types'
 
 interface ProgressContextType {
   loading: boolean
@@ -45,7 +45,7 @@ interface ProgressContextType {
   updateUnitStatus: (id: string, labelStatus: Record<string, UnitState>, notes: string) => Promise<{ error: string | null }>
   setAssignment: (id: string, assigned: string[], delegated: string[]) => Promise<{ error: string | null }>
   fetchHistory: (id: string) => Promise<ProgressHistoryEntry[]>
-  updateItemMeta: (id: string, patch: { title?: string; planned_start?: string | null; planned_end?: string | null }) => Promise<{ error: string | null }>
+  updateItemMeta: (id: string, patch: { title?: string; planned_start?: string | null; planned_end?: string | null; category_domain?: CategoryDomain | null; category_stream?: CategoryStream | null }) => Promise<{ error: string | null }>
   deleteItem: (id: string) => Promise<{ error: string | null }>
 }
 
@@ -68,6 +68,9 @@ interface AddItemInput {
   // 'unit_status' (the CreateItemModal seeds every label to 'pending'); ignored
   // (left at the DB default '{}') for other modes.
   label_status?: Record<string, UnitState>
+  // v57: 2-axis category (root 大項 only). Ignored for children (parent_id set).
+  category_domain?: CategoryDomain | null
+  category_stream?: CategoryStream | null
 }
 
 const ProgressContext = createContext<ProgressContextType | null>(null)
@@ -198,6 +201,9 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
       qty_done: 0,
       qty_unit: isQuantity ? ((input.qty_unit ?? '').trim() || null) : null,
       label_status: labelStatus,
+      // v57: category tags only on the 大項 (root); children inherit via their root.
+      category_domain: input.parent_id ? null : (input.category_domain ?? null),
+      category_stream: input.parent_id ? null : (input.category_stream ?? null),
       assigned_to: [],
       delegated_to: [],
       last_updated_by: profile.id,
@@ -241,7 +247,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
   // item's history, children, drawings or assignments (vs delete + recreate).
   async function updateItemMeta(
     id: string,
-    patch: { title?: string; planned_start?: string | null; planned_end?: string | null },
+    patch: { title?: string; planned_start?: string | null; planned_end?: string | null; category_domain?: CategoryDomain | null; category_stream?: CategoryStream | null },
   ) {
     if (!profile) return { error: '未登入' }
     const before = items.find(i => i.id === id)
@@ -252,6 +258,8 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     if (patch.title !== undefined) upd.title = patch.title
     if (patch.planned_start !== undefined) upd.planned_start = patch.planned_start
     if (patch.planned_end !== undefined) upd.planned_end = patch.planned_end
+    if (patch.category_domain !== undefined) upd.category_domain = patch.category_domain
+    if (patch.category_stream !== undefined) upd.category_stream = patch.category_stream
     const { error } = await supabase.from('progress_items').update(upd).eq('id', id)
     if (error) return { error: error.message }
     // Journal the metadata edit as an immutable history row (v38) — only the

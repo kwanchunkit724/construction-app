@@ -2,8 +2,8 @@ import { FormEvent, useEffect, useState } from 'react'
 import { Modal } from './Modal'
 import { Spinner } from './Spinner'
 import { useProgress } from '../contexts/ProgressContext'
-import { plannedProgressOf } from '../types'
-import type { ProgressItem } from '../types'
+import { plannedProgressOf, CATEGORY_DOMAIN_ZH, CATEGORY_STREAM_ZH } from '../types'
+import type { ProgressItem, CategoryDomain, CategoryStream } from '../types'
 
 // Edit an existing item's title + planned dates WITHOUT delete+recreate (which
 // would lose its history, children, drawings and assignments). Planned dates
@@ -21,17 +21,22 @@ export function EditItemModal({
   const [plannedEnd, setPlannedEnd] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [catDomain, setCatDomain] = useState<CategoryDomain | null>(null)
+  const [catStream, setCatStream] = useState<CategoryStream | null>(null)
 
   useEffect(() => {
     if (open && item) {
       setTitle(item.title)
       setPlannedStart(item.planned_start ?? '')
       setPlannedEnd(item.planned_end ?? '')
+      setCatDomain(item.category_domain ?? null)
+      setCatStream(item.category_stream ?? null)
       setError('')
     }
   }, [open, item])
 
   if (!item) return null
+  const isRoot = item.parent_id === null
   const preview = plannedProgressOf({ planned_start: plannedStart || null, planned_end: plannedEnd || null })
 
   async function save(e?: FormEvent) {
@@ -44,6 +49,8 @@ export function EditItemModal({
       title: title.trim(),
       planned_start: plannedStart || null,
       planned_end: plannedEnd || null,
+      // category only on a root 大項
+      ...(item.parent_id === null ? { category_domain: catDomain, category_stream: catStream } : {}),
     })
     setSubmitting(false)
     if (error) setError(error)
@@ -79,6 +86,24 @@ export function EditItemModal({
             <input type="date" className="input" value={plannedEnd} onChange={e => setPlannedEnd(e.target.value)} />
           </div>
         </div>
+        {isRoot && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">範疇</label>
+              <select className="input" value={catDomain ?? ''} onChange={e => setCatDomain((e.target.value || null) as CategoryDomain | null)}>
+                <option value="">未分類</option>
+                {(Object.keys(CATEGORY_DOMAIN_ZH) as CategoryDomain[]).map(d => <option key={d} value={d}>{CATEGORY_DOMAIN_ZH[d]}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">工種</label>
+              <select className="input" value={catStream ?? ''} onChange={e => setCatStream((e.target.value || null) as CategoryStream | null)}>
+                <option value="">未分類</option>
+                {(Object.keys(CATEGORY_STREAM_ZH) as CategoryStream[]).map(s => <option key={s} value={s}>{CATEGORY_STREAM_ZH[s]}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
         <div className="rounded-xl bg-site-50 border border-site-100 p-3 flex items-center justify-between">
           <span className="label mb-0">計劃進度（自動）</span>
           <span className="text-base font-bold text-safety-600">

@@ -5,8 +5,8 @@ import { Spinner } from './Spinner'
 import { useProgress } from '../contexts/ProgressContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { supabase } from '../lib/supabase'
-import type { ProgressItem, TrackingMode, Zone, UnitState } from '../types'
-import { plannedProgressOf } from '../types'
+import type { ProgressItem, TrackingMode, Zone, UnitState, CategoryDomain, CategoryStream } from '../types'
+import { plannedProgressOf, CATEGORY_DOMAIN_ZH, CATEGORY_STREAM_ZH } from '../types'
 import { templateFor } from '../lib/progressTemplates'
 
 // Per-mode picker presentation. Keyed by TrackingMode so the picker can be
@@ -68,6 +68,9 @@ export function CreateItemModal({
   const [unitCount, setUnitCount] = useState(8)
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
+  // v57: 2-axis category for a root 大項.
+  const [catDomain, setCatDomain] = useState<CategoryDomain | null>(null)
+  const [catStream, setCatStream] = useState<CategoryStream | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   // Multi-zone selection (root-level adds only)
@@ -340,6 +343,9 @@ export function CreateItemModal({
         label_status: trackingMode === 'unit_status'
           ? Object.fromEntries(resolvedFloorLabels.map(l => [l, 'pending' as UnitState]))
           : undefined,
+        // v57: 2-axis category — only on a root 大項.
+        category_domain: isRootAdd ? catDomain : null,
+        category_stream: isRootAdd ? catStream : null,
       }))
     )
 
@@ -482,6 +488,25 @@ export function CreateItemModal({
             className="input"
           />
         </div>
+
+        {isRootAdd && (
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="label">範疇</label>
+              <select className="input" value={catDomain ?? ''} onChange={e => setCatDomain((e.target.value || null) as CategoryDomain | null)}>
+                <option value="">未分類</option>
+                {(Object.keys(CATEGORY_DOMAIN_ZH) as CategoryDomain[]).map(d => <option key={d} value={d}>{CATEGORY_DOMAIN_ZH[d]}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">工種</label>
+              <select className="input" value={catStream ?? ''} onChange={e => setCatStream((e.target.value || null) as CategoryStream | null)}>
+                <option value="">未分類</option>
+                {(Object.keys(CATEGORY_STREAM_ZH) as CategoryStream[]).map(s => <option key={s} value={s}>{CATEGORY_STREAM_ZH[s]}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <div>
