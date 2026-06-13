@@ -51,7 +51,7 @@ function systemPrompt(role: string | null): string {
 
 // Model router: 分析/報告/規劃-class questions go to opus; everything else sonnet.
 // Never silently downgrade an analysis to a cheaper tier (AI-ASSISTANT-PLAN §4.2).
-const ANALYSIS_RE = /分析|報告|周報|月報|規劃|預測|風險|落後|綜合|總結|overview|analy|report|plan|summary/i
+const ANALYSIS_RE = /分析|報告|週報|周報|月報|規劃|預測|風險|落後|綜合|總結|overview|analy|report|plan|summary/i
 function pickModel(messages: ChatMessage[], hint?: string): string {
   if (hint) return hint
   const lastUser = [...messages].reverse().find((m) => m.role === 'user')
