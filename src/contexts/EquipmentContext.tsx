@@ -7,7 +7,7 @@ import { useSignReauth } from './SignReauthContext'
 import { cacheGet, cacheSet, getOnline } from '../lib/offline'
 import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import type {
-  Equipment, FormInstance, FormSignoff, FormTemplate, FormsDashboard, FormSignoffResult,
+  Equipment, FormInstance, FormSignoff, FormTemplate, FormsDashboard, FormSignoffResult, UserProfile,
 } from '../types'
 
 // 地盤表格管理 context. Scoped to a projectId, realtime channel
@@ -39,6 +39,9 @@ interface EquipmentContextValue {
   canManage: boolean
 
   refetch: () => Promise<void>
+  // 匯出登記冊: assembles the full register (equipment + instances + signoffs +
+  // dashboard) plus a signer-name map, then hands it to exportEquipmentRegister.
+  exportRegister: () => Promise<{ error: string | null }>
   addEquipment: (input: AddEquipmentInput) => Promise<{ id: string | null; error: string | null }>
   addInstance: (
     equipmentId: string,
@@ -273,6 +276,35 @@ export function EquipmentProvider({ projectId, children }: { projectId: string; 
     return { id: (data as unknown as string) ?? null, error: null }
   }, [profile, requireStepUp, requireSignReauth, refetch])
 
+  // 匯出登記冊 → Excel. The context already holds equipment / instances /
+  // signoffs / dashboard / templateById; the only missing piece is a signer-name
+  // map. Resolve it from user_profiles by the distinct signed_by ids (same
+  // round-trip shape as VerifyCredentialsPanel). RLS may hide ex-members — that's
+  // fine, exportEquipmentRegister falls back to '前成員' for unresolved ids.
+  const exportRegister = useCallback(async () => {
+    const project = projects.find(p => p.id === projectId)
+    if (!project) return { error: '找不到項目' }
+    const signerIds = Array.from(new Set(
+      Object.values(signoffsByInstance).flat().map(s => s.signed_by).filter(Boolean),
+    ))
+    const users: Record<string, UserProfile> = {}
+    if (signerIds.length > 0) {
+      const { data: profs } = await supabase
+        .from('user_profiles').select('id, name').in('id', signerIds)
+      ;(profs || []).forEach((p: any) => { users[p.id] = { id: p.id, name: p.name } as UserProfile })
+    }
+    try {
+      const { exportEquipmentRegister } = await import('../lib/export')
+      await exportEquipmentRegister(
+        project, equipment, instances, signoffsByInstance, templateById, dashboard, users,
+      )
+      return { error: null }
+    } catch (e: any) {
+      console.error('exportEquipmentRegister error:', e)
+      return { error: e?.message || '匯出失敗' }
+    }
+  }, [projects, projectId, equipment, instances, signoffsByInstance, templateById, dashboard])
+
   const value: EquipmentContextValue = {
     projectId,
     loading,
@@ -285,6 +317,7 @@ export function EquipmentProvider({ projectId, children }: { projectId: string; 
     dashboard,
     canManage,
     refetch,
+    exportRegister,
     addEquipment,
     addInstance,
     signOff,

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Plus, Wrench, ChevronRight, X, QrCode } from 'lucide-react'
+import { Plus, Wrench, ChevronRight, X, QrCode, Download } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { EquipmentProvider, useEquipment } from '../contexts/EquipmentContext'
@@ -35,9 +35,22 @@ function EquipmentListInner() {
   const { id: projectId } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const {
-    equipment, instances, templateById, dashboard, loading, fetchError, canManage,
+    equipment, instances, templateById, dashboard, loading, fetchError, canManage, exportRegister,
   } = useEquipment()
   const [showAdd, setShowAdd] = useState(false)
+
+  // 匯出登記冊: hand the loaded register off to exportEquipmentRegister (Excel).
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
+
+  async function doExport() {
+    if (exporting) return
+    setExportError('')
+    setExporting(true)
+    const { error } = await exportRegister()
+    setExporting(false)
+    if (error) setExportError(error)
+  }
 
   // 列印全部 QR (managers): mint a token per equipment, then open the print
   // sheet. Cards start token=null and stream in as each mint resolves so the
@@ -99,28 +112,50 @@ function EquipmentListInner() {
 
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-base font-semibold text-site-900">機械登記冊</h2>
-          {canManage && (
-            <div className="flex items-center gap-2">
-              {equipment.length > 0 && (
-                <button
-                  type="button"
-                  className="btn-ghost text-sm"
-                  disabled={minting}
-                  onClick={printAllQr}
-                >
-                  {minting
-                    ? <Spinner size={14} className="inline mr-1" />
-                    : <QrCode size={14} className="inline mr-1" />}
-                  列印全部 QR
-                </button>
-              )}
-              <button type="button" className="btn-primary" onClick={() => setShowAdd(true)}>
-                <Plus size={16} className="inline mr-1" />
-                新增機械
+          <div className="flex items-center gap-2">
+            {/* 匯出登記冊 — available to anyone who can view the register. */}
+            {equipment.length > 0 && (
+              <button
+                type="button"
+                className="btn-ghost text-sm"
+                disabled={exporting}
+                onClick={doExport}
+              >
+                {exporting
+                  ? <Spinner size={14} className="inline mr-1" />
+                  : <Download size={14} className="inline mr-1" />}
+                匯出登記冊
               </button>
-            </div>
-          )}
+            )}
+            {canManage && (
+              <>
+                {equipment.length > 0 && (
+                  <button
+                    type="button"
+                    className="btn-ghost text-sm"
+                    disabled={minting}
+                    onClick={printAllQr}
+                  >
+                    {minting
+                      ? <Spinner size={14} className="inline mr-1" />
+                      : <QrCode size={14} className="inline mr-1" />}
+                    列印全部 QR
+                  </button>
+                )}
+                <button type="button" className="btn-primary" onClick={() => setShowAdd(true)}>
+                  <Plus size={16} className="inline mr-1" />
+                  新增機械
+                </button>
+              </>
+            )}
+          </div>
         </div>
+
+        {exportError && (
+          <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+            匯出失敗：{exportError}
+          </div>
+        )}
 
         {loading ? (
           <div className="py-12 text-center"><Spinner size={32} /></div>

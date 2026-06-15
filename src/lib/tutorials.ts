@@ -3107,6 +3107,7 @@ export const SCREEN_TUTORIAL: Record<string, string> = {
   "timetable": "timetable",
   "contacts": "contacts",
   "drawings": "drawing-version-control",
+  "files": "drawing-version-control",
   "weather": "weather-eot",
   "equipment": "equipment",
   "admin": "project-management",

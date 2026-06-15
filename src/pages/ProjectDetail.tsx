@@ -24,6 +24,7 @@ import { IssueCard } from '../components/IssueCard'
 import { CreateIssueModal } from '../components/CreateIssueModal'
 import { ExportProgressModal } from '../components/ExportProgressModal'
 import { useAiAssistantEnabled } from '../components/assistant/useAiAssistantEnabled'
+import { HelpButton } from '../components/tutorial/HelpButton'
 import { WeatherBanner } from '../components/WeatherBanner'
 // Lazy so the 助理 chat panel (+ SSE client) stays out of the eager entry chunk.
 const AssistantPanel = lazy(() => import('../components/assistant/AssistantPanel').then(m => ({ default: m.AssistantPanel })))
@@ -407,9 +408,16 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
           <ToolsSwitcher projectId={projectId} />
         )}
         {tab === 'assistant' && showAssistantTab && (
-          <Suspense fallback={<div className="py-10 flex justify-center"><Spinner size={28} /></div>}>
-            <AssistantPanel projectId={projectId} />
-          </Suspense>
+          <>
+            {/* In-page tab (not a /project/:id/<seg> route), so HelpButton can't
+                infer the tutorial from the path — pass the key explicitly. */}
+            <div className="flex justify-end mb-2">
+              <HelpButton tutorialKey="ai-assistant" variant="pill" />
+            </div>
+            <Suspense fallback={<div className="py-10 flex justify-center"><Spinner size={28} /></div>}>
+              <AssistantPanel projectId={projectId} />
+            </Suspense>
+          </>
         )}
       </main>
       </div>
