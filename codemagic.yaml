@@ -454,3 +454,54 @@ workflows:
     #   google_play:
     #     credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
     #     track: internal
+
+  e2e-tests:
+    # Playwright E2E against the LIVE Supabase backend. Runs on the Codemagic
+    # runner because it has real network — the local build sandbox does not, so
+    # these specs (which log in to Supabase) can ONLY run here / in CI.
+    #
+    # playwright.config.ts auto-starts the app: webServer runs
+    # `npm run build && npm run preview` on :5173 (waits for 200), mobile viewport
+    # 390x844. Specs exercise the real DOM flows: drawings, SI/VO, PTW (+ fire-
+    # watch), account deletion.
+    #
+    # DEPENDS ON the test seed being present in the live project (applied once via
+    # the SQL editor): seed-test-auth.sql + seed-phase2.sql + seed-phase3.sql
+    # (personas 60000001-04 / 60000099, project 20002000, leaf 30003000). If the
+    # seed is missing the specs fail at login — that's a seed gap, not a code regression.
+    name: Playwright E2E (live Supabase)
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+
+    environment:
+      vars:
+        VITE_SUPABASE_URL: "https://syyntodkvexkbpjrskjj.supabase.co"
+        VITE_SUPABASE_ANON_KEY: "sb_publishable_BHKTjGCKkot6GVa2M6BCMQ_0qBAl1jP"
+        # Forces Playwright to start its own preview server (no reuse) + forbid .only.
+        CI: "true"
+      node: latest
+
+    # Runs on every push to main (the integration gate). Widen branch_patterns to
+    # 'claude/*' etc. to gate feature branches pre-merge (costs more CI minutes +
+    # more live-DB churn from the mutating specs).
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+
+    scripts:
+      - name: Install Node dependencies
+        script: npm ci
+
+      - name: Install Playwright Chromium
+        script: npx playwright install chromium
+
+      - name: Run E2E tests (Playwright builds + previews + runs all specs)
+        script: npm run test:e2e
+
+    artifacts:
+      # Traces (trace: retain-on-failure) for debugging any red spec.
+      - test-results/**
+      - playwright-report/**
