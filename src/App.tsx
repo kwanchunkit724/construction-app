@@ -90,6 +90,11 @@ const MissionPage = lazy(() => import('./pages/Mission'))
 const SellPage = lazy(() => import('./pages/Sell'))
 const TakeawayPage = lazy(() => import('./pages/Takeaway'))
 
+// Public in-app feature-showcase for live presentations (/#/demo). No auth —
+// like /sell — so it opens straight up in front of a prospect. Lazy so it
+// never weighs down the authed entry chunk.
+const DemoPage = lazy(() => import('./pages/Demo'))
+
 function lazyRoute(node: React.ReactNode) {
   return <Suspense fallback={<FullPageSpinner label="載入中..." />}>{node}</Suspense>
 }
@@ -185,6 +190,7 @@ export default function App() {
             <>
               <Route path="/mission" element={lazyRoute(<MissionPage />)} />
               <Route path="/sell" element={lazyRoute(<SellPage />)} />
+              <Route path="/demo" element={lazyRoute(<DemoPage />)} />
               <Route path="/takeaway" element={lazyRoute(<TakeawayPage />)} />
             </>
           )}
