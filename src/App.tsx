@@ -3,6 +3,7 @@ import { lazy, Suspense, ReactNode } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { AuthProvider } from './contexts/AuthContext'
 import { StepUpProvider } from './contexts/StepUpContext'
+import { SignReauthProvider } from './contexts/SignReauthContext'
 import { ProjectsProvider } from './contexts/ProjectsContext'
 import { PtwFlagProvider } from './contexts/PtwFlagContext'
 import { FilesFlagProvider } from './contexts/FilesFlagContext'
@@ -125,6 +126,7 @@ export default function App() {
   return (
     <AuthProvider>
       <StepUpProvider>
+      <SignReauthProvider>
       <ProjectsProvider>
         <PtwFlagProvider>
         <FilesFlagProvider>
@@ -192,6 +194,7 @@ export default function App() {
         </FilesFlagProvider>
         </PtwFlagProvider>
       </ProjectsProvider>
+      </SignReauthProvider>
       </StepUpProvider>
     </AuthProvider>
   )

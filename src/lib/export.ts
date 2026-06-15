@@ -987,3 +987,110 @@ export async function shareFormSignoffPdf(input: FormPdfInput): Promise<void> {
   const filename = `${safeName(input.projectName)}_${input.templateCode}_${safeName(input.equipmentName)}_${dateStr()}.pdf`
   await shareOrDownloadBlob(blob, filename, `${input.templateName} — ${input.equipmentName}`)
 }
+
+// ── 簽名證明 certificate (v60 non-repudiation) ──────────────────
+// The 本人 proof certificate for 勞工處: WHO signed (verified account + derived
+// phone + project role), WHICH credential backed it, WHAT was signed, WHEN, the
+// re-auth posture, and the hash-chain tamper-evidence. SignatureProofCard reads
+// get_signature_proof(p_kind,p_id) and renders this on screen; the 匯出簽名證明
+// button renders the SAME proof object into this jsPDF doc. Shape mirrors the
+// get_signature_proof return jsonb (see supabase/v60-sign-reauth.sql §7).
+
+export interface SignatureProofInput {
+  kind: 'ptw' | 'form'
+  signerName: string | null
+  signerPhone: string | null
+  signerRoleZh: string | null
+  credential: Record<string, unknown> | null
+  docNumber: string | null
+  docKindZh: string          // e.g. 動火工作許可證 / 法定表格
+  projectName: string | null
+  detailZh: string | null    // ptw_type label OR 表格 + result, for the WHAT line
+  signedAt: string | null
+  reauthEnforced: boolean
+  reauthMethodZh: string     // e.g. 密碼重新驗證
+  ledgerSeq: number | null
+  ledgerHash: string | null
+  integrityIntact: boolean
+  integrityReason: string | null
+  attestationZh: string
+}
+
+export async function exportSignatureProofPdf(input: SignatureProofInput): Promise<void> {
+  const jspdfMod = await import('jspdf')
+  const jsPDFCtor = (jspdfMod as any).default
+  const doc: any = new jsPDFCtor({ unit: 'pt', format: 'a4' })
+  await ensureChineseFont(doc)
+
+  // Title
+  doc.setFontSize(18)
+  doc.text('簽名證明 (Signature Proof)', 40, 52)
+  doc.setFontSize(10)
+  doc.text('CK工程 — 電子簽名非否認證明（勞工處用途）', 40, 70)
+
+  let y = 104
+  const line = (label: string, val: string) => {
+    doc.setFontSize(10)
+    doc.text(`${label}：${val}`, 40, y, { maxWidth: 515 })
+    y += 18
+  }
+  const heading = (t: string) => {
+    y += 8
+    doc.setFontSize(12)
+    doc.text(t, 40, y)
+    y += 18
+    doc.setFontSize(10)
+  }
+
+  // WHO
+  heading('簽署人')
+  line('姓名', input.signerName ?? '（未知）')
+  line('電話', input.signerPhone ?? '未提供')
+  line('項目角色', input.signerRoleZh ?? '—')
+
+  // Credential (form signoffs carry a credential snapshot; ptw does not)
+  if (input.credential) {
+    const c = input.credential as Record<string, any>
+    const certNo = c.cert_no ?? c.certNo ?? null
+    const type = c.type ?? c.credential_type ?? null
+    const validUntil = c.valid_until ?? c.validUntil ?? null
+    heading('合資格人士證明')
+    if (type) line('資格類別', String(type))
+    if (certNo) line('證書編號', String(certNo))
+    if (validUntil) line('有效至', new Date(String(validUntil)).toLocaleDateString('zh-HK'))
+  }
+
+  // WHAT
+  heading('簽署文件')
+  line('類型', input.docKindZh)
+  line('編號', input.docNumber ?? '—')
+  if (input.projectName) line('項目', input.projectName)
+  if (input.detailZh) line('內容', input.detailZh)
+  line('簽署時間', input.signedAt ? `${new Date(input.signedAt).toLocaleString('zh-HK')}（香港時間）` : '未知')
+
+  // Re-auth posture
+  heading('身份驗證')
+  line('簽署前重新驗證', input.reauthEnforced ? `已啟用（${input.reauthMethodZh}）` : `未強制（${input.reauthMethodZh}）`)
+
+  // Tamper-evidence
+  heading('防篡改記錄')
+  line('帳本序號', input.ledgerSeq !== null ? String(input.ledgerSeq) : '未記錄')
+  if (input.ledgerHash) line('雜湊', input.ledgerHash)
+  line('雜湊鏈完整性', input.integrityIntact ? '完整（未被竄改）' : `已破損${input.integrityReason ? `：${input.integrityReason}` : ''}`)
+
+  // Attestation
+  y += 12
+  if (y > 720) { doc.addPage(); y = 50 }
+  doc.setFontSize(12)
+  doc.text('證明聲明', 40, y); y += 18
+  doc.setFontSize(10)
+  doc.text(input.attestationZh, 40, y, { maxWidth: 515 })
+
+  // Footer
+  doc.setFontSize(8)
+  doc.text(`產生時間：${new Date().toLocaleString('zh-HK')} — 由 CK工程系統產生`, 40, 820)
+
+  const blob = doc.output('blob') as Blob
+  const filename = `簽名證明_${safeName(input.docNumber ?? input.kind)}_${dateStr()}.pdf`
+  await shareOrDownloadBlob(blob, filename, `簽名證明 — ${input.docNumber ?? input.docKindZh}`)
+}

@@ -6,6 +6,7 @@ import { usePtw } from '../../contexts/PtwContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { useProjects } from '../../contexts/ProjectsContext'
 import { useStepUp } from '../../contexts/StepUpContext'
+import { useSignReauth } from '../../contexts/SignReauthContext'
 import { useIsOnline } from '../../hooks/useIsOnline'
 import { OfflineBanner } from '../OfflineBanner'
 import { supabase } from '../../lib/supabase'
@@ -23,6 +24,7 @@ export function PtwApproverBar({ ptw, onAction }: Props) {
   const { projects, memberships } = useProjects()
   const { approve, requestRevision, reject, adminOverride } = usePtw()
   const { requireStepUp } = useStepUp()
+  const { requireSignReauth } = useSignReauth()
   const online = useIsOnline()
   const [activeAction, setActiveAction] = useState<Action>(null)
   const [reason, setReason] = useState('')
@@ -107,6 +109,15 @@ export function PtwApproverBar({ ptw, onAction }: Props) {
     try {
       const { error: aErr } = await approve(ptw.id)
       if (aErr) throw new Error(aErr)
+      // Sign re-auth (#9) right before the signoff RPC: when enforcement is ON,
+      // the signer re-enters their login password so the signature stands up as
+      // 本人 for a 勞工處 dispute. record_ptw_signoff re-asserts assert_sign_reauth
+      // server-side, so a false here (cancel / wrong password) MUST abort —
+      // otherwise the RPC would just raise 簽名前需要重新輸入密碼確認身份.
+      if (!(await requireSignReauth())) {
+        setSubmitting(false)
+        return
+      }
       const { error: sErr } = await supabase.rpc('record_ptw_signoff', {
         p_ptw_id: ptw.id,
         p_signature_b64: b64,

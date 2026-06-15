@@ -5,6 +5,7 @@ import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { PtwApproverBar } from '../components/ptw/PtwApproverBar'
 import { PtwSignaturePad } from '../components/ptw/PtwSignaturePad'
+import { SignatureProofCard } from '../components/SignatureProofCard'
 import { QrCard } from '../components/ptw/PtwQrCard'
 import { Modal } from '../components/Modal'
 import { OfflineBanner } from '../components/OfflineBanner'
@@ -223,6 +224,18 @@ function PtwDetailInner() {
                   )
                 })}
             </ul>
+          </div>
+        )}
+
+        {/* 簽名證明 (本人 proof) — one certificate per recorded signoff */}
+        {signoffs.length > 0 && (
+          <div className="space-y-3">
+            {signoffs
+              .slice()
+              .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))
+              .map(sg => (
+                <SignatureProofCard key={sg.id} kind="ptw" signoffId={sg.id} />
+              ))}
           </div>
         )}
 

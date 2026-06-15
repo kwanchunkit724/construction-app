@@ -21,6 +21,7 @@ import {
   fetchMyCredentials, hasMatchingCredential, credentialTypeLabel,
 } from '../lib/credentials'
 import { shareFormSignoffPdf } from '../lib/export'
+import { SignatureProofCard } from '../components/SignatureProofCard'
 
 const RESULT_OPTIONS: FormSignoffResult[] = ['pass', 'pass_with_remarks', 'fail']
 
@@ -216,6 +217,15 @@ function EquipmentDetailInner() {
                     <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5 mt-1.5 leading-relaxed">
                       你未有已核實的「{credentialTypeLabel(tmpl.required_credential)}」資格。請於「個人」頁上載證書並由管理員 / PM / 安全主任核實後再簽署。
                     </p>
+                  </div>
+                )}
+
+                {/* 簽名證明 (本人 proof) — one certificate per recorded signoff */}
+                {signoffs.length > 0 && (
+                  <div className="mt-3 space-y-3">
+                    {signoffs.map(sg => (
+                      <SignatureProofCard key={sg.id} kind="form" signoffId={sg.id} />
+                    ))}
                   </div>
                 )}
               </div>

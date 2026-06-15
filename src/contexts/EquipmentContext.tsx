@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { useProjects } from './ProjectsContext'
 import { useStepUp } from './StepUpContext'
+import { useSignReauth } from './SignReauthContext'
 import { cacheGet, cacheSet, getOnline } from '../lib/offline'
 import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import type {
@@ -60,6 +61,7 @@ export function EquipmentProvider({ projectId, children }: { projectId: string; 
   const { profile } = useAuth()
   const { memberships, projects } = useProjects()
   const { requireStepUp } = useStepUp()
+  const { requireSignReauth } = useSignReauth()
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [equipment, setEquipment] = useState<Equipment[]>([])
@@ -253,6 +255,13 @@ export function EquipmentProvider({ projectId, children }: { projectId: string; 
     // requireStepUp returns false on cancel / no-2FA → abort, surface no error.
     const ok = await requireStepUp('form_signoff')
     if (!ok) return { id: null, error: null }
+    // Sign re-auth (#9) after the step-up gate, before the RPC: when enforcement
+    // is ON, the signer re-enters their login password so the statutory-form
+    // signature stands up as 本人 for a 勞工處 dispute. record_form_signoff
+    // re-asserts assert_sign_reauth server-side, so a false here (cancel / wrong
+    // password) MUST abort — surface a clean cancel like the step-up path does.
+    const reauthOk = await requireSignReauth()
+    if (!reauthOk) return { id: null, error: null }
     const { data, error } = await supabase.rpc('record_form_signoff', {
       p_instance_id: instanceId,
       p_result: result,
@@ -262,7 +271,7 @@ export function EquipmentProvider({ projectId, children }: { projectId: string; 
     if (error) return { id: null, error: error.message }
     await refetch()
     return { id: (data as unknown as string) ?? null, error: null }
-  }, [profile, requireStepUp, refetch])
+  }, [profile, requireStepUp, requireSignReauth, refetch])
 
   const value: EquipmentContextValue = {
     projectId,
