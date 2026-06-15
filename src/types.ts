@@ -1210,3 +1210,29 @@ export type { Event, TimetableEntry } from './types-timetable'
 
 export type { Contact, ContactInput } from './types-contact'
 export { TRADE_SUGGESTIONS } from './types-contact'
+
+// ── v59: per-project module switches ─────────────────────────
+// An admin can turn any module OFF for a single project (進度 excepted — it is
+// the non-disableable core). The catalogue of 13 ModuleKeys + their labels /
+// icons / routes lives in src/lib/modules.ts; ModuleKey is re-exported here so
+// feature consumers keep importing module types `from '../types'`.
+//
+// A ProjectModule row is the persisted override. Absence of a row means the
+// module is enabled (backwards-compat) — only an explicit row with enabled=false
+// hides a surface. Column names mirror the SQL verbatim (no camelCase).
+export type { ModuleKey } from './lib/modules'
+
+export interface ProjectModule {
+  project_id: string
+  module_key: string
+  enabled: boolean
+  updated_by: string | null
+  updated_at: string
+}
+
+// One row of get_project_modules() — every catalogue key with its effective
+// enabled state (override row coalesced to true when absent).
+export interface ModuleState {
+  module_key: string
+  enabled: boolean
+}

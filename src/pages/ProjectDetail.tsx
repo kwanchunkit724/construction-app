@@ -1,4 +1,4 @@
-import { useMemo, useState, lazy, Suspense } from 'react'
+import { useMemo, useState, useEffect, lazy, Suspense } from 'react'
 import { useParams, useNavigate, Navigate } from 'react-router-dom'
 import {
   ChevronLeft, Plus, Building2, RefreshCw,
@@ -37,6 +37,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useStepUp } from '../contexts/StepUpContext'
 import { usePtwFlag } from '../contexts/PtwFlagContext'
 import { useFilesFlag } from '../contexts/FilesFlagContext'
+import { useModules } from '../contexts/ModulesContext'
 import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH, deriveStatus, plannedProgressOf, CATEGORY_DOMAIN_ZH, CATEGORY_STREAM_ZH } from '../types'
 import type { ProgressItem, ProgressStatus, Zone, CategoryDomain, CategoryStream } from '../types'
 import { templateFor } from '../lib/progressTemplates'
@@ -87,10 +88,22 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const { loading, items, fetchError, canEdit, refetch, deleteItem } = useProgress()
   const { issues, myRoleInProject } = useIssues()
   const { requireStepUp } = useStepUp()
+  const { isModuleEnabled } = useModules()
 
   const project = projects.find(p => p.id === projectId)
 
   const aiEnabled = useAiAssistantEnabled(projectId)
+  // Module gating — each tab only shows when its module is on (default-true
+  // until the RPC says off, so nothing hides while loading). 進度 is core and
+  // always visible. 簽核 / 工具 are multi-module gateways: shown when ANY of the
+  // modules they front is enabled; the cards inside gate themselves per-module.
+  const showIssuesTab = isModuleEnabled('issues')
+  const showSiVoTab = isModuleEnabled('si') || isModuleEnabled('vo') || isModuleEnabled('ptw')
+  const showToolsTab = isModuleEnabled('weather') || isModuleEnabled('documents')
+    || isModuleEnabled('materials') || isModuleEnabled('contacts')
+    || isModuleEnabled('timetable') || isModuleEnabled('dailies') || isModuleEnabled('equipment')
+  const showAssistantTab = aiEnabled && isModuleEnabled('assistant')
+
   const [tab, setTab] = useState<Tab>('progress')
   // v57: progress category filter (大樓/外圍 × 土建/BS)
   const [catDomain, setCatDomain] = useState<CategoryDomain | 'all'>('all')
@@ -104,6 +117,20 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const [refreshing, setRefreshing] = useState(false)
   const [createIssueOpen, setCreateIssueOpen] = useState(false)
   const [showExport, setShowExport] = useState(false)
+
+  // If the module behind the active tab gets turned off (admin toggle arrives
+  // over realtime), the tab button + its content both disappear — bounce back
+  // to 進度 so the user is never stranded on a now-blank tab. 進度 is core and
+  // can never be disabled.
+  useEffect(() => {
+    const stillVisible =
+      tab === 'progress'
+      || (tab === 'issues' && showIssuesTab)
+      || (tab === 'si-vo' && showSiVoTab)
+      || (tab === 'tools' && showToolsTab)
+      || (tab === 'assistant' && showAssistantTab)
+    if (!stillVisible) setTab('progress')
+  }, [tab, showIssuesTab, showSiVoTab, showToolsTab, showAssistantTab])
 
   const openIssueCount = issues.filter(i => i.status === 'open').length
 
@@ -275,10 +302,10 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
       <div className="bg-white border-b border-site-200">
         <div className="max-w-2xl md:max-w-7xl mx-auto flex">
           <TabButton active={tab === 'progress'} onClick={() => setTab('progress')} icon={ListChecks} label="進度" />
-          <TabButton active={tab === 'issues'} onClick={() => setTab('issues')} icon={AlertCircle} label="問題" badge={openIssueCount} />
-          <TabButton active={tab === 'si-vo'} onClick={() => setTab('si-vo')} icon={FileCheck2} label="簽核" />
-          <TabButton active={tab === 'tools'} onClick={() => setTab('tools')} icon={Wrench} label="工具" />
-          {aiEnabled && <TabButton active={tab === 'assistant'} onClick={() => setTab('assistant')} icon={Bot} label="助理" />}
+          {showIssuesTab && <TabButton active={tab === 'issues'} onClick={() => setTab('issues')} icon={AlertCircle} label="問題" badge={openIssueCount} />}
+          {showSiVoTab && <TabButton active={tab === 'si-vo'} onClick={() => setTab('si-vo')} icon={FileCheck2} label="簽核" />}
+          {showToolsTab && <TabButton active={tab === 'tools'} onClick={() => setTab('tools')} icon={Wrench} label="工具" />}
+          {showAssistantTab && <TabButton active={tab === 'assistant'} onClick={() => setTab('assistant')} icon={Bot} label="助理" />}
         </div>
       </div>
       </div>
@@ -359,7 +386,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
           </>
         )}
 
-        {tab === 'issues' && (
+        {tab === 'issues' && showIssuesTab && (
           <IssuesTab
             projectId={projectId}
             canReport={!!myRoleInProject}
@@ -367,13 +394,13 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
           />
         )}
 
-        {tab === 'si-vo' && (
+        {tab === 'si-vo' && showSiVoTab && (
           <SiVoSwitcher projectId={projectId} />
         )}
-        {tab === 'tools' && (
+        {tab === 'tools' && showToolsTab && (
           <ToolsSwitcher projectId={projectId} />
         )}
-        {tab === 'assistant' && aiEnabled && (
+        {tab === 'assistant' && showAssistantTab && (
           <Suspense fallback={<div className="py-10 flex justify-center"><Spinner size={28} /></div>}>
             <AssistantPanel projectId={projectId} />
           </Suspense>
@@ -611,12 +638,15 @@ function SiVoSwitcher({ projectId }: { projectId: string }) {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const { enabled: ptwEnabled } = usePtwFlag()
-  const showPtw = ptwEnabled || profile?.global_role === 'admin'
+  const { isModuleEnabled } = useModules()
+  // PTW gates on BOTH its legacy app_config flag AND the per-project module.
+  const showPtw = (ptwEnabled || profile?.global_role === 'admin') && isModuleEnabled('ptw')
   return (
     <div className="space-y-3">
       <p className="text-sm text-site-600 px-1">
         簽核流程：選擇要查看的文件類型
       </p>
+      {isModuleEnabled('si') && (
       <button
         onClick={() => navigate(`/project/${projectId}/si`)}
         className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left"
@@ -630,6 +660,8 @@ function SiVoSwitcher({ projectId }: { projectId: string }) {
         </div>
         <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
       </button>
+      )}
+      {isModuleEnabled('vo') && (
       <button
         onClick={() => navigate(`/project/${projectId}/vo`)}
         className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left"
@@ -643,6 +675,7 @@ function SiVoSwitcher({ projectId }: { projectId: string }) {
         </div>
         <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
       </button>
+      )}
       {showPtw && (
         <button
           onClick={() => navigate(`/project/${projectId}/ptw`)}
@@ -669,9 +702,11 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
   const { profile } = useAuth()
   const { projects, memberships } = useProjects()
   const { enabled: filesEnabled } = useFilesFlag()
+  const { isModuleEnabled } = useModules()
   // 文件 card appears only when files_enabled is ON (admins bypass to pilot),
-  // matching the route gate (FilesGate) — flag OFF = no new surface.
-  const showFiles = filesEnabled || profile?.global_role === 'admin'
+  // matching the route gate (FilesGate) — flag OFF = no new surface. Also gated
+  // on the per-project documents module.
+  const showFiles = (filesEnabled || profile?.global_role === 'admin') && isModuleEnabled('documents')
 
   // 機械/表格 (地盤表格管理) entry. The v55 migration ships forms_enabled=false but
   // exposes NO get_forms_enabled RPC, so there is no flag hook to mirror
@@ -680,7 +715,7 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
   // pm/main_contractor/safety_officer). Read-only members reach the surface only
   // via a reminder deep-link; managers get the card here. (A future migration
   // can add get_forms_enabled + a FormsFlagContext to gate this like files/ptw.)
-  const showEquipment = (() => {
+  const showEquipment = isModuleEnabled('equipment') && (() => {
     if (!profile) return false
     if (profile.global_role === 'admin') return true
     const project = projects.find(p => p.id === projectId)
@@ -696,6 +731,7 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
       <p className="text-sm text-site-600 px-1">
         工地工具：選擇要使用的功能
       </p>
+      {isModuleEnabled('weather') && (
       <button
         onClick={() => navigate(`/project/${projectId}/weather`)}
         className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
@@ -709,6 +745,7 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
         </div>
         <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
       </button>
+      )}
       {showEquipment && (
         <button
           onClick={() => navigate(`/project/${projectId}/equipment`)}
@@ -739,6 +776,7 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
           <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
         </button>
       )}
+      {isModuleEnabled('dailies') && (
       <button
         onClick={() => navigate(`/project/${projectId}/daily`)}
         className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
@@ -752,6 +790,8 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
         </div>
         <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
       </button>
+      )}
+      {isModuleEnabled('materials') && (
       <button
         onClick={() => navigate(`/project/${projectId}/materials`)}
         className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
@@ -765,6 +805,8 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
         </div>
         <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
       </button>
+      )}
+      {isModuleEnabled('timetable') && (
       <button
         onClick={() => navigate(`/project/${projectId}/timetable`)}
         className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
@@ -778,6 +820,8 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
         </div>
         <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
       </button>
+      )}
+      {isModuleEnabled('contacts') && (
       <button
         onClick={() => navigate(`/project/${projectId}/contacts`)}
         className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
@@ -791,6 +835,7 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
         </div>
         <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
       </button>
+      )}
     </div>
   )
 }
