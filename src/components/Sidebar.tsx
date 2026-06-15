@@ -4,9 +4,12 @@ import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { usePtwFlag } from '../contexts/PtwFlagContext'
 import { useFilesFlag } from '../contexts/FilesFlagContext'
+import { useModules } from '../contexts/ModulesContext'
 import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
 
 const FORMS_MANAGE_ROLES = ['pm', 'main_contractor', 'safety_officer']
+
+type NavItem = { to: string; label: string; icon: typeof Home }
 
 /**
  * Desktop-only sidebar nav. Hidden below md (768px).
@@ -42,21 +45,16 @@ export function Sidebar() {
       && m.status === 'approved' && FORMS_MANAGE_ROLES.includes(m.role))
   )
 
-  const tabs = [
+  // Non-project nav (always safe — no module context needed). The per-project
+  // module links live in <ProjectNavLinks>, which is only mounted when there is
+  // a projectId in scope; that keeps useModules() out of the global pages
+  // (/home, /projects, /admin…) where no ModulesProvider exists.
+  const topTabs: NavItem[] = [
     { to: '/home', label: '首頁', icon: Home },
     ...(showDashboard ? [{ to: '/dashboard', label: '儀表板', icon: LayoutDashboard }] : []),
     { to: '/projects', label: '工地', icon: Building2 },
-    ...(projectId ? [
-      { to: `/project/${projectId}/si`, label: '工地指令', icon: FileText },
-      { to: `/project/${projectId}/vo`, label: '變更指令', icon: Receipt },
-      ...(showPtw ? [{ to: `/project/${projectId}/ptw`, label: '工作許可證', icon: HardHat }] : []),
-      ...(showEquipment ? [{ to: `/project/${projectId}/equipment`, label: '機械/表格', icon: Wrench }] : []),
-      { to: `/project/${projectId}/daily`, label: '每日日誌', icon: BookOpen },
-      { to: `/project/${projectId}/materials`, label: '物料', icon: Package },
-      { to: `/project/${projectId}/timetable`, label: '行事曆', icon: CalendarDays },
-      { to: `/project/${projectId}/contacts`, label: '聯絡人', icon: ContactIcon },
-      ...(showFiles ? [{ to: `/project/${projectId}/files`, label: '文件', icon: FolderOpen }] : []),
-    ] : []),
+  ]
+  const bottomTabs: NavItem[] = [
     ...(isAdmin ? [
       { to: '/admin', label: '管理', icon: Shield },
       { to: '/admin/users', label: '用戶', icon: Users },
@@ -81,22 +79,16 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
-        {tabs.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-safety-50 text-safety-700'
-                  : 'text-site-600 hover:bg-site-50 hover:text-site-900'
-              }`
-            }
-          >
-            <Icon size={18} />
-            {label}
-          </NavLink>
-        ))}
+        {topTabs.map(t => <SidebarLink key={t.to} item={t} />)}
+        {projectId && (
+          <ProjectNavLinks
+            projectId={projectId}
+            showPtw={showPtw}
+            showFiles={showFiles}
+            showEquipment={showEquipment}
+          />
+        )}
+        {bottomTabs.map(t => <SidebarLink key={t.to} item={t} />)}
       </nav>
 
       {/* User card + signout */}
@@ -125,4 +117,51 @@ export function Sidebar() {
       )}
     </aside>
   )
+}
+
+// One sidebar row. Shared so the global + per-project link groups render
+// identically.
+function SidebarLink({ item: { to, label, icon: Icon } }: { item: NavItem }) {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+          isActive
+            ? 'bg-safety-50 text-safety-700'
+            : 'text-site-600 hover:bg-site-50 hover:text-site-900'
+        }`
+      }
+    >
+      <Icon size={18} />
+      {label}
+    </NavLink>
+  )
+}
+
+// Per-project module links. Mounted ONLY inside a /project/:id scope, so it is
+// the single place useModules() runs in the sidebar — never on a global page
+// where there is no ModulesProvider. Each module link only renders when its
+// module is enabled (default-true while the RPC loads, so nothing flickers off).
+function ProjectNavLinks({
+  projectId, showPtw, showFiles, showEquipment,
+}: {
+  projectId: string
+  showPtw: boolean
+  showFiles: boolean
+  showEquipment: boolean
+}) {
+  const { isModuleEnabled } = useModules()
+  const items: NavItem[] = [
+    ...(isModuleEnabled('si') ? [{ to: `/project/${projectId}/si`, label: '工地指令', icon: FileText }] : []),
+    ...(isModuleEnabled('vo') ? [{ to: `/project/${projectId}/vo`, label: '變更指令', icon: Receipt }] : []),
+    ...(showPtw && isModuleEnabled('ptw') ? [{ to: `/project/${projectId}/ptw`, label: '工作許可證', icon: HardHat }] : []),
+    ...(showEquipment && isModuleEnabled('equipment') ? [{ to: `/project/${projectId}/equipment`, label: '機械/表格', icon: Wrench }] : []),
+    ...(isModuleEnabled('dailies') ? [{ to: `/project/${projectId}/daily`, label: '每日日誌', icon: BookOpen }] : []),
+    ...(isModuleEnabled('materials') ? [{ to: `/project/${projectId}/materials`, label: '物料', icon: Package }] : []),
+    ...(isModuleEnabled('timetable') ? [{ to: `/project/${projectId}/timetable`, label: '行事曆', icon: CalendarDays }] : []),
+    ...(isModuleEnabled('contacts') ? [{ to: `/project/${projectId}/contacts`, label: '聯絡人', icon: ContactIcon }] : []),
+    ...(showFiles && isModuleEnabled('documents') ? [{ to: `/project/${projectId}/files`, label: '文件', icon: FolderOpen }] : []),
+  ]
+  return <>{items.map(t => <SidebarLink key={t.to} item={t} />)}</>
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Building2, UserCog, Trash2, RefreshCw, Download, GitBranch, Shield } from 'lucide-react'
+import { Plus, Building2, UserCog, Trash2, RefreshCw, Download, GitBranch, Shield, ToggleLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
@@ -169,6 +169,13 @@ export default function AdminProjects() {
                   title="設定簽核流程"
                 >
                   <GitBranch size={16} /> 簽核流程
+                </Link>
+                <Link
+                  to={`/admin/projects/${p.id}/modules`}
+                  className="flex-1 flex items-center justify-center gap-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 py-2 rounded-lg"
+                  title="設定模組"
+                >
+                  <ToggleLeft size={16} /> 模組
                 </Link>
                 {confirmDelId === p.id ? (
                   <>

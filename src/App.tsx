@@ -1,13 +1,16 @@
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { lazy, Suspense } from 'react'
+import { HashRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
+import { lazy, Suspense, ReactNode } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { AuthProvider } from './contexts/AuthContext'
 import { StepUpProvider } from './contexts/StepUpContext'
 import { ProjectsProvider } from './contexts/ProjectsContext'
 import { PtwFlagProvider } from './contexts/PtwFlagContext'
 import { FilesFlagProvider } from './contexts/FilesFlagContext'
+import { ModulesProvider } from './contexts/ModulesContext'
 import { PtwGate } from './components/PtwGate'
 import { FilesGate } from './components/FilesGate'
+import { ModuleGate } from './components/ModuleGate'
+import type { ModuleKey } from './types'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { FullPageSpinner } from './components/Spinner'
 import Login from './pages/Login'
@@ -43,6 +46,9 @@ const ProjectFilesPage = lazy(() => import('./pages/ProjectFiles'))
 const PendingReviewsPage = lazy(() => import('./pages/PendingReviews'))
 // 資料完整性 — admin tamper-evident ledger verify/export (Security Phase 1).
 const DataIntegrityPage = lazy(() => import('./pages/DataIntegrity'))
+// v59 per-project module switches — admin-only toggle list (owned by 2C).
+// Lazy so the admin-only surface stays out of the entry chunk.
+const AdminProjectModulesPage = lazy(() => import('./pages/AdminProjectModules'))
 
 // v1.2 feature pages — lazy so the entry chunk stays under the 800 KB CI
 // guard. None of these load until the user actually opens the route.
@@ -87,6 +93,24 @@ function lazyRoute(node: React.ReactNode) {
   return <Suspense fallback={<FullPageSpinner label="載入中..." />}>{node}</Suspense>
 }
 
+// Per-project module gating. The 13-surface catalogue (src/lib/modules.ts) can
+// be switched off per project by an admin (進度 excepted — core). Each gated
+// module route is wrapped here: ModulesProvider reads :id and drives a single
+// get_project_modules subscription, ModuleGate redirects to the project home
+// when the module is OFF (admins bypass). Default-enabled, so absence of a
+// row / loading window keeps the surface visible (backwards-compat).
+//
+// Mounted INSIDE ProtectedRoute (auth first) — mirror PtwGate/FilesGate.
+function ModuleRoute({ module, children }: { module: ModuleKey; children: ReactNode }) {
+  const { id } = useParams<{ id: string }>()
+  if (!id) return <Navigate to="/home" replace />
+  return (
+    <ModulesProvider projectId={id}>
+      <ModuleGate module={module}>{children}</ModuleGate>
+    </ModulesProvider>
+  )
+}
+
 // Sales/marketing surfaces (/mission, /sell, /takeaway) are WEB-ONLY tools
 // for going out and selling the system — they must NOT ship inside the
 // native iOS/Android app. Register those routes only on web (Vercel) builds;
@@ -118,29 +142,41 @@ export default function App() {
           <Route path="/admin/users" element={<ProtectedRoute requireAdmin><AdminUsers /></ProtectedRoute>} />
           <Route path="/admin/integrity" element={<ProtectedRoute requireAdmin>{lazyRoute(<DataIntegrityPage />)}</ProtectedRoute>} />
           <Route path="/admin/projects/:id/chains" element={<ProtectedRoute requireAdmin><AdminProjectChainsPage /></ProtectedRoute>} />
+          {/* v59 per-project module switches — admin-only toggle list (page owned by 2C). */}
+          <Route path="/admin/projects/:id/modules" element={<ProtectedRoute requireAdmin>{lazyRoute(<AdminProjectModulesPage />)}</ProtectedRoute>} />
+          {/* ProjectDetail hosts the in-page tabs: 進度 (core, never gated), 問題,
+              工地指令/變更指令 (si-vo), and 助理. These tab surfaces are gated inside
+              ProjectDetail via useModules() (2B-tabs), not at the route — the route
+              itself must stay open since 進度 is the non-disableable core.
+              TODO(Phase 2E): the 助理 tab is gated by its own ai_enabled flag —
+              fold the assistant ModuleKey in alongside that flag there. */}
           <Route path="/project/:id" element={<ProtectedRoute>{lazyRoute(<ProjectDetail />)}</ProtectedRoute>} />
-          <Route path="/project/:id/issue/:issueId" element={<ProtectedRoute><IssueDetail /></ProtectedRoute>} />
-          <Route path="/project/:id/si" element={<ProtectedRoute><SiListPage /></ProtectedRoute>} />
-          <Route path="/project/:id/si/:siId" element={<ProtectedRoute><SiDetailPage /></ProtectedRoute>} />
-          <Route path="/project/:id/vo" element={<ProtectedRoute><VoListPage /></ProtectedRoute>} />
-          <Route path="/project/:id/vo/:voId" element={<ProtectedRoute><VoDetailPage /></ProtectedRoute>} />
-          <Route path="/project/:id/ptw" element={<ProtectedRoute><PtwGate>{lazyRoute(<PtwListPage />)}</PtwGate></ProtectedRoute>} />
-          <Route path="/project/:id/ptw/:ptwId" element={<ProtectedRoute><PtwGate>{lazyRoute(<PtwDetailPage />)}</PtwGate></ProtectedRoute>} />
+          <Route path="/project/:id/issue/:issueId" element={<ProtectedRoute><ModuleRoute module="issues"><IssueDetail /></ModuleRoute></ProtectedRoute>} />
+          <Route path="/project/:id/si" element={<ProtectedRoute><ModuleRoute module="si"><SiListPage /></ModuleRoute></ProtectedRoute>} />
+          <Route path="/project/:id/si/:siId" element={<ProtectedRoute><ModuleRoute module="si"><SiDetailPage /></ModuleRoute></ProtectedRoute>} />
+          <Route path="/project/:id/vo" element={<ProtectedRoute><ModuleRoute module="vo"><VoListPage /></ModuleRoute></ProtectedRoute>} />
+          <Route path="/project/:id/vo/:voId" element={<ProtectedRoute><ModuleRoute module="vo"><VoDetailPage /></ModuleRoute></ProtectedRoute>} />
+          {/* PTW composes ModuleGate (per-project switch) over PtwGate (org-wide app_config flag). */}
+          <Route path="/project/:id/ptw" element={<ProtectedRoute><ModuleRoute module="ptw"><PtwGate>{lazyRoute(<PtwListPage />)}</PtwGate></ModuleRoute></ProtectedRoute>} />
+          <Route path="/project/:id/ptw/:ptwId" element={<ProtectedRoute><ModuleRoute module="ptw"><PtwGate>{lazyRoute(<PtwDetailPage />)}</PtwGate></ModuleRoute></ProtectedRoute>} />
+          {/* /verify/:token has no :id (it's an equipment/permit deep-link), so it stays org-flag-gated only. */}
           <Route path="/verify/:token" element={<ProtectedRoute><PtwGate>{lazyRoute(<PtwVerifyPage />)}</PtwGate></ProtectedRoute>} />
-          {/* Phase D documents register — gated like PTW (FilesGate → /home when files_enabled is off). */}
-          <Route path="/project/:id/files" element={<ProtectedRoute><FilesGate>{lazyRoute(<ProjectFilesPage />)}</FilesGate></ProtectedRoute>} />
+          {/* Phase D documents register — composes ModuleGate (per-project 文件 switch) over
+              FilesGate (org-wide files_enabled flag). /reviews is cross-project (no :id) so
+              it stays FilesGate-only. */}
+          <Route path="/project/:id/files" element={<ProtectedRoute><ModuleRoute module="documents"><FilesGate>{lazyRoute(<ProjectFilesPage />)}</FilesGate></ModuleRoute></ProtectedRoute>} />
           <Route path="/reviews" element={<ProtectedRoute><FilesGate>{lazyRoute(<PendingReviewsPage />)}</FilesGate></ProtectedRoute>} />
-          {/* v1.2: site diary, on-site materials, and the unified timetable. */}
-          <Route path="/project/:id/daily" element={<ProtectedRoute>{lazyRoute(<DailyListPage />)}</ProtectedRoute>} />
-          <Route path="/project/:id/daily/edit" element={<ProtectedRoute>{lazyRoute(<DailyEditPage />)}</ProtectedRoute>} />
-          <Route path="/project/:id/materials" element={<ProtectedRoute>{lazyRoute(<MaterialListPage />)}</ProtectedRoute>} />
-          <Route path="/project/:id/timetable" element={<ProtectedRoute>{lazyRoute(<TimetablePage />)}</ProtectedRoute>} />
-          <Route path="/project/:id/contacts" element={<ProtectedRoute>{lazyRoute(<ContactListPage />)}</ProtectedRoute>} />
-          <Route path="/project/:id/weather" element={<ProtectedRoute>{lazyRoute(<WeatherRecordPage />)}</ProtectedRoute>} />
+          {/* v1.2: site diary, on-site materials, and the unified timetable. Per-project module-gated. */}
+          <Route path="/project/:id/daily" element={<ProtectedRoute><ModuleRoute module="dailies">{lazyRoute(<DailyListPage />)}</ModuleRoute></ProtectedRoute>} />
+          <Route path="/project/:id/daily/edit" element={<ProtectedRoute><ModuleRoute module="dailies">{lazyRoute(<DailyEditPage />)}</ModuleRoute></ProtectedRoute>} />
+          <Route path="/project/:id/materials" element={<ProtectedRoute><ModuleRoute module="materials">{lazyRoute(<MaterialListPage />)}</ModuleRoute></ProtectedRoute>} />
+          <Route path="/project/:id/timetable" element={<ProtectedRoute><ModuleRoute module="timetable">{lazyRoute(<TimetablePage />)}</ModuleRoute></ProtectedRoute>} />
+          <Route path="/project/:id/contacts" element={<ProtectedRoute><ModuleRoute module="contacts">{lazyRoute(<ContactListPage />)}</ModuleRoute></ProtectedRoute>} />
+          <Route path="/project/:id/weather" element={<ProtectedRoute><ModuleRoute module="weather">{lazyRoute(<WeatherRecordPage />)}</ModuleRoute></ProtectedRoute>} />
           {/* 地盤表格管理 — register + per-equipment forms / mobile e-signing. */}
-          <Route path="/project/:id/equipment" element={<ProtectedRoute>{lazyRoute(<EquipmentListPage />)}</ProtectedRoute>} />
-          <Route path="/project/:id/equipment/:equipmentId" element={<ProtectedRoute>{lazyRoute(<EquipmentDetailPage />)}</ProtectedRoute>} />
-          {/* Equipment QR verify — login-gated only (no forms flag gate). */}
+          <Route path="/project/:id/equipment" element={<ProtectedRoute><ModuleRoute module="equipment">{lazyRoute(<EquipmentListPage />)}</ModuleRoute></ProtectedRoute>} />
+          <Route path="/project/:id/equipment/:equipmentId" element={<ProtectedRoute><ModuleRoute module="equipment">{lazyRoute(<EquipmentDetailPage />)}</ModuleRoute></ProtectedRoute>} />
+          {/* Equipment QR verify — login-gated only (no :id, no forms flag gate). */}
           <Route path="/equipment-verify/:token" element={<ProtectedRoute>{lazyRoute(<EquipmentVerifyPage />)}</ProtectedRoute>} />
           {/* Public sales surfaces — WEB-ONLY, never in the native app. */}
           {!isNativeApp && (
