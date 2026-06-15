@@ -16,10 +16,14 @@ import {
   ISSUE_ACTION_ZH, formatIssueNo,
   computeRollup, getDescendantLeaves, plannedProgressOf, deriveStatus,
   isScheduled, LINE_ITEM_CATEGORY_ZH,
+  WEATHER_KIND_ZH, EQUIPMENT_KIND_ZH, EQUIPMENT_STATUS_ZH,
+  FORM_RESULT_ZH, FORM_STATUS_ZH, deriveFormStatus,
 } from '../types'
 import type {
   Project, ProgressItem, Issue, IssueComment, UserProfile, ProgressStatus,
   VO, VOVersion, DrawingVersion,
+  WeatherEvent, WeatherClaim, WeatherKind, EquipmentKind, EquipmentStatus,
+  Equipment, FormInstance, FormSignoff, FormTemplate, FormsDashboard, FormStatus,
 } from '../types'
 import { formatHKD } from './currency'
 import { fetchPrevSnapshot, captureSnapshot } from './snapshots'
@@ -1093,4 +1097,226 @@ export async function exportSignatureProofPdf(input: SignatureProofInput): Promi
   const blob = doc.output('blob') as Blob
   const filename = `簽名證明_${safeName(input.docNumber ?? input.kind)}_${dateStr()}.pdf`
   await shareOrDownloadBlob(blob, filename, `簽名證明 — ${input.docNumber ?? input.docKindZh}`)
+}
+
+// ── 天氣記錄 / 極端天氣 EOT 申索 export (Weather Part 2) ──────────
+// Joins each per-project project_weather_claims row to the territory-wide
+// weather_events evidence on the same hkt_date so an EOT claim ships with its
+// objective HKO grounds (T8+/黑雨/紅雨/24h雨量>20mm). Mirrors the CEDD PAH
+// Appendix 7.4 (Inclement Weather Report Form) discretionary fields. Replaces
+// the ad-hoc anchor-download CSV that Capacitor's WebView blocks on native.
+
+// One ZH line summarising a date's weather_events (kind labels + rainfall mm).
+function weatherEventsLabel(evs: WeatherEvent[]): string {
+  return evs
+    .map(e => {
+      const base = WEATHER_KIND_ZH[e.kind as WeatherKind] ?? e.kind
+      const mm = e.kind === 'rainfall_20mm' && e.evidence?.mm != null ? `（${e.evidence.mm}mm）` : ''
+      return base + mm
+    })
+    .join(' + ')
+}
+
+// Stations recorded for a date (rain-gauge codes for rainfall_20mm rows).
+function weatherStations(evs: WeatherEvent[]): string {
+  return Array.from(new Set(evs.map(e => e.station).filter((s): s is string => !!s))).join(' / ')
+}
+
+const yesNo = (v: boolean | null | undefined) => v == null ? '' : v ? '是' : '否'
+
+export async function exportWeatherEotToExcel(
+  project: Project,
+  events: WeatherEvent[],
+  claims: WeatherClaim[],
+): Promise<void> {
+  const eventsByDate = new Map<string, WeatherEvent[]>()
+  for (const e of events) {
+    const a = eventsByDate.get(e.hkt_date) ?? []
+    a.push(e)
+    eventsByDate.set(e.hkt_date, a)
+  }
+  const totalDays = claims.reduce((s, c) => s + (Number(c.claim_days) || 0), 0)
+  const sorted = claims.slice().sort((a, b) => a.hkt_date.localeCompare(b.hkt_date))
+
+  const aoa: (string | number | null)[][] = []
+  aoa.push([`${project.name} — 天氣記錄 / 極端天氣 EOT 申索`])
+  aoa.push([`產生：${new Date().toLocaleString('zh-HK')}`])
+  aoa.push([`已記錄申請 EOT 總日數：${totalDays} 日 · 共 ${claims.length} 日`])
+  aoa.push([])
+  const header = ['日期', '天氣事件', '天文台站', '觸發', '關鍵路徑', '可施工', '善後日數', '申請EOT日數', '備註']
+  aoa.push(header)
+  for (const c of sorted) {
+    const evs = eventsByDate.get(c.hkt_date) ?? []
+    aoa.push([
+      c.hkt_date,
+      weatherEventsLabel(evs),
+      weatherStations(evs),
+      c.trigger,
+      yesNo(c.on_critical_path),
+      yesNo(c.ready_to_work),
+      c.tidy_days ?? '',
+      c.claim_days ?? '',
+      c.note ?? '',
+    ])
+  }
+  aoa.push([])
+  aoa.push(['', '', '', '', '', '', '', totalDays, '申請EOT總日數'])
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa)
+  ws['!cols'] = [{ wch: 12 }, { wch: 24 }, { wch: 14 }, { wch: 28 }, { wch: 9 }, { wch: 9 }, { wch: 10 }, { wch: 12 }, { wch: 40 }]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, '天氣EOT記錄')
+  const blob = new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+  await shareOrDownloadBlob(blob, `${safeName(project.name)}_天氣EOT_${dateStr()}.xlsx`, `${project.name} — 天氣 EOT 申索（${totalDays} 日）`)
+}
+
+// PDF variant — emulates the CEDD Inclement Weather Report Form layout via
+// jsPDF + autoTable (ensureChineseFont so every glyph renders).
+export async function exportWeatherEotToPDF(
+  project: Project,
+  events: WeatherEvent[],
+  claims: WeatherClaim[],
+): Promise<void> {
+  const jspdfMod = await import('jspdf')
+  const autoTableMod = await import('jspdf-autotable')
+  const jsPDFCtor = (jspdfMod as any).default
+  const autoTableFn = (autoTableMod as any).default
+  const doc: any = new jsPDFCtor({ unit: 'pt', format: 'a4' })
+  await ensureChineseFont(doc)
+
+  const eventsByDate = new Map<string, WeatherEvent[]>()
+  for (const e of events) {
+    const a = eventsByDate.get(e.hkt_date) ?? []
+    a.push(e)
+    eventsByDate.set(e.hkt_date, a)
+  }
+  const totalDays = claims.reduce((s, c) => s + (Number(c.claim_days) || 0), 0)
+  const sorted = claims.slice().sort((a, b) => a.hkt_date.localeCompare(b.hkt_date))
+
+  // Header
+  doc.setFontSize(16)
+  doc.text('惡劣天氣 / 工期延誤 (EOT) 申索報告', 40, 50)
+  doc.setFontSize(10)
+  doc.text(`項目：${project.name}`, 40, 72)
+  doc.text(`已記錄申請 EOT 總日數：${totalDays} 日 · 共 ${claims.length} 日`, 40, 88)
+  doc.text('標準：T8 或以上 / 黑雨 / 紅雨 / 24 小時雨量 > 20mm（私人 SFBC / 房署客觀準則）。', 40, 104, { maxWidth: 515 })
+  doc.text('政府 GCC 為酌情，需填關鍵路徑等資料供工程師審批。資料來源：香港天文台。', 40, 118, { maxWidth: 515 })
+
+  autoTableFn(doc, {
+    startY: 138,
+    head: [['日期', '天氣事件', '觸發', '關鍵路徑', '可施工', '善後', 'EOT', '備註']],
+    body: sorted.map(c => {
+      const evs = eventsByDate.get(c.hkt_date) ?? []
+      return [
+        c.hkt_date,
+        weatherEventsLabel(evs),
+        c.trigger,
+        yesNo(c.on_critical_path),
+        yesNo(c.ready_to_work),
+        c.tidy_days ?? '',
+        c.claim_days ?? '',
+        c.note ?? '',
+      ]
+    }),
+    foot: [[
+      { content: '申請 EOT 總日數', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
+      { content: `${totalDays}`, styles: { fontStyle: 'bold' } },
+      '',
+    ]],
+    styles: { font: 'NotoHK', fontSize: 9, cellPadding: 4 },
+    headStyles: { fillColor: [29, 78, 216] },
+  })
+
+  doc.setFontSize(8)
+  doc.text(`產生時間：${new Date().toLocaleString('zh-HK')} — 由 CK工程系統產生`, 40, 820)
+
+  const blob = doc.output('blob') as Blob
+  await shareOrDownloadBlob(blob, `${safeName(project.name)}_天氣EOT_${dateStr()}.pdf`, `${project.name} — 天氣 EOT 申索（${totalDays} 日）`)
+}
+
+// ── 機械登記 / 法定表格 register export (equipment module) ────────
+// Two sheets: 機械登記 (equipment_register) + 檢查狀態 (each form_instance's
+// derived FormStatus + its latest form_signoffs row). pdf_path is always NULL
+// (no bucket / setter RPC), so no PDF-link column is exported.
+
+// Latest signoff for an instance (by signed_at).
+function latestSignoff(signoffs: FormSignoff[] | undefined): FormSignoff | null {
+  if (!signoffs || signoffs.length === 0) return null
+  return signoffs.slice().sort((a, b) => b.signed_at.localeCompare(a.signed_at))[0]
+}
+
+export async function exportEquipmentRegister(
+  project: Project,
+  equipment: Equipment[],
+  instances: FormInstance[],
+  signoffsByInstance: Record<string, FormSignoff[]>,
+  templateById: Record<string, FormTemplate>,
+  dashboard: FormsDashboard | null,
+  users: Record<string, UserProfile>,
+): Promise<void> {
+  // Sheet 1 — 機械登記
+  const equipRows = equipment
+    .slice()
+    .sort((a, b) => a.ref_no.localeCompare(b.ref_no))
+    .map(eq => ({
+      編號: eq.ref_no,
+      名稱: eq.name_zh,
+      類別: EQUIPMENT_KIND_ZH[eq.kind as EquipmentKind] ?? eq.kind,
+      品牌型號: eq.brand_model ?? '',
+      序號: eq.serial_no ?? '',
+      位置: eq.location_zh ?? '',
+      狀態: EQUIPMENT_STATUS_ZH[eq.status as EquipmentStatus] ?? eq.status,
+    }))
+  const ws1 = XLSX.utils.json_to_sheet(equipRows)
+  ws1['!cols'] = [{ wch: 10 }, { wch: 22 }, { wch: 12 }, { wch: 20 }, { wch: 16 }, { wch: 18 }, { wch: 10 }]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws1, '機械登記')
+
+  // Sheet 2 — 檢查狀態. Prefer the server dashboard rows (status already
+  // derived server-side); fall back to deriving from instances + templates.
+  const equipNameById = new Map(equipment.map(eq => [eq.id, `${eq.ref_no} ${eq.name_zh}`]))
+  const dashByInstance = new Map((dashboard?.rows ?? []).map(r => [r.instance_id, r]))
+
+  const inspRows = instances
+    .slice()
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .map(inst => {
+      const tpl = templateById[inst.template_id]
+      const dash = dashByInstance.get(inst.id)
+      const status: FormStatus = dash?.status
+        ?? deriveFormStatus(inst, tpl?.remind_before_days ?? 0)
+      const last = latestSignoff(signoffsByInstance[inst.id])
+      const equipName = inst.equipment_id
+        ? (equipNameById.get(inst.equipment_id) ?? dash?.equipment_name ?? '')
+        : (dash?.equipment_name ?? '')
+      return {
+        機械: equipName,
+        表格: tpl ? `${tpl.name_zh}（${tpl.code}）` : (dash ? `${dash.template_name}（${dash.template_code}）` : ''),
+        法定依據: tpl?.statutory_ref ?? '',
+        狀態: FORM_STATUS_ZH[status],
+        有效至: inst.valid_until ? new Date(inst.valid_until).toLocaleDateString('zh-HK') : '',
+        最後簽署: last ? new Date(last.signed_at).toLocaleString('zh-HK') : '',
+        簽署人: last ? (users[last.signed_by]?.name ?? '前成員') : '',
+        結果: last ? FORM_RESULT_ZH[last.result] : '',
+        暫停: yesNo(inst.suspended),
+      }
+    })
+  const ws2 = XLSX.utils.json_to_sheet(inspRows)
+  ws2['!cols'] = [{ wch: 24 }, { wch: 26 }, { wch: 18 }, { wch: 10 }, { wch: 14 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 8 }]
+
+  // KPI header rows prepended to sheet 2 from dashboard.counts (when available).
+  if (dashboard) {
+    const c = dashboard.counts
+    XLSX.utils.sheet_add_aoa(ws2, [[
+      `有效 ${c.valid} · 即將到期 ${c.expiring} · 過期 ${c.expired} · 未簽 ${c.missing} · 停用 ${c.suspended}`,
+    ]], { origin: -1 })
+  }
+  XLSX.utils.book_append_sheet(wb, ws2, '檢查狀態')
+
+  const blob = new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+  await shareOrDownloadBlob(blob, `${safeName(project.name)}_機械表格_${dateStr()}.xlsx`, `${project.name} — 機械登記 / 法定表格`)
 }

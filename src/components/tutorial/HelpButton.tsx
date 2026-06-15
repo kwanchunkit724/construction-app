@@ -25,7 +25,7 @@ function screenFromPath(pathname: string): string | null {
   const m = pathname.match(/^\/project\/[^/]+\/([^/]+)/)
   if (m) {
     const seg = m[1]
-    if (['si', 'vo', 'ptw', 'daily', 'materials', 'timetable', 'contacts', 'drawings'].includes(seg)) return seg
+    if (['si', 'vo', 'ptw', 'daily', 'materials', 'timetable', 'contacts', 'drawings', 'weather', 'equipment'].includes(seg)) return seg
     if (seg === 'issue') return 'issues'
     return null
   }

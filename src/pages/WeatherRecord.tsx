@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, CloudRain, Download, Save } from 'lucide-react'
+import { ChevronLeft, CloudRain, FileSpreadsheet, FileText, Save } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
+import { useModules } from '../contexts/ModulesContext'
 import { Spinner } from '../components/Spinner'
+import { exportWeatherEotToExcel, exportWeatherEotToPDF } from '../lib/export'
 import { WEATHER_KIND_ZH } from '../types'
 import type { WeatherEvent, WeatherClaim, WeatherKind } from '../types'
 
@@ -19,18 +21,26 @@ export default function WeatherRecord() {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const { projects, memberships } = useProjects()
+  const { isModuleEnabled } = useModules()
   const [events, setEvents] = useState<WeatherEvent[]>([])
   const [claims, setClaims] = useState<WeatherClaim[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<Editing | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+
+  const project = useMemo(() => projects.find(p => p.id === id), [projects, id])
+  // The module route's ModuleGate already bounces non-admin members away when
+  // 天氣 is off; admins bypass that gate, so this only ever resolves false here
+  // for an admin viewing a project with the module disabled.
+  const weatherOn = isModuleEnabled('weather')
 
   const canManage = useMemo(() => {
     if (!profile) return false
     if (profile.global_role === 'admin') return true
-    if (projects.find(p => p.id === id)?.assigned_pm_ids.includes(profile.id)) return true
+    if (project?.assigned_pm_ids.includes(profile.id)) return true
     return memberships.some(m => m.user_id === profile.id && m.project_id === id && m.status === 'approved' && ['pm', 'main_contractor', 'general_foreman'].includes(m.role))
-  }, [profile, projects, memberships, id])
+  }, [profile, project, memberships, id])
 
   async function load() {
     setLoading(true)
@@ -80,12 +90,21 @@ export default function WeatherRecord() {
     setEditing(null)
     await load()
   }
-  function exportCsv() {
-    const head = '日期,觸發,關鍵路徑,可施工,善後日數,申請EOT日數,備註\n'
-    const body = claims.slice().sort((a, b) => a.hkt_date.localeCompare(b.hkt_date)).map(c =>
-      [c.hkt_date, c.trigger, c.on_critical_path ? '是' : '否', c.ready_to_work ? '是' : '否', c.tidy_days ?? '', c.claim_days ?? '', (c.note ?? '').replace(/[,\n]/g, ' ')].join(',')).join('\n')
-    const blob = new Blob(['﻿' + head + body], { type: 'text/csv;charset=utf-8' })
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `天氣EOT記錄_${id.slice(0, 8)}.csv`; a.click()
+  // Share-first Excel / PDF (the old anchor-download CSV was blocked by the
+  // Capacitor WebView on iOS/Android). Both ship the per-day EOT claims joined
+  // to their HKO weather_events evidence for the same date.
+  async function runExport(fmt: 'xlsx' | 'pdf') {
+    if (!project || exporting) return
+    setError(null)
+    setExporting(true)
+    try {
+      if (fmt === 'xlsx') await exportWeatherEotToExcel(project, events, claims)
+      else await exportWeatherEotToPDF(project, events, claims)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '匯出失敗')
+    } finally {
+      setExporting(false)
+    }
   }
 
   return (
@@ -95,7 +114,12 @@ export default function WeatherRecord() {
           <button onClick={() => navigate(`/project/${id}`)} className="p-1.5 -ml-1.5 rounded-lg hover:bg-site-100"><ChevronLeft size={20} /></button>
           <CloudRain size={18} className="text-blue-600" />
           <h1 className="font-bold text-site-900">天氣記錄 / 極端天氣 EOT</h1>
-          <button onClick={exportCsv} className="ml-auto btn-ghost px-2.5 py-1.5 text-xs flex items-center gap-1"><Download size={14} />匯出</button>
+          {weatherOn && claims.length > 0 && (
+            <div className="ml-auto flex items-center gap-1.5">
+              <button onClick={() => runExport('xlsx')} disabled={exporting} className="btn-ghost px-2.5 py-1.5 text-xs flex items-center gap-1 disabled:opacity-50"><FileSpreadsheet size={14} />Excel</button>
+              <button onClick={() => runExport('pdf')} disabled={exporting} className="btn-ghost px-2.5 py-1.5 text-xs flex items-center gap-1 disabled:opacity-50"><FileText size={14} />PDF</button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -110,7 +134,7 @@ export default function WeatherRecord() {
         {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{error}</div>}
 
         {loading ? <div className="py-10 flex justify-center"><Spinner size={26} /></div>
-          : dates.length === 0 ? <div className="card p-8 text-center text-sm text-site-500">暫時冇記錄到極端天氣日。天氣同步每 30 分鐘自動執行。</div>
+          : dates.length === 0 ? <div className="card p-8 text-center text-sm text-site-500">{weatherOn ? '暫時冇記錄到極端天氣日。天氣同步每 30 分鐘自動執行。' : '此工地已停用天氣模組。請管理員喺模組設定重新啟用。'}</div>
           : dates.map(date => {
             const evs = eventsByDate.get(date) ?? []
             const claim = claimByDate.get(date)
