@@ -251,6 +251,21 @@ function pick<T extends Record<string, unknown>>(o: T, keys: string[]) {
   return r
 }
 
+// v59 gates 11 feature tables on project_module_enabled(project_id,'<key>'). When
+// a module is OFF the underlying read returns [] (RLS) — indistinguishable from
+// "nothing on site". moduleEnabled() asks the existing RPC so a gated read tool
+// can instead return { module_disabled: true, module } and the model knows WHY.
+// Absence of an override row = enabled (the RPC coalesces to true), and on any
+// RPC error we fail OPEN (treat as enabled) so a transient hiccup degrades to the
+// pre-existing []-behaviour rather than a false "module off".
+type ModuleKey = 'issues' | 'documents' | 'contacts' | 'materials' | 'timetable' | 'dailies'
+async function moduleEnabled(supa: Supa, projectId: string, key: ModuleKey): Promise<boolean> {
+  const { data, error } = await supa.rpc('project_module_enabled', { p_project_id: projectId, p_module_key: key })
+  if (error) return true
+  return data !== false
+}
+function moduleDisabled(key: ModuleKey) { return { module_disabled: true, module: key } }
+
 export const READ_TOOLS: ToolDef[] = [
   {
     name: 'get_progress_tree',
@@ -331,6 +346,7 @@ export async function executeReadTool(supa: Supa, projectId: string, name: strin
       ]))
     }
     case 'get_timetable_window': {
+      if (!(await moduleEnabled(supa, projectId, 'timetable'))) return moduleDisabled('timetable')
       const now = Date.now()
       const from = new Date(now + (Number(input?.from_days ?? 0)) * 864e5).toISOString()
       const to = new Date(now + (Number(input?.to_days ?? 14)) * 864e5).toISOString()
@@ -339,6 +355,7 @@ export async function executeReadTool(supa: Supa, projectId: string, name: strin
       return ((data ?? []) as Record<string, unknown>[]).slice(0, CAP)
     }
     case 'list_materials': {
+      if (!(await moduleEnabled(supa, projectId, 'materials'))) return moduleDisabled('materials')
       const { data, error } = await supa.from('materials')
         .select('id, name, unit, qty_needed, qty_arrived, status, planned_arrival_at, arrived_at, urgent, notes')
         .eq('project_id', projectId).order('planned_arrival_at', { ascending: true, nullsFirst: false }).limit(CAP)
@@ -350,12 +367,14 @@ export async function executeReadTool(supa: Supa, projectId: string, name: strin
       return rows
     }
     case 'list_open_issues': {
+      if (!(await moduleEnabled(supa, projectId, 'issues'))) return moduleDisabled('issues')
       const { data, error } = await supa.from('issues')
         .select('id, title, description, status, current_handler_role, reporter_role, created_at')
         .eq('project_id', projectId).eq('status', 'open').order('created_at', { ascending: false }).limit(CAP)
       return error ? { error: error.message } : data
     }
     case 'search_documents': {
+      if (!(await moduleEnabled(supa, projectId, 'documents'))) return moduleDisabled('documents')
       let q = supa.from('documents')
         .select('id, title, doc_number, document_type, current_version_id, review_due_date')
         .eq('project_id', projectId).limit(CAP)
@@ -381,6 +400,7 @@ export async function executeReadTool(supa: Supa, projectId: string, name: strin
       }))
     }
     case 'get_document_link': {
+      if (!(await moduleEnabled(supa, projectId, 'documents'))) return moduleDisabled('documents')
       if (!input?.version_id) return { error: 'version_id required' }
       const { data: v, error } = await supa.from('document_versions')
         .select('id, bucket_id, file_path, version_no, status').eq('id', input.version_id).maybeSingle()
@@ -395,11 +415,13 @@ export async function executeReadTool(supa: Supa, projectId: string, name: strin
       return error ? { error: error.message } : (data ?? [])
     }
     case 'list_contacts': {
+      if (!(await moduleEnabled(supa, projectId, 'contacts'))) return moduleDisabled('contacts')
       const { data, error } = await supa.from('contacts')
         .select('id, name, trade, phone, notes').eq('project_id', projectId).order('trade').limit(CAP)
       return error ? { error: error.message } : data
     }
     case 'get_dailies': {
+      if (!(await moduleEnabled(supa, projectId, 'dailies'))) return moduleDisabled('dailies')
       const days = Math.max(1, Math.min(30, Number(input?.days ?? 7)))
       const since = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10)
       const { data, error } = await supa.from('dailies')
@@ -489,10 +511,20 @@ const REVIEWERS = ['admin', 'pm', 'main_contractor', 'general_foreman']
 
 export type StepUpClass = 'approval' | 'document' | 'progress_delete'
 
+// v59 module keys this file's tools touch. 'progress' is the non-disableable core
+// (set_progress_blocked / update_progress_percent / delete_progress_item are never
+// gated). The remaining keys map a tool to the gated table it WRITES.
+export type ModuleKey = 'issues' | 'documents' | 'contacts' | 'materials' | 'timetable' | 'si' | 'vo' | 'ptw'
+const MODULE_ZH: Record<ModuleKey, string> = {
+  issues: '問題/跟進', documents: '文件', contacts: '聯絡人', materials: '物料',
+  timetable: '時間表', si: '工地指令', vo: '工程變更', ptw: '動火/工作許可證',
+}
+
 interface MutateSpec {
   def: ToolDef
   risk: Risk
   allow: string[]                                   // membership roles permitted (admin always allowed)
+  module?: ModuleKey | ((a: any) => ModuleKey)       // gated module; if OFF the confirm-run returns a distinct error
   step_up?: StepUpClass                              // if set, the client runs requireStepUp(class) before confirming
   summary: (a: any) => string                        // zh-HK confirm-card line
   run: (supa: Supa, projectId: string, uid: string, a: any) => Promise<unknown>
@@ -500,43 +532,43 @@ interface MutateSpec {
 
 const SPECS: Record<string, MutateSpec> = {
   create_event: {
-    risk: 'medium', allow: PLUS_SAFETY,
+    risk: 'medium', allow: PLUS_SAFETY, module: 'timetable',
     def: { name: 'create_event', description: '喺時間表加一個事件（會議/巡查/里程碑/其他）。', input_schema: { type: 'object', properties: { title: { type: 'string' }, starts_at: { type: 'string', description: 'ISO 時間' }, ends_at: { type: 'string' }, location: { type: 'string' }, event_type: { type: 'string', enum: ['meeting', 'inspection', 'milestone', 'other'] }, description: { type: 'string' } }, required: ['title', 'starts_at'], additionalProperties: false } },
     summary: (a) => `📅 新增事件「${a.title}」· ${fmt(a.starts_at)}${a.location ? ' · ' + a.location : ''}`,
     run: (s, p, uid, a) => s.from('events').insert({ project_id: p, title: a.title, starts_at: a.starts_at, ends_at: a.ends_at ?? null, location: a.location ?? null, event_type: a.event_type ?? 'other', description: a.description ?? null, created_by: uid }).select('id, title, starts_at').single(),
   },
   update_event: {
-    risk: 'medium', allow: PLUS_SAFETY,
+    risk: 'medium', allow: PLUS_SAFETY, module: 'timetable',
     def: { name: 'update_event', description: '改一個時間表事件（時間/標題/地點）。需要 event_id（先用 get_timetable_window 搵）。', input_schema: { type: 'object', properties: { event_id: { type: 'string' }, title: { type: 'string' }, starts_at: { type: 'string' }, ends_at: { type: 'string' }, location: { type: 'string' } }, required: ['event_id'], additionalProperties: false } },
     summary: (a) => `✏️ 修改事件 ${a.title ? '「' + a.title + '」' : ''}${a.starts_at ? ' → ' + fmt(a.starts_at) : ''}`,
     run: (s, _p, _uid, a) => { const patch: Record<string, unknown> = {}; for (const k of ['title', 'starts_at', 'ends_at', 'location']) if (a[k] !== undefined) patch[k] = a[k]; return s.from('events').update(patch).eq('id', a.event_id).select('id').single() },
   },
   create_issue: {
-    risk: 'medium', allow: EVERYONE,
+    risk: 'medium', allow: EVERYONE, module: 'issues',
     def: { name: 'create_issue', description: '開一個問題/跟進。處理人同狀態由系統按你嘅角色自動決定。', input_schema: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' } }, required: ['title'], additionalProperties: false } },
     summary: (a) => `🛠️ 開問題「${a.title}」`,
     run: (s, p, uid, a) => s.from('issues').insert({ project_id: p, reporter_id: uid, title: a.title, description: a.description ?? '' }).select('id, title').single(),
   },
   add_issue_comment: {
-    risk: 'low', allow: EVERYONE,
+    risk: 'low', allow: EVERYONE, module: 'issues',
     def: { name: 'add_issue_comment', description: '喺一個問題加一句跟進備註。需要 issue_id（先用 list_open_issues 搵）。', input_schema: { type: 'object', properties: { issue_id: { type: 'string' }, body: { type: 'string' } }, required: ['issue_id', 'body'], additionalProperties: false } },
     summary: (a) => `💬 加備註：「${trunc(a.body)}」`,
     run: (s, _p, uid, a) => s.from('issue_comments').insert({ issue_id: a.issue_id, author_id: uid, action: 'commented', body: a.body }).select('id').single(),
   },
   order_material: {
-    risk: 'medium', allow: MANAGERS,
+    risk: 'medium', allow: MANAGERS, module: 'materials',
     def: { name: 'order_material', description: '落一張物料訂單。', input_schema: { type: 'object', properties: { name: { type: 'string' }, unit: { type: 'string' }, qty_needed: { type: 'number' }, planned_arrival_at: { type: 'string', description: 'ISO 預計到貨時間' }, urgent: { type: 'boolean' } }, required: ['name', 'unit', 'qty_needed'], additionalProperties: false } },
     summary: (a) => `📦 落單：${a.qty_needed} ${a.unit} ${a.name}${a.planned_arrival_at ? ' · ' + fmt(a.planned_arrival_at) + '到' : ''}${a.urgent ? ' · 急' : ''}`,
     run: (s, p, uid, a) => s.from('materials').insert({ project_id: p, name: a.name, unit: a.unit, qty_needed: a.qty_needed, planned_arrival_at: a.planned_arrival_at ?? null, urgent: a.urgent ?? false, item_ids: [], requested_by: uid }).select('id, name, qty_needed').single(),
   },
   receive_material: {
-    risk: 'medium', allow: MANAGERS,
+    risk: 'medium', allow: MANAGERS, module: 'materials',
     def: { name: 'receive_material', description: '更新某物料已到貨數量。需要 material_id（先用 list_materials 搵）。', input_schema: { type: 'object', properties: { material_id: { type: 'string' }, qty_arrived: { type: 'number' } }, required: ['material_id', 'qty_arrived'], additionalProperties: false } },
     summary: (a) => `📥 到貨更新：${a.qty_arrived}`,
     run: (s, _p, _uid, a) => s.from('materials').update({ qty_arrived: a.qty_arrived }).eq('id', a.material_id).select('id, qty_arrived, status').single(),
   },
   add_contact: {
-    risk: 'low', allow: PLUS_SAFETY,
+    risk: 'low', allow: PLUS_SAFETY, module: 'contacts',
     def: { name: 'add_contact', description: '加一個項目聯絡人。', input_schema: { type: 'object', properties: { name: { type: 'string' }, trade: { type: 'string', description: '工種，例如 水電/泥水/紮鐵' }, phone: { type: 'string' }, notes: { type: 'string' } }, required: ['name', 'trade', 'phone'], additionalProperties: false } },
     summary: (a) => `📇 加聯絡人：${a.name}（${a.trade}）${a.phone}`,
     run: (s, p, uid, a) => s.from('contacts').insert({ project_id: p, name: a.name, trade: a.trade, phone: a.phone, notes: a.notes ?? null, created_by: uid }).select('id, name').single(),
@@ -581,7 +613,7 @@ const SPECS: Record<string, MutateSpec> = {
   },
   // ── Phase 3: high-risk decision actions (existing well-tested RPCs / RLS) ───
   escalate_issue: {
-    risk: 'high', allow: EVERYONE,
+    risk: 'high', allow: EVERYONE, module: 'issues',
     def: { name: 'escalate_issue', description: '把一個問題上呈俾上一級處理人（判頭→總承建商→PM）。需要 issue_id（先用 list_open_issues 搵）+ 一句說明。只有現任處理人或報告人先做到。', input_schema: { type: 'object', properties: { issue_id: { type: 'string' }, comment: { type: 'string' } }, required: ['issue_id', 'comment'], additionalProperties: false } },
     summary: (a) => `⬆️ 上呈問題：「${trunc(a.comment)}」`,
     run: async (s, _p, uid, a) => {
@@ -600,7 +632,7 @@ const SPECS: Record<string, MutateSpec> = {
     },
   },
   resolve_issue: {
-    risk: 'high', allow: EVERYONE,
+    risk: 'high', allow: EVERYONE, module: 'issues',
     def: { name: 'resolve_issue', description: '標記一個問題為已解決。需要 issue_id + 一句說明。只有現任處理人/報告人/管理員先做到。', input_schema: { type: 'object', properties: { issue_id: { type: 'string' }, comment: { type: 'string' } }, required: ['issue_id', 'comment'], additionalProperties: false } },
     summary: (a) => `✅ 解決問題：「${trunc(a.comment)}」`,
     run: async (s, _p, uid, a) => {
@@ -612,7 +644,7 @@ const SPECS: Record<string, MutateSpec> = {
     },
   },
   reopen_issue: {
-    risk: 'medium', allow: EVERYONE,
+    risk: 'medium', allow: EVERYONE, module: 'issues',
     def: { name: 'reopen_issue', description: '重開一個已解決嘅問題。需要 issue_id + 一句原因。', input_schema: { type: 'object', properties: { issue_id: { type: 'string' }, comment: { type: 'string' } }, required: ['issue_id', 'comment'], additionalProperties: false } },
     summary: (a) => `🔄 重開問題：「${trunc(a.comment)}」`,
     run: async (s, _p, uid, a) => {
@@ -624,19 +656,19 @@ const SPECS: Record<string, MutateSpec> = {
     },
   },
   approve_document: {
-    risk: 'high', allow: REVIEWERS, step_up: 'document',
+    risk: 'high', allow: REVIEWERS, module: 'documents', step_up: 'document',
     def: { name: 'approve_document', description: '批准一個文件版本。需要 version_id。判頭冇權審批；唔可以批自己提交嘅文件。', input_schema: { type: 'object', properties: { version_id: { type: 'string' }, note: { type: 'string' } }, required: ['version_id'], additionalProperties: false } },
     summary: (a) => `📄✅ 批准文件版本${a.note ? '：「' + trunc(a.note) + '」' : ''}`,
     run: (s, _p, _uid, a) => s.rpc('review_document_version', { p_version_id: a.version_id, p_action: 'approve', p_note: a.note?.trim() ?? null }).then((r: any) => ({ data: { version_id: a.version_id, action: 'approve' }, error: r.error })),
   },
   reject_document: {
-    risk: 'high', allow: REVIEWERS, step_up: 'document',
+    risk: 'high', allow: REVIEWERS, module: 'documents', step_up: 'document',
     def: { name: 'reject_document', description: '拒絕一個文件版本（必須填原因）。需要 version_id + note。', input_schema: { type: 'object', properties: { version_id: { type: 'string' }, note: { type: 'string' } }, required: ['version_id', 'note'], additionalProperties: false } },
     summary: (a) => `📄❌ 拒絕文件版本：「${trunc(a.note)}」`,
     run: (s, _p, _uid, a) => s.rpc('review_document_version', { p_version_id: a.version_id, p_action: 'reject', p_note: a.note?.trim() ?? null }).then((r: any) => ({ data: { version_id: a.version_id, action: 'reject' }, error: r.error })),
   },
   submit_approval_decision: {
-    risk: 'high', allow: PLUS_SAFETY, step_up: 'approval',
+    risk: 'high', allow: PLUS_SAFETY, module: (a) => (a?.doc_type === 'si' || a?.doc_type === 'vo' || a?.doc_type === 'ptw' ? a.doc_type : 'ptw'), step_up: 'approval',
     def: { name: 'submit_approval_decision', description: '喺審批鏈對一張 SI/VO/PTW 落審批決定。只有現任審批步驟嘅持有人先做到。reject / request_revision 嘅 reason 要 ≥10 字。', input_schema: { type: 'object', properties: { doc_type: { type: 'string', enum: ['si', 'vo', 'ptw'] }, doc_id: { type: 'string' }, action: { type: 'string', enum: ['approve', 'reject', 'request_revision'] }, reason: { type: 'string' } }, required: ['doc_type', 'doc_id', 'action'], additionalProperties: false } },
     summary: (a) => `🖊️ ${String(a.doc_type).toUpperCase()} ${a.action === 'approve' ? '批准' : a.action === 'reject' ? '拒絕' : '要求修改'}${a.reason ? '：「' + trunc(a.reason) + '」' : ''}`,
     run: (s, _p, _uid, a) => s.rpc('submit_approval', { p_doc_type: a.doc_type, p_doc_id: a.doc_id, p_action_type: a.action, p_reason: a.reason?.trim() ?? null, p_edits_jsonb: null }).then((r: any) => ({ data: { doc_type: a.doc_type, doc_id: a.doc_id, action: a.action }, error: r.error })),
@@ -669,6 +701,15 @@ export function mutateStepUp(name: string): StepUpClass | undefined { return SPE
 export async function executeMutateTool(supa: Supa, projectId: string, uid: string, name: string, args: any): Promise<unknown> {
   const spec = SPECS[name]
   if (!spec) return { error: `unknown mutate tool ${name}` }
+  // Module gate (v59): if this tool's target module is OFF for the project, the
+  // write would be RLS-rejected with a generic permission error. Return a distinct
+  // signal instead so the model can tell the user the module is disabled, not that
+  // they lack permission. Fail OPEN on RPC error (let RLS stay the authority).
+  if (spec.module) {
+    const key = typeof spec.module === 'function' ? spec.module(args ?? {}) : spec.module
+    const { data: on, error: me } = await supa.rpc('project_module_enabled', { p_project_id: projectId, p_module_key: key })
+    if (!me && on === false) return { error: `${MODULE_ZH[key]}模組已關閉，無法操作` }
+  }
   const { data, error } = (await spec.run(supa, projectId, uid, args ?? {})) as { data: unknown; error: { message: string } | null }
   if (error) return { error: error.message }
   return { ok: true, ...(data as object) }
@@ -765,7 +806,8 @@ function systemPrompt(role: string | null): string {
 3) 想開啟文件/圖紙時，先 search_documents 搵到 current_version，再用 get_document_link 攞連結。
 4) 改動類工具（加事件、開問題、落料、加聯絡人、寫日誌…）唔會即刻執行——系統會彈一張「確認卡」俾使用者撳「確認」先做。所以你 call 完改動工具之後，唔好當已經做咗；等使用者確認。如果使用者嘅角色冇權做某個改動，你就唔會見到嗰個工具，照實話佢冇權、可以叫 PM/老總幫手。
 5) 進度：你可以標記/解除受阻（set_progress_blocked），同埋更新「百分比追蹤」項目嘅完成度（update_progress_percent）。但樓層/數量/單位追蹤嘅項目就要叫使用者自己去進度表改（嗰啲工具會自動拒絕）。改進度一樣會彈確認卡。
-6) 天氣：問到天氣或者要做未來規劃時，用 get_weather_outlook 攞天文台預測。見到大雨/大風/颱風/酷熱就主動、具體噉提醒地盤要預防：大雨→清排水渠、物料離地加蓋、暫停批盪油漆；大風或颱風→綁好棚架網、收起易被風吹落街嘅物件、固定塔吊、收高空工作；酷熱→防中暑、調整戶外工時、設補水點。引用實際預測（例如「3 日後大雨機會高（PSR High）」）。`
+6) 天氣：問到天氣或者要做未來規劃時，用 get_weather_outlook 攞天文台預測。見到大雨/大風/颱風/酷熱就主動、具體噉提醒地盤要預防：大雨→清排水渠、物料離地加蓋、暫停批盪油漆；大風或颱風→綁好棚架網、收起易被風吹落街嘅物件、固定塔吊、收高空工作；酷熱→防中暑、調整戶外工時、設補水點。引用實際預測（例如「3 日後大雨機會高（PSR High）」）。
+7) 工具結果如果係 { module_disabled: true, module } 或者出現「…模組已關閉」嘅錯誤，代表管理員已經為呢個項目關閉咗嗰個功能模組——直接同使用者講「呢個功能已被管理員為此項目停用」，唔好當係「搵唔到資料」或者「冇權限」，亦唔好重試嗰個工具。`
 }
 
 // Model router: 分析/報告/規劃-class questions go to opus; everything else sonnet.

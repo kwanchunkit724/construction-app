@@ -24,6 +24,21 @@ function pick<T extends Record<string, unknown>>(o: T, keys: string[]) {
   return r
 }
 
+// v59 gates 11 feature tables on project_module_enabled(project_id,'<key>'). When
+// a module is OFF the underlying read returns [] (RLS) — indistinguishable from
+// "nothing on site". moduleEnabled() asks the existing RPC so a gated read tool
+// can instead return { module_disabled: true, module } and the model knows WHY.
+// Absence of an override row = enabled (the RPC coalesces to true), and on any
+// RPC error we fail OPEN (treat as enabled) so a transient hiccup degrades to the
+// pre-existing []-behaviour rather than a false "module off".
+type ModuleKey = 'issues' | 'documents' | 'contacts' | 'materials' | 'timetable' | 'dailies'
+async function moduleEnabled(supa: Supa, projectId: string, key: ModuleKey): Promise<boolean> {
+  const { data, error } = await supa.rpc('project_module_enabled', { p_project_id: projectId, p_module_key: key })
+  if (error) return true
+  return data !== false
+}
+function moduleDisabled(key: ModuleKey) { return { module_disabled: true, module: key } }
+
 export const READ_TOOLS: ToolDef[] = [
   {
     name: 'get_progress_tree',
@@ -104,6 +119,7 @@ export async function executeReadTool(supa: Supa, projectId: string, name: strin
       ]))
     }
     case 'get_timetable_window': {
+      if (!(await moduleEnabled(supa, projectId, 'timetable'))) return moduleDisabled('timetable')
       const now = Date.now()
       const from = new Date(now + (Number(input?.from_days ?? 0)) * 864e5).toISOString()
       const to = new Date(now + (Number(input?.to_days ?? 14)) * 864e5).toISOString()
@@ -112,6 +128,7 @@ export async function executeReadTool(supa: Supa, projectId: string, name: strin
       return ((data ?? []) as Record<string, unknown>[]).slice(0, CAP)
     }
     case 'list_materials': {
+      if (!(await moduleEnabled(supa, projectId, 'materials'))) return moduleDisabled('materials')
       const { data, error } = await supa.from('materials')
         .select('id, name, unit, qty_needed, qty_arrived, status, planned_arrival_at, arrived_at, urgent, notes')
         .eq('project_id', projectId).order('planned_arrival_at', { ascending: true, nullsFirst: false }).limit(CAP)
@@ -123,12 +140,14 @@ export async function executeReadTool(supa: Supa, projectId: string, name: strin
       return rows
     }
     case 'list_open_issues': {
+      if (!(await moduleEnabled(supa, projectId, 'issues'))) return moduleDisabled('issues')
       const { data, error } = await supa.from('issues')
         .select('id, title, description, status, current_handler_role, reporter_role, created_at')
         .eq('project_id', projectId).eq('status', 'open').order('created_at', { ascending: false }).limit(CAP)
       return error ? { error: error.message } : data
     }
     case 'search_documents': {
+      if (!(await moduleEnabled(supa, projectId, 'documents'))) return moduleDisabled('documents')
       let q = supa.from('documents')
         .select('id, title, doc_number, document_type, current_version_id, review_due_date')
         .eq('project_id', projectId).limit(CAP)
@@ -154,6 +173,7 @@ export async function executeReadTool(supa: Supa, projectId: string, name: strin
       }))
     }
     case 'get_document_link': {
+      if (!(await moduleEnabled(supa, projectId, 'documents'))) return moduleDisabled('documents')
       if (!input?.version_id) return { error: 'version_id required' }
       const { data: v, error } = await supa.from('document_versions')
         .select('id, bucket_id, file_path, version_no, status').eq('id', input.version_id).maybeSingle()
@@ -168,11 +188,13 @@ export async function executeReadTool(supa: Supa, projectId: string, name: strin
       return error ? { error: error.message } : (data ?? [])
     }
     case 'list_contacts': {
+      if (!(await moduleEnabled(supa, projectId, 'contacts'))) return moduleDisabled('contacts')
       const { data, error } = await supa.from('contacts')
         .select('id, name, trade, phone, notes').eq('project_id', projectId).order('trade').limit(CAP)
       return error ? { error: error.message } : data
     }
     case 'get_dailies': {
+      if (!(await moduleEnabled(supa, projectId, 'dailies'))) return moduleDisabled('dailies')
       const days = Math.max(1, Math.min(30, Number(input?.days ?? 7)))
       const since = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10)
       const { data, error } = await supa.from('dailies')

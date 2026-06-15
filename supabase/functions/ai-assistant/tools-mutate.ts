@@ -30,10 +30,20 @@ const REVIEWERS = ['admin', 'pm', 'main_contractor', 'general_foreman']
 
 export type StepUpClass = 'approval' | 'document' | 'progress_delete'
 
+// v59 module keys this file's tools touch. 'progress' is the non-disableable core
+// (set_progress_blocked / update_progress_percent / delete_progress_item are never
+// gated). The remaining keys map a tool to the gated table it WRITES.
+export type ModuleKey = 'issues' | 'documents' | 'contacts' | 'materials' | 'timetable' | 'si' | 'vo' | 'ptw'
+const MODULE_ZH: Record<ModuleKey, string> = {
+  issues: '問題/跟進', documents: '文件', contacts: '聯絡人', materials: '物料',
+  timetable: '時間表', si: '工地指令', vo: '工程變更', ptw: '動火/工作許可證',
+}
+
 interface MutateSpec {
   def: ToolDef
   risk: Risk
   allow: string[]                                   // membership roles permitted (admin always allowed)
+  module?: ModuleKey | ((a: any) => ModuleKey)       // gated module; if OFF the confirm-run returns a distinct error
   step_up?: StepUpClass                              // if set, the client runs requireStepUp(class) before confirming
   summary: (a: any) => string                        // zh-HK confirm-card line
   run: (supa: Supa, projectId: string, uid: string, a: any) => Promise<unknown>
@@ -41,43 +51,43 @@ interface MutateSpec {
 
 const SPECS: Record<string, MutateSpec> = {
   create_event: {
-    risk: 'medium', allow: PLUS_SAFETY,
+    risk: 'medium', allow: PLUS_SAFETY, module: 'timetable',
     def: { name: 'create_event', description: '喺時間表加一個事件（會議/巡查/里程碑/其他）。', input_schema: { type: 'object', properties: { title: { type: 'string' }, starts_at: { type: 'string', description: 'ISO 時間' }, ends_at: { type: 'string' }, location: { type: 'string' }, event_type: { type: 'string', enum: ['meeting', 'inspection', 'milestone', 'other'] }, description: { type: 'string' } }, required: ['title', 'starts_at'], additionalProperties: false } },
     summary: (a) => `📅 新增事件「${a.title}」· ${fmt(a.starts_at)}${a.location ? ' · ' + a.location : ''}`,
     run: (s, p, uid, a) => s.from('events').insert({ project_id: p, title: a.title, starts_at: a.starts_at, ends_at: a.ends_at ?? null, location: a.location ?? null, event_type: a.event_type ?? 'other', description: a.description ?? null, created_by: uid }).select('id, title, starts_at').single(),
   },
   update_event: {
-    risk: 'medium', allow: PLUS_SAFETY,
+    risk: 'medium', allow: PLUS_SAFETY, module: 'timetable',
     def: { name: 'update_event', description: '改一個時間表事件（時間/標題/地點）。需要 event_id（先用 get_timetable_window 搵）。', input_schema: { type: 'object', properties: { event_id: { type: 'string' }, title: { type: 'string' }, starts_at: { type: 'string' }, ends_at: { type: 'string' }, location: { type: 'string' } }, required: ['event_id'], additionalProperties: false } },
     summary: (a) => `✏️ 修改事件 ${a.title ? '「' + a.title + '」' : ''}${a.starts_at ? ' → ' + fmt(a.starts_at) : ''}`,
     run: (s, _p, _uid, a) => { const patch: Record<string, unknown> = {}; for (const k of ['title', 'starts_at', 'ends_at', 'location']) if (a[k] !== undefined) patch[k] = a[k]; return s.from('events').update(patch).eq('id', a.event_id).select('id').single() },
   },
   create_issue: {
-    risk: 'medium', allow: EVERYONE,
+    risk: 'medium', allow: EVERYONE, module: 'issues',
     def: { name: 'create_issue', description: '開一個問題/跟進。處理人同狀態由系統按你嘅角色自動決定。', input_schema: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' } }, required: ['title'], additionalProperties: false } },
     summary: (a) => `🛠️ 開問題「${a.title}」`,
     run: (s, p, uid, a) => s.from('issues').insert({ project_id: p, reporter_id: uid, title: a.title, description: a.description ?? '' }).select('id, title').single(),
   },
   add_issue_comment: {
-    risk: 'low', allow: EVERYONE,
+    risk: 'low', allow: EVERYONE, module: 'issues',
     def: { name: 'add_issue_comment', description: '喺一個問題加一句跟進備註。需要 issue_id（先用 list_open_issues 搵）。', input_schema: { type: 'object', properties: { issue_id: { type: 'string' }, body: { type: 'string' } }, required: ['issue_id', 'body'], additionalProperties: false } },
     summary: (a) => `💬 加備註：「${trunc(a.body)}」`,
     run: (s, _p, uid, a) => s.from('issue_comments').insert({ issue_id: a.issue_id, author_id: uid, action: 'commented', body: a.body }).select('id').single(),
   },
   order_material: {
-    risk: 'medium', allow: MANAGERS,
+    risk: 'medium', allow: MANAGERS, module: 'materials',
     def: { name: 'order_material', description: '落一張物料訂單。', input_schema: { type: 'object', properties: { name: { type: 'string' }, unit: { type: 'string' }, qty_needed: { type: 'number' }, planned_arrival_at: { type: 'string', description: 'ISO 預計到貨時間' }, urgent: { type: 'boolean' } }, required: ['name', 'unit', 'qty_needed'], additionalProperties: false } },
     summary: (a) => `📦 落單：${a.qty_needed} ${a.unit} ${a.name}${a.planned_arrival_at ? ' · ' + fmt(a.planned_arrival_at) + '到' : ''}${a.urgent ? ' · 急' : ''}`,
     run: (s, p, uid, a) => s.from('materials').insert({ project_id: p, name: a.name, unit: a.unit, qty_needed: a.qty_needed, planned_arrival_at: a.planned_arrival_at ?? null, urgent: a.urgent ?? false, item_ids: [], requested_by: uid }).select('id, name, qty_needed').single(),
   },
   receive_material: {
-    risk: 'medium', allow: MANAGERS,
+    risk: 'medium', allow: MANAGERS, module: 'materials',
     def: { name: 'receive_material', description: '更新某物料已到貨數量。需要 material_id（先用 list_materials 搵）。', input_schema: { type: 'object', properties: { material_id: { type: 'string' }, qty_arrived: { type: 'number' } }, required: ['material_id', 'qty_arrived'], additionalProperties: false } },
     summary: (a) => `📥 到貨更新：${a.qty_arrived}`,
     run: (s, _p, _uid, a) => s.from('materials').update({ qty_arrived: a.qty_arrived }).eq('id', a.material_id).select('id, qty_arrived, status').single(),
   },
   add_contact: {
-    risk: 'low', allow: PLUS_SAFETY,
+    risk: 'low', allow: PLUS_SAFETY, module: 'contacts',
     def: { name: 'add_contact', description: '加一個項目聯絡人。', input_schema: { type: 'object', properties: { name: { type: 'string' }, trade: { type: 'string', description: '工種，例如 水電/泥水/紮鐵' }, phone: { type: 'string' }, notes: { type: 'string' } }, required: ['name', 'trade', 'phone'], additionalProperties: false } },
     summary: (a) => `📇 加聯絡人：${a.name}（${a.trade}）${a.phone}`,
     run: (s, p, uid, a) => s.from('contacts').insert({ project_id: p, name: a.name, trade: a.trade, phone: a.phone, notes: a.notes ?? null, created_by: uid }).select('id, name').single(),
@@ -122,7 +132,7 @@ const SPECS: Record<string, MutateSpec> = {
   },
   // ── Phase 3: high-risk decision actions (existing well-tested RPCs / RLS) ───
   escalate_issue: {
-    risk: 'high', allow: EVERYONE,
+    risk: 'high', allow: EVERYONE, module: 'issues',
     def: { name: 'escalate_issue', description: '把一個問題上呈俾上一級處理人（判頭→總承建商→PM）。需要 issue_id（先用 list_open_issues 搵）+ 一句說明。只有現任處理人或報告人先做到。', input_schema: { type: 'object', properties: { issue_id: { type: 'string' }, comment: { type: 'string' } }, required: ['issue_id', 'comment'], additionalProperties: false } },
     summary: (a) => `⬆️ 上呈問題：「${trunc(a.comment)}」`,
     run: async (s, _p, uid, a) => {
@@ -141,7 +151,7 @@ const SPECS: Record<string, MutateSpec> = {
     },
   },
   resolve_issue: {
-    risk: 'high', allow: EVERYONE,
+    risk: 'high', allow: EVERYONE, module: 'issues',
     def: { name: 'resolve_issue', description: '標記一個問題為已解決。需要 issue_id + 一句說明。只有現任處理人/報告人/管理員先做到。', input_schema: { type: 'object', properties: { issue_id: { type: 'string' }, comment: { type: 'string' } }, required: ['issue_id', 'comment'], additionalProperties: false } },
     summary: (a) => `✅ 解決問題：「${trunc(a.comment)}」`,
     run: async (s, _p, uid, a) => {
@@ -153,7 +163,7 @@ const SPECS: Record<string, MutateSpec> = {
     },
   },
   reopen_issue: {
-    risk: 'medium', allow: EVERYONE,
+    risk: 'medium', allow: EVERYONE, module: 'issues',
     def: { name: 'reopen_issue', description: '重開一個已解決嘅問題。需要 issue_id + 一句原因。', input_schema: { type: 'object', properties: { issue_id: { type: 'string' }, comment: { type: 'string' } }, required: ['issue_id', 'comment'], additionalProperties: false } },
     summary: (a) => `🔄 重開問題：「${trunc(a.comment)}」`,
     run: async (s, _p, uid, a) => {
@@ -165,19 +175,19 @@ const SPECS: Record<string, MutateSpec> = {
     },
   },
   approve_document: {
-    risk: 'high', allow: REVIEWERS, step_up: 'document',
+    risk: 'high', allow: REVIEWERS, module: 'documents', step_up: 'document',
     def: { name: 'approve_document', description: '批准一個文件版本。需要 version_id。判頭冇權審批；唔可以批自己提交嘅文件。', input_schema: { type: 'object', properties: { version_id: { type: 'string' }, note: { type: 'string' } }, required: ['version_id'], additionalProperties: false } },
     summary: (a) => `📄✅ 批准文件版本${a.note ? '：「' + trunc(a.note) + '」' : ''}`,
     run: (s, _p, _uid, a) => s.rpc('review_document_version', { p_version_id: a.version_id, p_action: 'approve', p_note: a.note?.trim() ?? null }).then((r: any) => ({ data: { version_id: a.version_id, action: 'approve' }, error: r.error })),
   },
   reject_document: {
-    risk: 'high', allow: REVIEWERS, step_up: 'document',
+    risk: 'high', allow: REVIEWERS, module: 'documents', step_up: 'document',
     def: { name: 'reject_document', description: '拒絕一個文件版本（必須填原因）。需要 version_id + note。', input_schema: { type: 'object', properties: { version_id: { type: 'string' }, note: { type: 'string' } }, required: ['version_id', 'note'], additionalProperties: false } },
     summary: (a) => `📄❌ 拒絕文件版本：「${trunc(a.note)}」`,
     run: (s, _p, _uid, a) => s.rpc('review_document_version', { p_version_id: a.version_id, p_action: 'reject', p_note: a.note?.trim() ?? null }).then((r: any) => ({ data: { version_id: a.version_id, action: 'reject' }, error: r.error })),
   },
   submit_approval_decision: {
-    risk: 'high', allow: PLUS_SAFETY, step_up: 'approval',
+    risk: 'high', allow: PLUS_SAFETY, module: (a) => (a?.doc_type === 'si' || a?.doc_type === 'vo' || a?.doc_type === 'ptw' ? a.doc_type : 'ptw'), step_up: 'approval',
     def: { name: 'submit_approval_decision', description: '喺審批鏈對一張 SI/VO/PTW 落審批決定。只有現任審批步驟嘅持有人先做到。reject / request_revision 嘅 reason 要 ≥10 字。', input_schema: { type: 'object', properties: { doc_type: { type: 'string', enum: ['si', 'vo', 'ptw'] }, doc_id: { type: 'string' }, action: { type: 'string', enum: ['approve', 'reject', 'request_revision'] }, reason: { type: 'string' } }, required: ['doc_type', 'doc_id', 'action'], additionalProperties: false } },
     summary: (a) => `🖊️ ${String(a.doc_type).toUpperCase()} ${a.action === 'approve' ? '批准' : a.action === 'reject' ? '拒絕' : '要求修改'}${a.reason ? '：「' + trunc(a.reason) + '」' : ''}`,
     run: (s, _p, _uid, a) => s.rpc('submit_approval', { p_doc_type: a.doc_type, p_doc_id: a.doc_id, p_action_type: a.action, p_reason: a.reason?.trim() ?? null, p_edits_jsonb: null }).then((r: any) => ({ data: { doc_type: a.doc_type, doc_id: a.doc_id, action: a.action }, error: r.error })),
@@ -210,6 +220,15 @@ export function mutateStepUp(name: string): StepUpClass | undefined { return SPE
 export async function executeMutateTool(supa: Supa, projectId: string, uid: string, name: string, args: any): Promise<unknown> {
   const spec = SPECS[name]
   if (!spec) return { error: `unknown mutate tool ${name}` }
+  // Module gate (v59): if this tool's target module is OFF for the project, the
+  // write would be RLS-rejected with a generic permission error. Return a distinct
+  // signal instead so the model can tell the user the module is disabled, not that
+  // they lack permission. Fail OPEN on RPC error (let RLS stay the authority).
+  if (spec.module) {
+    const key = typeof spec.module === 'function' ? spec.module(args ?? {}) : spec.module
+    const { data: on, error: me } = await supa.rpc('project_module_enabled', { p_project_id: projectId, p_module_key: key })
+    if (!me && on === false) return { error: `${MODULE_ZH[key]}模組已關閉，無法操作` }
+  }
   const { data, error } = (await spec.run(supa, projectId, uid, args ?? {})) as { data: unknown; error: { message: string } | null }
   if (error) return { error: error.message }
   return { ok: true, ...(data as object) }
