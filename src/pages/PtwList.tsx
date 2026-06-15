@@ -6,6 +6,7 @@ import { Spinner } from '../components/Spinner'
 import { PtwCard } from '../components/ptw/PtwCard'
 import { PtwSubmitForm } from '../components/ptw/PtwSubmitForm'
 import { PtwProvider, usePtw } from '../contexts/PtwContext'
+import { effectivePtwStatus } from '../lib/ptw'
 import type { PtwStatus } from '../types'
 
 type StatusFilter = 'all' | 'draft' | 'in_review' | 'active' | 'closed_out' | 'expired' | 'rejected' | 'revision_requested'
@@ -30,9 +31,12 @@ function PtwListInner() {
 
   const filtered = useMemo(() => {
     return ptws.filter(p => {
+      // Derive expiry client-side: an over-time 'active' permit reads as 已過期
+      // so it leaves the 生效中 bucket and shows under 已過期 (no cron flips it).
+      const effStatus = effectivePtwStatus(p)
       if (filter !== 'all') {
-        if (filter === 'in_review' && !['submitted', 'in_review', 'approved'].includes(p.status)) return false
-        if (filter !== 'in_review' && p.status !== (filter as PtwStatus)) return false
+        if (filter === 'in_review' && !['submitted', 'in_review', 'approved'].includes(effStatus)) return false
+        if (filter !== 'in_review' && effStatus !== (filter as PtwStatus)) return false
       }
       if (search.trim() && !p.number.toLowerCase().includes(search.trim().toLowerCase())) return false
       return true

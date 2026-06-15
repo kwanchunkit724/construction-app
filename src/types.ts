@@ -275,6 +275,20 @@ export function unitStatusCounts(
   return { signedOff, fixed, total: ls.length }
 }
 
+// Advance a unit_status label one step along UNIT_STATE_ORDER, cycling
+// 已簽收 → 未處理. The unknown-value guard is load-bearing: a label whose stored
+// value isn't in UNIT_STATE_ORDER (e.g. a legacy/AI/imported 'unprocessed' that
+// v44 had no CHECK to reject) yields indexOf === -1 → (-1 + 1) % n === 0, which
+// would silently RESET it to 'pending' on the first tap and destroy the dispute
+// trail. Instead an unknown value advances to 'fixing' (the natural "work has
+// started" step), so a tap never quietly rewinds the record. Owned here (types)
+// so every consumer — UpdateProgressModal included — shares one safe mapping.
+export function nextUnitState(s: UnitState | string): UnitState {
+  const i = UNIT_STATE_ORDER.indexOf(s as UnitState)
+  if (i === -1) return 'fixing'
+  return UNIT_STATE_ORDER[(i + 1) % UNIT_STATE_ORDER.length]
+}
+
 export const PROGRESS_STATUS_ZH: Record<ProgressStatus, string> = {
   'not-started': '未開始',
   'in-progress': '進行中',
@@ -379,7 +393,9 @@ export interface Rollup {
 // set is quantity-mode in one shared unit; otherwise every leaf weighs 1 (the
 // historical equal-weight behaviour). Returns null when not weightable so the
 // caller falls back to the plain mean — guaranteeing byte-identical numbers
-// for every non-quantity (i.e. every existing) project.
+// for every non-quantity (i.e. every existing) project. The non-null result
+// ALSO drives the rollup's "已鋪 230/600 m" Σ badge, which is why it stays
+// strict: a Σ only makes sense when every leaf is sized in the one unit.
 function quantityWeighting(
   leaves: ProgressItem[],
 ): { unit: string; sumDone: number; sumTotal: number; weights: number[] } | null {
@@ -404,6 +420,36 @@ function quantityWeighting(
   return { unit, sumDone, sumTotal, weights }
 }
 
+// Per-leaf rollup weights for a MIXED-mode parent (small-reno finding): when a
+// branch mixes a sized quantity leaf (e.g. B.1 機電 320m run) with percentage /
+// checklist leaves, the old code fell back to a naive equal-weight mean — so a
+// big 320m electrical run counted the same as a tiny blocked stub. Here each
+// sized quantity leaf keeps its qty_total as weight while every other leaf
+// weighs 1 (its historical weight), so the bulk-of-work leaf pulls the parent %
+// proportionally without us inventing a weight for unsized work. Returns null
+// when no quantity leaf is present (or none is sized) so the caller keeps the
+// plain mean — every non-quantity (i.e. existing) parent is byte-identical.
+function mixedQuantityWeights(leaves: ProgressItem[]): number[] | null {
+  if (leaves.length === 0) return null
+  let anySized = false
+  const weights = leaves.map(l => {
+    if (l.tracking_mode === 'quantity' && l.qty_total != null && l.qty_total > 0) {
+      anySized = true
+      return l.qty_total
+    }
+    return 1
+  })
+  return anySized ? weights : null
+}
+
+// A contributing leaf counts as "blocked" when its stored status is 'blocked'
+// OR it carries a blocked_reason (the only field that forces 受阻 in the UI).
+// deriveStatus can never return 'blocked' on its own, so this is the sole signal
+// that lets a parent surface a descendant's real stoppage.
+function isBlockedLeaf(item: ProgressItem): boolean {
+  return item.status === 'blocked' || !!item.blocked_reason
+}
+
 export function computeRollup(leaves: ProgressItem[], today: Date = new Date()): Rollup {
   if (leaves.length === 0) {
     return {
@@ -412,10 +458,13 @@ export function computeRollup(leaves: ProgressItem[], today: Date = new Date()):
     }
   }
   const qw = quantityWeighting(leaves)
-  // Quantity-weighted average when the whole branch is one-unit 渠務; otherwise
-  // the historical equal-weight mean (weight = 1 each) → identical numbers for
-  // every existing project. Math: equal weights collapse to the plain average.
-  const weights = qw ? qw.weights : leaves.map(() => 1)
+  // Quantity-weighted average when the whole branch is one-unit 渠務; else a
+  // MIXED-mode weighting (sized quantity leaves by qty_total, the rest by 1) when
+  // the branch mixes a metred run with %/checklist work (small-reno B 機電); else
+  // the historical equal-weight mean (weight = 1 each). Math: equal weights
+  // collapse to the plain average, so any branch without a sized quantity leaf —
+  // i.e. every existing non-quantity project — is byte-identical.
+  const weights = qw ? qw.weights : (mixedQuantityWeights(leaves) ?? leaves.map(() => 1))
   const weightSum = weights.reduce((s, w) => s + w, 0)
   const actual = weightSum > 0
     ? Math.round(leaves.reduce((s, x, i) => s + x.actual_progress * weights[i], 0) / weightSum)
@@ -438,8 +487,17 @@ export function computeRollup(leaves: ProgressItem[], today: Date = new Date()):
       planned = Math.round(sched.reduce((s, x) => s + plannedProgressOf(x, today), 0) / sched.length)
     }
   }
+  // Surface a descendant stoppage: deriveStatus alone can never return 'blocked',
+  // so a parent whose child is 受阻 used to roll up to 落後/進行中 and silently
+  // discard the stored 'blocked' (maintenance B.3 消防 + drainage findings). When
+  // any contributing leaf is blocked and the branch isn't fully complete, prefer
+  // 'blocked' so the parent's chip honestly reflects the held-up child. % math
+  // is unchanged — only the badge changes.
+  const status: ProgressStatus = actual < 100 && leaves.some(isBlockedLeaf)
+    ? 'blocked'
+    : deriveStatus(actual, planned)
   return {
-    actual, planned, status: deriveStatus(actual, planned),
+    actual, planned, status,
     leafCount: leaves.length, scheduledCount: sched.length,
     qtySum: qw ? qw.sumDone : null,
     qtyTotal: qw ? qw.sumTotal : null,
@@ -509,7 +567,12 @@ export const ISSUE_ACTION_ZH: Record<IssueAction, string> = {
   reopened: '重新開啟',
 }
 
-// Initial handler when an issue is reported (escalation routing)
+// Initial handler when an issue is reported (escalation routing).
+// safety_officer / general_foreman are supervisory roles that don't sit on the
+// subcontractor→main_contractor→pm ladder, so an issue THEY report goes straight
+// to PM. These cases are explicit (not the silent default) so the routing for the
+// two v48 roles is intentional and grep-able; their ACT authority on issues they
+// did NOT report is granted separately by canActOnIssue (IssuesContext).
 export function getInitialHandler(reporterRole: GlobalRole): IssueHandlerRole {
   switch (reporterRole) {
     case 'subcontractor_worker': return 'subcontractor'
@@ -518,6 +581,8 @@ export function getInitialHandler(reporterRole: GlobalRole): IssueHandlerRole {
     case 'owner': return 'pm'
     case 'pm': return 'pm'
     case 'admin': return 'pm'
+    case 'safety_officer': return 'pm'
+    case 'general_foreman': return 'pm'
     default: return 'pm'
   }
 }
@@ -929,6 +994,20 @@ export interface PtwPayload {
   lat?: number
   lng?: number
   accuracy_m?: number
+  // ── 渠務 / 密閉空間 + 掘地 safety extras (optional, backwards-compatible) ──
+  // The seed PTW payloads (confined_space / excavation) already store these, but
+  // before this they had no home on the type so PtwDetail couldn't render them.
+  // All optional: every existing hot_work / work_at_height / lifting permit (and
+  // pre-existing rows) simply leave them undefined.
+  //  - hazards / controls: free-text safety lines shown above the checklist.
+  //  - gas_test: confined-space pre-entry gas readings (O2/H2S/CO/LEL); each a
+  //    free string so a unit ('20.9%' / '0 ppm' / '<10% LEL') survives intact.
+  //  - valid_from / valid_to: the permit's own validity window (ISO date/time).
+  hazards?: string[]
+  controls?: string[]
+  gas_test?: { o2?: string; h2s?: string; co?: string; lel?: string }
+  valid_from?: string
+  valid_to?: string
 }
 
 export interface PtwVersion {
@@ -975,8 +1054,11 @@ export const PTW_TYPE_ZH: Record<PtwType, string> = {
   scaffold: '棚架',
 }
 
-// PTW types shipping in v1; rest stub "敬請期待"
-export const PTW_TYPE_V1: PtwType[] = ['hot_work', 'work_at_height', 'lifting']
+// PTW types shipping in v1; rest stub "敬請期待". confined_space (密閉空間) and
+// excavation (掘地) are THE permits a 渠務 site lives on — the seed already
+// authors them, so they must be authorable from the UI (their checklist
+// templates land in src/lib/ptw.ts). electrical / scaffold stay stubbed.
+export const PTW_TYPE_V1: PtwType[] = ['hot_work', 'work_at_height', 'lifting', 'confined_space', 'excavation']
 
 export const PTW_STATUS_ZH: Record<PtwStatus, string> = {
   draft: '草稿',

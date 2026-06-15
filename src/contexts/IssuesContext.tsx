@@ -248,6 +248,11 @@ export function useIssues() {
 
 // Helper: can the user (with role X in project) act on this issue?
 //
+// `myRole` is the caller's PER-PROJECT membership role (admin globally, 'pm'
+// when assigned to the project, otherwise the approved project_members.role) —
+// see IssuesProvider's myRoleInProject. So every grant below is membership-
+// scoped: a user only gains these rights inside a project they belong to.
+//
 // Authority mirrors the issues UPDATE RLS policy in v4-issues-schema.sql:
 //   admin OR has_role_in_project(handler) OR reporter_id = auth.uid()
 // The reporter clause is what keeps escalation from dead-ending: a
@@ -257,6 +262,16 @@ export function useIssues() {
 // the reporter act on their own open issue (escalate it upward, or resolve it)
 // breaks the dead-end without widening anyone else's authority, and the server
 // already permits exactly this.
+//
+// Supervisory roles — safety_officer (安全主任) and general_foreman (老總) — run
+// the site and own the safety lane (棚網鬆脫 etc.), yet the chain never routes a
+// handler to them. Without this branch the 老總 / 安全主任 can only act on issues
+// they personally reported — the wrong authority model for the people who
+// supervise the whole project. Grant them ACT rights on ANY issue in a project
+// they are an approved member of (myRole carries the membership scope), the same
+// blanket way admin is allowed. NOTE: this is the client gate only; the server
+// issues UPDATE RLS still needs a matching grant for these roles or the mutation
+// will be rejected for issues they neither handle nor reported.
 export function canActOnIssue(
   myRole: GlobalRole | null,
   handler: IssueHandlerRole,
@@ -264,6 +279,8 @@ export function canActOnIssue(
 ): boolean {
   if (!myRole) return false
   if (myRole === 'admin') return true
+  // On-site supervisors: project-wide act-rights on every issue (membership-scoped).
+  if (myRole === 'safety_officer' || myRole === 'general_foreman') return true
   if (handler === 'pm' && myRole === 'pm') return true
   if (handler === 'main_contractor' && myRole === 'main_contractor') return true
   if (handler === 'subcontractor' && myRole === 'subcontractor') return true

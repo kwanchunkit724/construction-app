@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { PTW, PtwType, PtwChecklistItem } from '../types'
+import type { PTW, PtwType, PtwStatus, PtwChecklistItem } from '../types'
 
 // Reuses Plan 02-01's private project-si-vo bucket. RLS gates by
 // project membership via storage.foldername(name)[1]::uuid = project_id,
@@ -122,15 +122,49 @@ export function checklistTemplate(ptwType: PtwType): PtwChecklistItem[] {
         { key: 'signaller', label_zh: '指定信號員 (Banksman) 在場', required: true, value: null },
         { key: 'wind_check', label_zh: '風速核實 (< 9.7 m/s/塔吊製造商上限)', required: true, value: null },
       ]
-    // Stubs — Plan 03-05 picker shows these types with '敬請期待' label.
     case 'confined_space':
+      return [
+        { key: 'gas_test', label_zh: '氣體測試合格 (O2 19.5–23%、H2S、CO、LEL <10%)', required: true, value: null },
+        { key: 'continuous_ventilation', label_zh: '連續強制通風運作中', required: true, value: null },
+        { key: 'tripod_rescue', label_zh: '三腳架 + 救生繩 + 絞盤就位', required: true, value: null },
+        { key: 'standby_man', label_zh: '坑外監察員 (standby man) 在場', required: true, value: null },
+        { key: 'permit_gas_record', label_zh: '進入許可證 + 氣體記錄表備妥', required: true, value: null },
+        { key: 'emergency_rescue', label_zh: '緊急救援安排已部署', required: true, value: null },
+        { key: 'entry_log', label_zh: '進出人數登記制度', required: true, value: null },
+      ]
     case 'excavation':
+      return [
+        { key: 'utility_detection', label_zh: '地下管線探測 (電/水/氣/電訊)', required: true, value: null },
+        { key: 'shoring', label_zh: '護土板/斜坡支撐 (深 > 1.2 米)', required: true, value: null },
+        { key: 'edge_clear', label_zh: '坑邊 1 米內不堆放物料', required: true, value: null },
+        { key: 'access_ladder', label_zh: '上落梯級妥當', required: true, value: null },
+        { key: 'banksman', label_zh: '人車分隔 + 指揮員在場', required: true, value: null },
+        { key: 'dewatering', label_zh: '積水/排水安排妥當', required: true, value: null },
+        { key: 'slope_monitoring', label_zh: '邊坡監測安排', required: true, value: null },
+      ]
+    // Stubs — picker shows these types with '敬請期待' label.
     case 'electrical':
     case 'scaffold':
       return []
     default:
       return []
   }
+}
+
+// ── Client-side derived expiry ─────────────────────────────
+// No cron flips an over-time 'active' permit to 'expired'. Until one
+// exists, derive expiry on the client so an expired permit never reads
+// 生效中 with a valid QR (a real safety hole). Display-only — the stored
+// status column is left untouched.
+export function isPtwExpired(p: PTW): boolean {
+  if (p.status !== 'active' || !p.expires_at) return false
+  return Date.parse(p.expires_at) < Date.now()
+}
+
+// Status to display: 'expired' when an active permit is past expiry,
+// otherwise the stored status verbatim.
+export function effectivePtwStatus(p: PTW): PtwStatus {
+  return isPtwExpired(p) ? 'expired' : p.status
 }
 
 // ── Helpers for status transitions ──

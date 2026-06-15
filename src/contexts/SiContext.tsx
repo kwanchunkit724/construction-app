@@ -79,8 +79,14 @@ export function SiProvider({ projectId, children }: { projectId: string; childre
       siIds.length
         ? supabase.from('si_versions').select('*').in('si_id', siIds)
         : Promise.resolve({ data: [] as any[], error: null }),
-      supabase.from('approvals').select('*').eq('doc_type', 'si'),
-      supabase.from('protest_comments').select('*'),
+      // Scope approvals to this project's SIs only (avoids cross-project over-fetch).
+      siIds.length
+        ? supabase.from('approvals').select('*').eq('doc_type', 'si').in('doc_id', siIds)
+        : Promise.resolve({ data: [] as any[], error: null }),
+      // Scope protest_comments to this project's SIs only.
+      siIds.length
+        ? supabase.from('protest_comments').select('*').in('si_id', siIds)
+        : Promise.resolve({ data: [] as any[], error: null }),
     ])
     if (verRes.error) console.error('si_versions fetch error:', verRes.error)
     const vmap: Record<string, SIVersion[]> = {}

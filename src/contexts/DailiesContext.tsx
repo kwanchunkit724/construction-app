@@ -10,6 +10,58 @@ import {
 import { supabase } from '../lib/supabase'
 import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import { useAuth } from './AuthContext'
+import { useProjects } from './ProjectsContext'
+import type { Project, ProjectMember, UserProfile } from '../types'
+
+// ── Daily authorship gate (per-project membership role) ─────────────────────
+// The site diary is the 老總(general_foreman)'s natural job, plus the PM and
+// 總承建商. Authorship is therefore gated on per-project SUPERVISOR membership
+// rather than GLOBAL role + sub_role (which locked out general_foreman, PM, and
+// any main_contractor whose sub_role was null). Mirrors the supervisor set used
+// by progress/materials: admin OR assigned PM OR approved member whose
+// membership role is pm | general_foreman | main_contractor.
+// (findings-drainage 9.1 / findings-small-reno 7.1+7.2)
+export const DAILY_AUTHOR_ROLES = ['pm', 'general_foreman', 'main_contractor'] as const
+
+export function canAuthorDaily(
+  profile: Pick<UserProfile, 'id' | 'global_role'> | null,
+  memberships: ProjectMember[],
+  projects: Project[],
+  projectId: string,
+): boolean {
+  if (!profile) return false
+  if (profile.global_role === 'admin') return true
+  const project = projects.find(p => p.id === projectId)
+  if (project?.assigned_pm_ids.includes(profile.id)) return true
+  const myMembership = memberships.find(
+    m => m.user_id === profile.id && m.project_id === projectId && m.status === 'approved',
+  )
+  return !!myMembership && (DAILY_AUTHOR_ROLES as readonly string[]).includes(myMembership.role)
+}
+
+// Human-readable reason the current user can't author, so the missing CTA
+// isn't a silent dead-end. Returns null when the user CAN author.
+export function dailyAuthorDenyReason(
+  profile: Pick<UserProfile, 'id' | 'global_role'> | null,
+  memberships: ProjectMember[],
+  projects: Project[],
+  projectId: string,
+): string | null {
+  if (!profile) return null
+  if (canAuthorDaily(profile, memberships, projects, projectId)) return null
+  if (profile.global_role === 'subcontractor' || profile.global_role === 'subcontractor_worker') {
+    return '判頭 / 工人唔可以寫日誌 — 由項目主管（PM / 老總 / 總承建商）填寫。'
+  }
+  if (profile.global_role === 'owner') {
+    return '業主只能閱讀日誌。'
+  }
+  if (profile.global_role === 'safety_officer') {
+    return '安全主任只能閱讀日誌 — 由項目主管（PM / 老總 / 總承建商）填寫。'
+  }
+  // A supervisor-ish global role that isn't an approved member / assigned PM
+  // of THIS project (e.g. a main_contractor pending approval).
+  return '你未係呢個項目嘅核准主管，所以唔可以寫日誌，只能閱讀。'
+}
 
 // ── Inline types (re-exported via src/types-daily.ts for the orchestrator) ──
 export const WEATHER_OPTIONS = ['晴', '陰', '雨', '暴雨', '熱', '凍', '大風'] as const
@@ -107,6 +159,7 @@ export function DailiesProvider({
   children: ReactNode
 }) {
   const { profile } = useAuth()
+  const { memberships, projects } = useProjects()
   const [dailies, setDailies] = useState<Daily[]>([])
   const [selectedDate, setSelectedDate] = useState<string>(todayHKT())
   const [loading, setLoading] = useState(true)
@@ -159,12 +212,12 @@ export function DailiesProvider({
     async (payload: DailyPayload): Promise<{ id: string | null; error: string | null }> => {
       if (!profile) return { id: null, error: '未登入' }
       const date = todayHKT()
-      // Server RLS gates this to main_contractor + foreman/engineer on self only,
-      // but we mirror the role check client-side so the UI can disable Save early.
-      const allowed =
-        profile.global_role === 'main_contractor' &&
-        (profile.sub_role === 'foreman' || profile.sub_role === 'engineer')
-      if (!allowed) return { id: null, error: '只有總承建商管工或工程師可以填寫日誌' }
+      // Authorship = per-project supervisor (PM / 老總 / 總承建商), mirroring the
+      // progress/materials gate. We check it client-side so the UI can disable
+      // Save early; the server RLS is the source of truth.
+      if (!canAuthorDaily(profile, memberships, projects, projectId)) {
+        return { id: null, error: '只有項目主管（PM / 老總 / 總承建商）可以填寫日誌' }
+      }
       const { data, error } = await supabase
         .from('dailies')
         .upsert(
@@ -194,7 +247,7 @@ export function DailiesProvider({
       }
       return { id: (data as { id: string }).id, error: null }
     },
-    [profile, projectId],
+    [profile, projectId, memberships, projects],
   )
 
   const fetchMyDailyFor = useCallback(

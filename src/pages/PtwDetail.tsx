@@ -12,7 +12,7 @@ import { OfflineBanner } from '../components/OfflineBanner'
 import { useIsOnline } from '../hooks/useIsOnline'
 import { PtwProvider, usePtw } from '../contexts/PtwContext'
 import { mintPtwQrToken } from '../lib/ptw-jwt'
-import { remainingFireWatchSeconds, hotWorkFireWatchEligible } from '../lib/ptw'
+import { remainingFireWatchSeconds, hotWorkFireWatchEligible, isPtwExpired, effectivePtwStatus } from '../lib/ptw'
 import { PTW_TYPE_ZH, PTW_STATUS_ZH } from '../types'
 import type { PTW, PtwPayload } from '../types'
 
@@ -31,19 +31,24 @@ function PtwDetailInner() {
 
   const payload = currentVersion?.payload as PtwPayload | undefined
 
+  // Derive expiry client-side — no cron flips an over-time 'active' permit, so
+  // an expired permit must not keep showing 生效中 with a verifying QR.
+  const expired = ptw ? isPtwExpired(ptw) : false
+  const displayStatus = ptw ? effectivePtwStatus(ptw) : null
+
   const [qrToken, setQrToken] = useState<string | null>(null)
   const [qrError, setQrError] = useState<string | null>(null)
   const [showCloseOut, setShowCloseOut] = useState(false)
   const [fireWatchSecRemaining, setFireWatchSecRemaining] = useState<number>(-1)
 
   useEffect(() => {
-    if (ptw?.status === 'active' && qrToken === null && !qrError) {
+    if (ptw?.status === 'active' && !expired && qrToken === null && !qrError) {
       mintPtwQrToken(ptw.id).then(({ token, error }) => {
         if (error) setQrError(error)
         else setQrToken(token)
       })
     }
-  }, [ptw?.id, ptw?.status, qrToken, qrError])
+  }, [ptw?.id, ptw?.status, expired, qrToken, qrError])
 
   useEffect(() => {
     if (!ptw || ptw.ptw_type !== 'hot_work') return
@@ -103,16 +108,27 @@ function PtwDetailInner() {
         <div className="card p-4 space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold text-site-900">{ptw.number}</h2>
-            <span className="px-3 py-1 rounded-full bg-site-100 text-site-700 text-sm font-medium">
-              {PTW_STATUS_ZH[ptw.status]}
+            <span className={
+              'px-3 py-1 rounded-full text-sm font-medium ' +
+              (expired ? 'bg-red-50 text-red-600' : 'bg-site-100 text-site-700')
+            }>
+              {displayStatus ? PTW_STATUS_ZH[displayStatus] : PTW_STATUS_ZH[ptw.status]}
             </span>
           </div>
           <p className="text-sm text-site-600">{PTW_TYPE_ZH[ptw.ptw_type]}</p>
           {ptw.status === 'active' && ptw.expires_at && (
-            <p className="text-sm text-site-600 flex items-center gap-1">
+            <p className={'text-sm flex items-center gap-1 ' + (expired ? 'text-red-600' : 'text-site-600')}>
               <Clock size={14} />
-              <span>有效至 {new Date(ptw.expires_at).toLocaleString('zh-HK')} 香港時間</span>
+              <span>
+                {expired ? '已過期：' : '有效至 '}
+                {new Date(ptw.expires_at).toLocaleString('zh-HK')} 香港時間
+              </span>
             </p>
+          )}
+          {expired && (
+            <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+              此許可證已過期，二維碼已失效，不可再憑此證施工。請重新申請。
+            </div>
           )}
         </div>
 
@@ -138,6 +154,56 @@ function PtwDetailInner() {
                 </ul>
               </>
             )}
+
+            {/* 有效時段 (confined_space / excavation permits carry an explicit window) */}
+            {(payload.valid_from || payload.valid_to) && (
+              <>
+                <h4 className="text-sm font-semibold text-site-900 mt-2">有效時段</h4>
+                <p className="text-sm text-site-700 flex items-center gap-1">
+                  <Clock size={14} />
+                  <span>
+                    {payload.valid_from ? new Date(payload.valid_from).toLocaleString('zh-HK') : '—'}
+                    {' 至 '}
+                    {payload.valid_to ? new Date(payload.valid_to).toLocaleString('zh-HK') : '—'}
+                  </span>
+                </p>
+              </>
+            )}
+
+            {/* 氣體測試 (密閉空間) */}
+            {payload.gas_test && (
+              payload.gas_test.o2 || payload.gas_test.h2s || payload.gas_test.co || payload.gas_test.lel
+            ) && (
+              <>
+                <h4 className="text-sm font-semibold text-site-900 mt-2">氣體測試</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+                  <GasReading label="O₂" value={payload.gas_test.o2} unit="%" />
+                  <GasReading label="H₂S" value={payload.gas_test.h2s} unit="ppm" />
+                  <GasReading label="CO" value={payload.gas_test.co} unit="ppm" />
+                  <GasReading label="LEL" value={payload.gas_test.lel} unit="%" />
+                </div>
+              </>
+            )}
+
+            {/* 危害 hazards */}
+            {payload.hazards && payload.hazards.length > 0 && (
+              <>
+                <h4 className="text-sm font-semibold text-site-900 mt-2">已識別危害</h4>
+                <ul className="text-sm space-y-1 list-disc pl-5 text-site-700">
+                  {payload.hazards.map((h, i) => <li key={i}>{h}</li>)}
+                </ul>
+              </>
+            )}
+
+            {/* 控制措施 controls */}
+            {payload.controls && payload.controls.length > 0 && (
+              <>
+                <h4 className="text-sm font-semibold text-site-900 mt-2">控制措施</h4>
+                <ul className="text-sm space-y-1 list-disc pl-5 text-site-700">
+                  {payload.controls.map((c, i) => <li key={i}>{c}</li>)}
+                </ul>
+              </>
+            )}
           </div>
         )}
 
@@ -159,8 +225,8 @@ function PtwDetailInner() {
           </div>
         )}
 
-        {/* QR card (active only) */}
-        {ptw.status === 'active' && (
+        {/* QR card (active and not past expiry — an expired permit must not verify) */}
+        {ptw.status === 'active' && !expired && (
           <QrCard token={qrToken} error={qrError} />
         )}
 
@@ -257,6 +323,17 @@ function PtwDetailInner() {
         />
       </Modal>
     </AppLayout>
+  )
+}
+
+function GasReading({ label, value, unit }: { label: string; value?: string; unit: string }) {
+  return (
+    <div className="rounded-xl border border-site-200 bg-site-50 px-3 py-2 text-center">
+      <div className="text-xs text-site-500">{label}</div>
+      <div className="font-semibold text-site-900">
+        {value ? `${value} ${unit}` : '—'}
+      </div>
+    </div>
   )
 }
 

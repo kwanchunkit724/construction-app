@@ -9,6 +9,7 @@ import { ShieldCheck, ShieldAlert, RefreshCw, Download } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { supabase } from '../lib/supabase'
+import { shareOrDownloadBlob } from '../lib/export'
 
 interface VerifyResult {
   intact: boolean
@@ -48,12 +49,8 @@ export default function DataIntegrity() {
     setExporting(false)
     if (error) { window.alert('匯出失敗：' + error.message); return }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `審計證明_${new Date().toISOString().slice(0, 10)}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+    const filename = `審計證明_${new Date().toISOString().slice(0, 10)}.json`
+    await shareOrDownloadBlob(blob, filename, '防篡改審計證明')
   }
 
   const intact = result?.intact === true

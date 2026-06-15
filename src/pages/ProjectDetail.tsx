@@ -39,8 +39,8 @@ import { useStepUp } from '../contexts/StepUpContext'
 import { usePtwFlag } from '../contexts/PtwFlagContext'
 import { useFilesFlag } from '../contexts/FilesFlagContext'
 import { ModulesProvider, useModules } from '../contexts/ModulesContext'
-import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH, deriveStatus, plannedProgressOf, CATEGORY_DOMAIN_ZH, CATEGORY_STREAM_ZH } from '../types'
-import type { ProgressItem, ProgressStatus, Zone, CategoryDomain, CategoryStream } from '../types'
+import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH, deriveStatus, plannedProgressOf, CATEGORY_DOMAIN_ZH, CATEGORY_STREAM_ZH, unitStatusCounts } from '../types'
+import type { ProgressItem, ProgressStatus, Zone, CategoryDomain, CategoryStream, UnitState } from '../types'
 import { templateFor } from '../lib/progressTemplates'
 
 type Tab = 'progress' | 'issues' | 'si-vo' | 'tools' | 'equipment' | 'assistant'
@@ -177,10 +177,12 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
 
   // Project-type template drives per-type vocabulary + zone chrome. 'general'
   // (and existing projects) resolve to today's behaviour, so the page renders
-  // byte-identical for them. autoZone types (小型工程) get one implicit zone at
-  // creation, so the zone header + the "尚未設定分區" dead-end are hidden.
+  // byte-identical for them. autoZone types (小型工程) designed for ONE implicit
+  // zone suppress the zone header by default. But if the project actually has
+  // >1 zones (e.g. a reno seed with A區 + B區), hiding all zone headers makes
+  // consecutive item lists indistinguishable — restore zone labels in that case.
   const template = templateFor(project.project_type)
-  const hideZoneChrome = template.autoZone
+  const hideZoneChrome = template.autoZone && project.zones.length <= 1
 
   // v57: narrow the tree + tiles to the selected category. The tag lives on the
   // 大項 (root); an item is visible iff its root matches. A 未分類 root only shows
@@ -209,13 +211,15 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const delayed = leaves.filter(i => effStatus(i) === 'delayed').length
   const notStarted = leaves.filter(i => effStatus(i) === 'not-started').length
 
-  // P3: 大樓維修 statutory-deadline tile. The 法定命令 deadline reuses planned_end
+  // P3: 大樓維修 earliest-completion tile. The 法定命令 deadline reuses planned_end
   // on the L1 (root / 座) items — we take the EARLIEST planned_end across all
-  // roots as 限期, then days = ceil((deadline − today)/day). Negative = overdue.
-  // Only computed (and only rendered) for maintenance projects; other types are
-  // byte-identical to before.
+  // roots as the target, then days = ceil((target − today)/day). Negative = overdue.
+  // Relabelled 最早完工目標 (not 法定限期) because it's just the earliest planned_end,
+  // not a true statutory order date. Only computed for maintenance; other types
+  // are byte-identical to before.
   const isMaintenance = template.kpiTiles === 'maintenance'
-  const statutoryDeadline = useMemo(() => {
+  const isDrainage = template.kpiTiles === 'drainage'
+  const earliestCompletion = useMemo(() => {
     if (!isMaintenance) return null
     const ends = items
       .filter(i => i.parent_id === null && i.planned_end)
@@ -229,6 +233,57 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
     const days = Math.ceil((endMs - todayMs) / 86400000)
     return { date: earliest, days }
   }, [isMaintenance, items])
+
+  // Maintenance KPI: 已簽收 / 已修復 counts across all unit_status leaves.
+  const maintenanceCounts = useMemo(() => {
+    if (!isMaintenance) return null
+    let signedOff = 0
+    let fixed = 0
+    let total = 0
+    for (const leaf of leaves) {
+      if (leaf.tracking_mode === 'unit_status') {
+        const c = unitStatusCounts(
+          leaf.label_status as Record<string, UnitState> | null,
+          leaf.floor_labels ?? [],
+        )
+        signedOff += c.signedOff
+        fixed += c.fixed
+        total += c.total
+      }
+    }
+    return { signedOff, fixed, total }
+  }, [isMaintenance, leaves])
+
+  // Drainage KPI: aggregate qtySum/qtyTotal/qtyUnit across all zones.
+  // Only shown when every leaf is quantity-mode sharing one unit (qtySum non-null).
+  const drainageRollup = useMemo(() => {
+    if (!isDrainage) return null
+    const allLeaves = project.zones.flatMap(z => getZoneLeaves(items, z.id))
+    const r = computeRollup(allLeaves)
+    if (r.qtySum === null || r.qtyTotal === null) return null
+    // Earliest L1 planned_end → distance-to-completion tile
+    const ends = items
+      .filter(i => i.parent_id === null && i.planned_end)
+      .map(i => i.planned_end as string)
+      .sort()
+    let daysToCompletion: number | null = null
+    let completionDate: string | null = null
+    if (ends.length > 0) {
+      const todayMs = new Date(new Date().toDateString()).getTime()
+      const endMs = new Date(ends[0] + 'T00:00:00').getTime()
+      if (!Number.isNaN(endMs)) {
+        daysToCompletion = Math.ceil((endMs - todayMs) / 86400000)
+        completionDate = ends[0]
+      }
+    }
+    return {
+      qtySum: r.qtySum,
+      qtyTotal: r.qtyTotal,
+      qtyUnit: r.qtyUnit ?? '',
+      daysToCompletion,
+      completionDate,
+    }
+  }, [isDrainage, items, project.zones])
 
   const expandedSet = expanded.size === 0 ? autoExpanded : expanded
 
@@ -327,8 +382,24 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
 
         {tab === 'progress' && (
           <>
-            {isMaintenance && statutoryDeadline && (
-              <DeadlineTile date={statutoryDeadline.date} days={statutoryDeadline.days} />
+            {isMaintenance && earliestCompletion && (
+              <EarliestCompletionTile date={earliestCompletion.date} days={earliestCompletion.days} />
+            )}
+            {isMaintenance && maintenanceCounts && maintenanceCounts.total > 0 && (
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <Stat label="已簽收" count={maintenanceCounts.signedOff} color="text-green-700 bg-green-50 border-green-200" />
+                <Stat label="已修復" count={maintenanceCounts.fixed} color="text-blue-700 bg-blue-50 border-blue-200" />
+                <Stat label="共" count={maintenanceCounts.total} color="text-site-700 bg-site-50 border-site-200" />
+              </div>
+            )}
+            {isDrainage && drainageRollup && (
+              <DrainageKpiStrip
+                qtySum={drainageRollup.qtySum}
+                qtyTotal={drainageRollup.qtyTotal}
+                qtyUnit={drainageRollup.qtyUnit}
+                daysToCompletion={drainageRollup.daysToCompletion}
+                completionDate={drainageRollup.completionDate}
+              />
             )}
             {items.some(i => i.category_domain || i.category_stream) && (
               <div className="flex flex-wrap items-center gap-1.5 mb-3">
@@ -863,9 +934,10 @@ function Stat({ label, count, color }: { label: string; count: number; color: st
   )
 }
 
-// P3: 大樓維修 statutory-deadline banner. days < 0 = 已逾期 (red), ≤ 14 = 緊迫
-// (amber), else informational (blue). The date is the earliest L1 planned_end.
-function DeadlineTile({ date, days }: { date: string; days: number }) {
+// P3: 大樓維修 earliest-completion banner. Relabelled 最早完工目標 instead of
+// 法定限期 — the date is the earliest L1 planned_end, not a statutory order.
+// days < 0 = 已逾期 (red), ≤ 14 = 緊迫 (amber), else informational (blue).
+function EarliestCompletionTile({ date, days }: { date: string; days: number }) {
   const overdue = days < 0
   const urgent = days >= 0 && days <= 14
   const color = overdue
@@ -877,12 +949,58 @@ function DeadlineTile({ date, days }: { date: string; days: number }) {
     <div className={`rounded-xl border p-3 mb-3 flex items-center gap-3 ${color}`}>
       <CalendarClock size={22} className="flex-shrink-0" />
       <div className="flex-1 min-w-0">
-        <p className="text-[11px] font-medium opacity-80">法定限期</p>
+        <p className="text-[11px] font-medium opacity-80">最早完工目標</p>
         <p className="text-sm font-bold">
-          {overdue ? `已逾期 ${Math.abs(days)} 日` : `距法定限期 ${days} 日`}
+          {overdue ? `已逾期 ${Math.abs(days)} 日` : `距完工目標 ${days} 日`}
         </p>
       </div>
       <span className="text-xs font-mono font-semibold flex-shrink-0">{date}</span>
+    </div>
+  )
+}
+
+// P2: 渠務 KPI strip. Shows Σ已鋪/共 in the project's native unit plus a
+// 距完工 tile derived from the earliest L1 planned_end. Only rendered when
+// every leaf is quantity-mode with the same unit (qtySum non-null).
+function DrainageKpiStrip({
+  qtySum, qtyTotal, qtyUnit, daysToCompletion, completionDate,
+}: {
+  qtySum: number
+  qtyTotal: number
+  qtyUnit: string
+  daysToCompletion: number | null
+  completionDate: string | null
+}) {
+  const pct = qtyTotal > 0 ? Math.round((qtySum / qtyTotal) * 100) : 0
+  return (
+    <div className="flex gap-2 mb-3 flex-wrap">
+      <div className="flex-1 min-w-[140px] rounded-xl border bg-teal-50 border-teal-200 text-teal-700 p-3">
+        <p className="text-[11px] font-medium opacity-80">已鋪 / 共</p>
+        <p className="text-lg font-black leading-tight">
+          {qtySum}<span className="text-xs font-semibold ml-0.5">{qtyUnit}</span>
+          <span className="text-sm font-semibold text-teal-500 mx-1">/</span>
+          {qtyTotal}<span className="text-xs font-semibold ml-0.5">{qtyUnit}</span>
+        </p>
+        <p className="text-xs font-medium mt-0.5 opacity-70">{pct}% 完成</p>
+      </div>
+      {daysToCompletion !== null && completionDate && (() => {
+        const overdue = daysToCompletion < 0
+        const urgent = daysToCompletion >= 0 && daysToCompletion <= 14
+        const color = overdue
+          ? 'bg-red-50 border-red-200 text-red-700'
+          : urgent
+            ? 'bg-amber-50 border-amber-200 text-amber-700'
+            : 'bg-blue-50 border-blue-200 text-blue-700'
+        return (
+          <div className={`flex-1 min-w-[140px] rounded-xl border p-3 ${color}`}>
+            <p className="text-[11px] font-medium opacity-80">最早完工目標</p>
+            <p className="text-lg font-black leading-tight">
+              {overdue ? `逾期 ${Math.abs(daysToCompletion)} 日` : `${daysToCompletion} 日`}
+            </p>
+            <p className="text-xs font-medium mt-0.5 opacity-70">{completionDate}</p>
+          </div>
+        )
+      })()}
     </div>
   )
 }

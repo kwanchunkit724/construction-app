@@ -143,15 +143,20 @@ export default function EquipmentVerifyPage() {
                         : '未簽署'}
                     </p>
                     {due && projectId && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          navigate(`/project/${projectId}/equipment/${result.equipment_id}`)
-                        }
-                        className="btn-primary w-full mt-3"
-                      >
-                        <PenLine size={16} className="inline mr-1" /> 去簽署
-                      </button>
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            navigate(`/project/${projectId}/equipment/${result.equipment_id}`)
+                          }
+                          className="btn-primary w-full"
+                        >
+                          <PenLine size={16} className="inline mr-1" /> 去簽署
+                        </button>
+                        <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5 mt-1.5 leading-relaxed">
+                          需合資格人士持有相關證書方可簽署
+                        </p>
+                      </div>
                     )}
                   </div>
                 )

@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { Home, Building2, User, Shield, ShieldCheck, HardHat, LogOut, LayoutDashboard, Users, FileText, Receipt, BookOpen, Package, CalendarDays, Contact as ContactIcon, GraduationCap, FolderOpen, Wrench } from 'lucide-react'
+import { Home, Building2, User, Shield, ShieldCheck, HardHat, LogOut, LayoutDashboard, Users, FileText, Receipt, BookOpen, Package, CalendarDays, Contact as ContactIcon, GraduationCap, FolderOpen, Wrench, CloudRain } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { usePtwFlag } from '../contexts/PtwFlagContext'
@@ -156,6 +156,7 @@ function ProjectNavLinks({
     ...(isModuleEnabled('si') ? [{ to: `/project/${projectId}/si`, label: '工地指令', icon: FileText }] : []),
     ...(isModuleEnabled('vo') ? [{ to: `/project/${projectId}/vo`, label: '變更指令', icon: Receipt }] : []),
     ...(showPtw && isModuleEnabled('ptw') ? [{ to: `/project/${projectId}/ptw`, label: '工作許可證', icon: HardHat }] : []),
+    ...(isModuleEnabled('weather') ? [{ to: `/project/${projectId}/weather`, label: '天氣記錄', icon: CloudRain }] : []),
     ...(showEquipment && isModuleEnabled('equipment') ? [{ to: `/project/${projectId}/equipment`, label: '機械/表格', icon: Wrench }] : []),
     ...(isModuleEnabled('dailies') ? [{ to: `/project/${projectId}/daily`, label: '每日日誌', icon: BookOpen }] : []),
     ...(isModuleEnabled('materials') ? [{ to: `/project/${projectId}/materials`, label: '物料', icon: Package }] : []),

@@ -8,6 +8,8 @@ import {
   DailiesProvider,
   useDailies,
   todayHKT,
+  canAuthorDaily,
+  dailyAuthorDenyReason,
   type Daily,
 } from '../contexts/DailiesContext'
 import { supabase } from '../lib/supabase'
@@ -45,32 +47,21 @@ function isSevereSignal(sig: string): boolean {
 function DailyListInner({ projectId }: { projectId: string }) {
   const navigate = useNavigate()
   const { profile } = useAuth()
+  const { memberships, projects } = useProjects()
   const { dailies, selectedDate, setSelectedDate, loading, fetchError } = useDailies()
 
   const today = todayHKT()
   const isToday = selectedDate === today
 
-  const canAuthor =
-    !!profile &&
-    profile.global_role === 'main_contractor' &&
-    (profile.sub_role === 'foreman' || profile.sub_role === 'engineer')
+  // Authorship now keys on per-project supervisor membership (PM / 老總 /
+  // 總承建商), aligned with progress/materials — not GLOBAL role + sub_role.
+  const canAuthor = canAuthorDaily(profile, memberships, projects, projectId)
 
   // Explain to the current user WHY they can't author a daily, so the
   // "新增" CTA absence isn't a silent UX dead-end. (persona-sim 2026-05-26)
-  const cannotAuthorReason: string | null = (() => {
-    if (!profile) return null
-    if (canAuthor) return null
-    if (profile.global_role === 'subcontractor' || profile.global_role === 'subcontractor_worker') {
-      return '判頭 / 工人唔可以寫日誌 — 由總承建商管工或工程師代為填寫。'
-    }
-    if (profile.global_role === 'owner') {
-      return '業主只能閱讀日誌。'
-    }
-    if (profile.global_role === 'main_contractor') {
-      return '只有 sub_role 為「管工」或「工程師」嘅總承建商員工可以寫日誌。'
-    }
-    return '你嘅角色唔可以寫每日日誌，只能閱讀。'
-  })()
+  const cannotAuthorReason = isToday
+    ? dailyAuthorDenyReason(profile, memberships, projects, projectId)
+    : null
 
   const myDaily = useMemo(
     () => (profile ? dailies.find(d => d.user_id === profile.id) ?? null : null),
@@ -102,7 +93,6 @@ function DailyListInner({ projectId }: { projectId: string }) {
   }, [dailies])
 
   // ── Resolve referenced progress item titles + zone ──────────
-  const { projects } = useProjects()
   const project = projects.find(p => p.id === projectId)
   const zoneNameById = useMemo(() => {
     const m: Record<string, string> = {}

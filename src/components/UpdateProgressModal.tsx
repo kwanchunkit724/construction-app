@@ -23,6 +23,11 @@ const UNIT_STATE_STYLE: Record<UnitState, string> = {
 
 function nextUnitState(s: UnitState): UnitState {
   const i = UNIT_STATE_ORDER.indexOf(s)
+  // Unknown legacy value (e.g. 'unprocessed') → indexOf returns -1 →
+  // start from the first known state instead of wrapping to index 0 via (-1+1)%5.
+  // (-1 + 1) % 5 happens to be 0 which is actually fine, but guard explicitly
+  // so the intent is clear and future order changes don't silently break it.
+  if (i === -1) return UNIT_STATE_ORDER[0]
   return UNIT_STATE_ORDER[(i + 1) % UNIT_STATE_ORDER.length]
 }
 
@@ -331,8 +336,8 @@ export function UpdateProgressModal({
                   className="w-full min-h-[44px] flex items-center justify-between gap-2.5 px-3 rounded-xl border-2 border-site-200 bg-white text-sm font-semibold transition-colors text-left hover:border-rose-300"
                 >
                   <span className="flex-1 min-w-0 truncate text-site-700">{label}</span>
-                  <span className={`flex-shrink-0 inline-flex items-center px-2.5 py-1 rounded-full border text-xs font-bold ${UNIT_STATE_STYLE[st]}`}>
-                    {UNIT_STATE_ZH[st]}
+                  <span className={`flex-shrink-0 inline-flex items-center px-2.5 py-1 rounded-full border text-xs font-bold ${UNIT_STATE_STYLE[st] ?? 'bg-site-100 text-site-500 border-site-200'}`}>
+                    {UNIT_STATE_ZH[st] ?? st}
                   </span>
                 </button>
               )

@@ -18,6 +18,7 @@ import {
   isScheduled, LINE_ITEM_CATEGORY_ZH,
   WEATHER_KIND_ZH, EQUIPMENT_KIND_ZH, EQUIPMENT_STATUS_ZH,
   FORM_RESULT_ZH, FORM_STATUS_ZH, deriveFormStatus,
+  unitStatusCounts,
 } from '../types'
 import type {
   Project, ProgressItem, Issue, IssueComment, UserProfile, ProgressStatus,
@@ -76,7 +77,7 @@ function dateStr() {
 // find the file. So: native → write to Cache + open the share sheet
 // (WhatsApp / email / …); web → Web Share API with the file (mobile), else
 // fall back to a normal download.
-async function shareOrDownloadBlob(blob: Blob, filename: string, title: string) {
+export async function shareOrDownloadBlob(blob: Blob, filename: string, title: string) {
   if (Capacitor.isNativePlatform()) {
     try {
       const b64 = await blobToBase64(blob)
@@ -176,7 +177,8 @@ interface ReportModel {
 
 // Tracking column text per mode. floors → "x/y樓" (unchanged); checklist →
 // "✓x/y" (P1 left this blank — fixed here); quantity → "done/total unit"
-// (P2); percentage → '' (the % columns already say it all).
+// (P2); unit_status → "已簽收 a / 待驗 b / 修復中 c" summary (P3 defect
+// register / 逐戶驗收); percentage → '' (the % columns already say it all).
 function trackingLabel(it: ProgressItem): string {
   switch (it.tracking_mode) {
     case 'floors':
@@ -185,6 +187,12 @@ function trackingLabel(it: ProgressItem): string {
       return `✓${it.floors_completed.length}/${it.floor_labels.length}`
     case 'quantity':
       return `${it.qty_done ?? 0}/${it.qty_total ?? '?'}${it.qty_unit ?? ''}`
+    case 'unit_status': {
+      const c = unitStatusCounts(it.label_status, it.floor_labels ?? [])
+      // pending = total − signedOff − fixed (fixing + reinspect collapse to "待驗")
+      const pending = c.total - c.signedOff - c.fixed
+      return `已簽收 ${c.signedOff} / 修復中 ${c.fixed} / 待驗 ${pending}`
+    }
     default:
       return ''
   }

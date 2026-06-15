@@ -14,7 +14,6 @@ import type { Material } from '../contexts/MaterialsContext'
 import { MaterialForm } from '../components/material/MaterialForm'
 import { MaterialReceiveModal } from '../components/material/MaterialReceiveModal'
 import { useAuth } from '../contexts/AuthContext'
-import { useProjects } from '../contexts/ProjectsContext'
 
 type FilterKey = 'all' | 'requested' | 'partial' | 'arrived' | 'late'
 
@@ -54,9 +53,10 @@ function MaterialCard({
 }) {
   const late = isMaterialLate(m)
   const linkedCount = m.item_ids?.length ?? 0
-  // Per-row gate matching v16 RLS: only requester OR supervisor (admin / pm /
-  // general_foreman / assigned PM) can mutate. Subcontractor/foreman/engineer
-  // members can only mutate their own rows.
+  // Per-row gate: requester OR supervisor. Supervisor now mirrors the create
+  // gate (per-project membership role: admin / assigned PM / pm /
+  // main_contractor / general_foreman / subcontractor) so a main_contractor or
+  // subcontractor who can 加物料 can also 入貨/編輯/刪除 rows they didn't create.
   const canMutate = isSupervisor || isOwner
 
   return (
@@ -143,17 +143,12 @@ function MaterialCard({
 function MaterialListInner({ projectId }: { projectId: string }) {
   const { materials, loading, fetchError, canManage, deleteMaterial } = useMaterials()
   const { profile } = useAuth()
-  // Supervisor = admin OR pm OR general_foreman OR assigned PM. Mirrors
-  // v16-materials-rls-fix.sql `is_material_supervisor()`. Only supervisors
-  // (or row owner) may mutate any given material row.
-  const { projects } = useProjects()
-  const project = projects.find(p => p.id === projectId)
-  const isSupervisor = !!profile && (
-    profile.global_role === 'admin'
-    || profile.global_role === 'pm'
-    || profile.global_role === 'general_foreman'
-    || (project?.assigned_pm_ids.includes(profile.id) ?? false)
-  )
+  // Supervisor (per-row 入貨/編輯/刪除) uses the SAME per-project membership-role
+  // gate as the FAB/create (`canManage`): admin OR assigned PM OR approved member
+  // in pm|main_contractor|general_foreman|subcontractor. Previously this keyed on
+  // GLOBAL role and omitted main_contractor + subcontractor, so a main_contractor
+  // saw 加物料 but could not 入貨 rows they didn't create. (findings-drainage 6.1)
+  const isSupervisor = canManage
   const [filter, setFilter] = useState<FilterKey>('all')
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Material | null>(null)

@@ -63,10 +63,17 @@ const GENERAL: ProgressTemplate = {
 
 const SMALL_WORKS: ProgressTemplate = {
   type: 'small_works',
-  allowedModes: ['checklist', 'percentage'],
+  // 'quantity' added so reno items measured in m2/m (floor area, pipe-run)
+  // can be authored; the create modal was silently blocking this mode while
+  // existing quantity leaves already rendered fine. checklist stays the
+  // default (most reno leaves are binary done/not-done).
+  allowedModes: ['checklist', 'percentage', 'quantity'],
   defaultMode: 'checklist',
   zoneNoun: null, // single implicit zone — hide the zone chrome
   labelNoun: '工序',
+  // autoZone=true suppresses the zone chrome for the normal 1-zone case.
+  // ProjectDetail reads project.zones.length to decide whether to restore
+  // zone headers even under autoZone (see hideZoneChrome derivation there).
   autoZone: true,
   kpiTiles: 'small-works',
 }

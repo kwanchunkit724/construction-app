@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext'
 import {
   DailiesProvider,
   useDailies,
+  canAuthorDaily,
   todayHKT,
   yesterdayHKT,
   WEATHER_OPTIONS,
@@ -24,7 +25,7 @@ function DailyEditInner({ projectId }: { projectId: string }) {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const { dailies, loading, upsertMyDaily, fetchMyDailyFor } = useDailies()
-  const { projects } = useProjects()
+  const { projects, memberships } = useProjects()
   const project = projects.find(p => p.id === projectId)
   const zoneNameById = useMemo(() => {
     const m: Record<string, string> = {}
@@ -34,10 +35,10 @@ function DailyEditInner({ projectId }: { projectId: string }) {
 
   const today = todayHKT()
 
-  const canAuthor =
-    !!profile &&
-    profile.global_role === 'main_contractor' &&
-    (profile.sub_role === 'foreman' || profile.sub_role === 'engineer')
+  // Unified with DailyList / DailiesContext (G4): project supervisors
+  // (admin / assigned-PM / membership pm·老總·總承建商) may author, not only a
+  // main_contractor with a foreman/engineer sub_role.
+  const canAuthor = canAuthorDaily(profile, memberships, projects, projectId)
 
   // Today's own row (provider is already scoped to today by default).
   const existing = useMemo(
