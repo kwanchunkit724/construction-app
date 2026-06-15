@@ -35,23 +35,22 @@ export default function WeatherRecord() {
   // for an admin viewing a project with the module disabled.
   const weatherOn = isModuleEnabled('weather')
 
-  // Mirror EXACTLY the server pwc_insert gate (v58, restated module-gated in
-  // v59 §1): can_edit_project_progress(uid, project) AND recorded_by = uid AND
-  // weather module on. can_edit_project_progress (v3, never re-defined since —
-  // v15/v27 only touched the SEPARATE can_manage_project_progress) resolves to:
-  //   admin OR assigned PM OR approved member whose user_profiles.global_role
-  //   ∈ ('pm','main_contractor','subcontractor').
-  // Note it gates on the GLOBAL account role, not the per-project membership
-  // role (unlike progress structure rights), so we read profile.global_role —
-  // the approved-membership row only supplies the existence check. recorded_by
-  // is always set to profile.id on save, so that conjunct holds; weatherOn
-  // covers project_module_enabled.
+  // Mirror the server weather-write gate (pwc_insert/update/delete). After v65
+  // it is (can_edit_project_progress OR can_manage_project_progress) AND
+  // recorded_by = uid AND weather module on. BOTH helpers key on the PER-PROJECT
+  // membership role (project_members.role) — NOT the global account role:
+  //   can_edit   = {pm, main_contractor, subcontractor}   (v3-progress-schema.sql)
+  //   can_manage = {pm, general_foreman, main_contractor}  (v27)
+  // Union (v65) = {pm, main_contractor, subcontractor, general_foreman}. admin +
+  // assigned PM are in both helpers (global-admin / assigned_pm_ids branches).
+  // recorded_by is always set to profile.id on save; weatherOn = module gate.
   const canManage = useMemo(() => {
     if (!profile || !weatherOn) return false
     if (profile.global_role === 'admin') return true
     if (project?.assigned_pm_ids.includes(profile.id)) return true
-    if (!['pm', 'main_contractor', 'subcontractor'].includes(profile.global_role)) return false
-    return memberships.some(m => m.user_id === profile.id && m.project_id === id && m.status === 'approved')
+    return memberships.some(m =>
+      m.user_id === profile.id && m.project_id === id && m.status === 'approved'
+      && ['pm', 'main_contractor', 'subcontractor', 'general_foreman'].includes(m.role))
   }, [profile, project, memberships, id, weatherOn])
 
   async function load() {

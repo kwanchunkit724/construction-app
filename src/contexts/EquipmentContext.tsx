@@ -278,21 +278,15 @@ export function EquipmentProvider({ projectId, children }: { projectId: string; 
 
   // 匯出登記冊 → Excel. The context already holds equipment / instances /
   // signoffs / dashboard / templateById; the only missing piece is a signer-name
-  // map. Resolve it from user_profiles by the distinct signed_by ids (same
-  // round-trip shape as VerifyCredentialsPanel). RLS may hide ex-members — that's
-  // fine, exportEquipmentRegister falls back to '前成員' for unresolved ids.
+  // map. Resolve it via get_form_signer_profiles (v65) — a SECURITY DEFINER RPC
+  // returning EVERY signer for the project, INCLUDING ex-members an RLS-narrowed
+  // user_profiles read would hide, so the 勞工處 export shows real names not 前成員.
   const exportRegister = useCallback(async () => {
     const project = projects.find(p => p.id === projectId)
     if (!project) return { error: '找不到項目' }
-    const signerIds = Array.from(new Set(
-      Object.values(signoffsByInstance).flat().map(s => s.signed_by).filter(Boolean),
-    ))
     const users: Record<string, UserProfile> = {}
-    if (signerIds.length > 0) {
-      const { data: profs } = await supabase
-        .from('user_profiles').select('id, name').in('id', signerIds)
-      ;(profs || []).forEach((p: any) => { users[p.id] = { id: p.id, name: p.name } as UserProfile })
-    }
+    const { data: profs } = await supabase.rpc('get_form_signer_profiles', { p_project_id: projectId })
+    ;(profs || []).forEach((p: any) => { users[p.id] = { id: p.id, name: p.name } as UserProfile })
     try {
       const { exportEquipmentRegister } = await import('../lib/export')
       await exportEquipmentRegister(
