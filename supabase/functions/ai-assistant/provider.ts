@@ -141,12 +141,22 @@ async function streamOpenRouter(a: StreamArgs): Promise<StreamResult> {
 
   const tools = a.tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.input_schema } }))
 
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  // Supabase Edge Functions egress from a region OpenRouter geo-blocks (403
+  // "provider Terms of Service", before any provider — proven by a known-good key
+  // still failing). OPENROUTER_BASE_URL points at our Fly Tokyo (nrt) relay, which
+  // re-originates the call from Japan; x-relay-secret authenticates us to it. With
+  // no base override we hit OpenRouter directly and skip the secret (unchanged).
+  const base = (Deno.env.get('OPENROUTER_BASE_URL') ?? 'https://openrouter.ai').replace(/\/+$/, '')
+  const relaySecret = Deno.env.get('RELAY_SECRET')
+  const orHeaders: Record<string, string> = {
+    Authorization: `Bearer ${key}`, 'Content-Type': 'application/json',
+    'HTTP-Referer': 'https://syyntodkvexkbpjrskjj.supabase.co', 'X-Title': 'CK Construction AI',
+  }
+  if (relaySecret) orHeaders['x-relay-secret'] = relaySecret
+
+  const res = await fetch(`${base}/api/v1/chat/completions`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${key}`, 'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://syyntodkvexkbpjrskjj.supabase.co', 'X-Title': 'CK Construction AI',
-    },
+    headers: orHeaders,
     body: JSON.stringify({ model, messages: msgs, tools: tools.length ? tools : undefined, stream: true, max_tokens: a.maxTokens ?? 4096, stream_options: { include_usage: true } }),
   })
   if (!res.ok || !res.body) throw new Error(`OpenRouter ${res.status}: ${await res.text().catch(() => '')}`)
