@@ -75,6 +75,16 @@ export const READ_TOOLS: ToolDef[] = [
     description: '讀取香港天文台未來 9 日天氣預測 + 現時警告 + 大致天氣情況/熱帶氣旋消息。用嚟提前提醒地盤預防（大雨→清渠/物料加蓋/停批盪；大風或颱風→綁棚架網/收起易吹落街物件/固定塔吊；酷熱→防中暑調工時）。',
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
   },
+  {
+    name: 'recall_memory',
+    description: '喺地盤記憶圖（由本項目嘅進度/文件/問題/聯絡人/項目本身衍生出嘅 memory_notes）入面搵返相關記憶。可選 query（標題/摘要/標籤關鍵字模糊比對）；唔填就攞晒。用嚟快速憶起「呢個地盤之前發生過咩」。RLS 已收窄到你可見嘅項目。',
+    input_schema: { type: 'object', properties: { query: { type: 'string', description: '關鍵字（比對標題/摘要/標籤）；留空攞晒' } }, additionalProperties: false },
+  },
+  {
+    name: 'graph_neighbors',
+    description: '由一個實體（entity_type + entity_id）出發，喺地盤記憶圖一跳行到佢直接連住嘅鄰居（連 edge_type，例如 governing/parent/belongs_to），一個 call 就睇晒關聯實體。entity_type 係 progress/document/issue/contact/project 之一，entity_id 係嗰個來源資料列嘅 id。RLS 已收窄到你可見嘅項目。',
+    input_schema: { type: 'object', properties: { entity_type: { type: 'string', enum: ['progress', 'document', 'issue', 'contact', 'project'], description: '實體類型' }, entity_id: { type: 'string', description: '來源資料列嘅 id' } }, required: ['entity_type', 'entity_id'], additionalProperties: false },
+  },
 ]
 
 // All read tools are exposed to every role in Phase 1 (RLS does the narrowing).
@@ -190,6 +200,30 @@ export async function executeReadTool(supa: Supa, projectId: string, name: strin
         forecast,
         updated: fnd?.updateTime ?? null,
       }
+    }
+    case 'recall_memory': {
+      const term = input?.query != null ? String(input.query).trim() : ''
+      const { data, error } = await supa.rpc('memory_recall', {
+        p_project_id: projectId,
+        p_query: term ? term : null,
+      })
+      if (error) return { error: error.message }
+      return ((data ?? []) as Record<string, unknown>[]).slice(0, CAP).map((r) => pick(r, [
+        'id', 'entity_type', 'entity_id', 'node_type', 'title', 'summary', 'tags', 'source_updated_at',
+      ]))
+    }
+    case 'graph_neighbors': {
+      if (!input?.entity_type || !input?.entity_id) return { error: 'entity_type 同 entity_id required' }
+      const { data: note, error: ne } = await supa.from('memory_notes')
+        .select('id')
+        .eq('project_id', projectId)
+        .eq('entity_type', input.entity_type)
+        .eq('entity_id', input.entity_id)
+        .maybeSingle()
+      if (ne) return { error: ne.message }
+      if (!note) return { error: '搵唔到呢個實體嘅記憶節點或者你冇權睇' }
+      const { data, error } = await supa.rpc('graph_neighbors', { p_note_id: note.id })
+      return error ? { error: error.message } : data
     }
     default:
       return { error: `unknown read tool ${name}` }
