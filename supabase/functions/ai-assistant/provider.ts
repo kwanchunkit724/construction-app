@@ -106,14 +106,86 @@ async function streamAnthropic(a: StreamArgs): Promise<StreamResult> {
 }
 
 // ── OpenRouter (OpenAI-compatible) adapter ───────────────────────────────────
-// OpenRouter speaks the OpenAI /chat/completions shape (tool_calls), not the
-// Anthropic blocks shape. This adapter is stubbed for Phase 0: implement the
-// message<->OpenAI translation + SSE tool_call assembly in Phase 1 if the user
-// chooses OpenRouter. Anthropic remains the default and needs nothing here.
-function streamOpenRouter(_a: StreamArgs): Promise<StreamResult> {
+// OpenRouter speaks the OpenAI /chat/completions shape (tool_calls + 'tool' role
+// messages), not Anthropic blocks. This adapter translates our Anthropic-shaped
+// messages/tools INTO OpenAI on the way out, and the streamed tool_calls back
+// INTO Anthropic-style assistantContent on the way back — so index.ts's loop
+// (which replays assistantContent + tool_result) works identically either way.
+// Model is OPENROUTER_MODEL (e.g. 'anthropic/claude-sonnet-4.6'); the per-tier
+// sonnet/opus routing is Anthropic-only, so OpenRouter uses one model for all.
+async function streamOpenRouter(a: StreamArgs): Promise<StreamResult> {
   const key = Deno.env.get('OPENROUTER_API_KEY')
   if (!key) throw new Error('OPENROUTER_API_KEY 未設定')
-  throw new Error('AI_PROVIDER=openrouter 嘅 adapter 仲未實作（Phase 1）。暫時用 anthropic。')
+  const model = Deno.env.get('OPENROUTER_MODEL') ?? 'anthropic/claude-sonnet-4.6'
+
+  // Anthropic-shaped messages -> OpenAI chat messages
+  const msgs: any[] = [{ role: 'system', content: a.system }]
+  for (const m of a.messages) {
+    if (typeof m.content === 'string') { msgs.push({ role: m.role, content: m.content }); continue }
+    if (m.role === 'assistant') {
+      const text = m.content.filter((b) => b.type === 'text').map((b: any) => b.text).join('')
+      const toolCalls = m.content.filter((b) => b.type === 'tool_use')
+        .map((b: any) => ({ id: b.id, type: 'function', function: { name: b.name, arguments: JSON.stringify(b.input ?? {}) } }))
+      const am: any = { role: 'assistant', content: text || null }
+      if (toolCalls.length) am.tool_calls = toolCalls
+      msgs.push(am)
+    } else {
+      // OpenAI: tool results are separate 'tool' messages, not inside the user turn
+      const texts = m.content.filter((b) => b.type === 'text').map((b: any) => b.text).join('')
+      if (texts) msgs.push({ role: 'user', content: texts })
+      for (const b of m.content.filter((b) => b.type === 'tool_result') as any[]) {
+        msgs.push({ role: 'tool', tool_call_id: b.tool_use_id, content: typeof b.content === 'string' ? b.content : JSON.stringify(b.content) })
+      }
+    }
+  }
+
+  const tools = a.tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.input_schema } }))
+
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${key}`, 'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://syyntodkvexkbpjrskjj.supabase.co', 'X-Title': 'CK Construction AI',
+    },
+    body: JSON.stringify({ model, messages: msgs, tools: tools.length ? tools : undefined, stream: true, max_tokens: a.maxTokens ?? 4096, stream_options: { include_usage: true } }),
+  })
+  if (!res.ok || !res.body) throw new Error(`OpenRouter ${res.status}: ${await res.text().catch(() => '')}`)
+
+  let textAcc = ''
+  const toolAcc: Record<number, { id: string; name: string; args: string }> = {}
+  let stopReason = 'end_turn'
+  let usageIn = 0, usageOut = 0
+
+  await readSSE(res.body, (_event, data) => {
+    const choice = data.choices?.[0]
+    if (choice) {
+      const d = choice.delta ?? {}
+      if (d.content) { a.onText(d.content); textAcc += d.content }
+      if (d.tool_calls) for (const tc of d.tool_calls) {
+        const i = tc.index ?? 0
+        const cur = toolAcc[i] ?? (toolAcc[i] = { id: '', name: '', args: '' })
+        if (tc.id) cur.id = tc.id
+        if (tc.function?.name) cur.name = tc.function.name
+        if (tc.function?.arguments) cur.args += tc.function.arguments
+      }
+      if (choice.finish_reason) stopReason = choice.finish_reason === 'tool_calls' ? 'tool_use' : choice.finish_reason === 'length' ? 'max_tokens' : 'end_turn'
+    }
+    if (data.usage) { usageIn = data.usage.prompt_tokens ?? usageIn; usageOut = data.usage.completion_tokens ?? usageOut }
+  })
+
+  const assistantContent: ContentBlock[] = []
+  if (textAcc) assistantContent.push({ type: 'text', text: textAcc })
+  const toolUses: ToolUse[] = []
+  for (const k of Object.keys(toolAcc).map(Number).sort((x, y) => x - y)) {
+    const t = toolAcc[k]
+    let input: unknown = {}
+    try { input = JSON.parse(t.args || '{}') } catch { input = {} }
+    const id = t.id || `call_${k}`
+    assistantContent.push({ type: 'tool_use', id, name: t.name, input })
+    toolUses.push({ id, name: t.name, input })
+  }
+  if (toolUses.length) stopReason = 'tool_use'
+  return { stopReason, toolUses, assistantContent, usage: { input: usageIn, output: usageOut } }
 }
 
 // ── minimal SSE line reader ──────────────────────────────────────────────────
