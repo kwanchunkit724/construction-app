@@ -35,12 +35,42 @@ RPC / function from a browser fetch → assert on the actual response. Verify by
 tools pause on a human-confirm card — they never auto-execute. The single most important AI-safety
 invariant holds.
 
+## §4.8 — Weather / EOT claims (L1 REST, allow+deny, with cleanup)
+
+| Plan ID | Step | Result | Verdict |
+|---|---|---|---|
+| WX-03 `[ALLOW]` | PM files claim | 201 created | ✅ |
+| **WX-04** `[no-double-count]` | PM files same (project, date) again | **409 / 23505** unique-constraint | ✅ money-safe |
+| WX-06 `[DENY]` | worker files claim | **403 / 42501** RLS | ✅ |
+| NEG-03 | PM reads other project's claims | 200, **count 0** | ✅ no cross-project read |
+| NEG-03 | PM inserts into other project | **403 / 42501** | ✅ no cross-project write |
+| (cleanup) | PM deletes test row | 1 deleted | ✅ no pollution |
+
+## §4.4 — Issue escalation chain (L1 REST)
+
+| Plan ID | Step | Result | Verdict |
+|---|---|---|---|
+| ISS-01 `[ALLOW]` | worker reports (handler=subcontractor) | 201 | ✅ |
+| ISS-02 `[ALLOW]` | subcontractor (handler) escalates → main_contractor | 200, 1 changed | ✅ |
+| ISS-06 `[DENY]` | general_foreman (non-handler/reporter/admin) resolves | 200, **0 changed** (RLS USING excludes row) | ✅ |
+| ISS-07/NEG-04 | reporter (worker) resolves own (anti-dead-end bypass) | 200, 1 changed | ✅ |
+
 ## Coverage map (vs the full plan)
-- ✅ Executed: PROG-10, AI-R01, AI-R02 (worker/non-member empty), AI-M01, AI-M05, NEG-01, NEG-17.
-- ⬜ Not run here (need build+preview+Playwright): §4.5 SI→VO→PTW spine, §4.1–4.6 DOM E2E,
-  §5 lifecycle 開盤→完盤, §7 mobile 390px / tablet 1600×900, weather double-claim (WX-04).
+- ✅ **Executed (L1 backend truth — the load-bearing allow+deny assertions):** PROG-10, AI-R01,
+  AI-R02, AI-M01, AI-M05, WX-03/04/06, NEG-03, ISS-01/02/06/07, NEG-01, NEG-17. **All green.**
+- ⛔ **Cannot run in this sandbox:** L2 Playwright DOM (`@si-vo-smoke`, `@ptw-smoke`,
+  `@ptw-fire-watch`, `@drawings`, `delete-my-account`), L3 `sim-runner.mjs`, L4
+  `lifecycle-runner.mjs`, and §7 mobile 390px/1600×900. **Reason: the build/test sandbox has NO
+  network** (curl to Supabase → `000`; Playwright browsers + config are present, but every spec
+  logs in to Supabase and would fail at auth). These must run on a **networked machine / CI**
+  (Codemagic), or driven through the live preview browser. The SI→VO→PTW chain's *permission
+  truth* (separation-of-duties DENY) is L1-testable the same way as issues above and is the
+  recommended next REST batch.
 
 ## Recommendation
-The new AI surface is **safe to pilot** — no RLS leak, no auto-mutation, parity verified across
-three roles. For a full release gate, run the L2/L3/L4 tracks (`§10 Execution Quick-Reference`)
-which require the dev server + Playwright.
+Every backend permission/RLS boundary exercised here is **green** — RLS visibility is monotonic
+and leak-free, the AI never leaks or auto-mutates, weather EOT can't double-count, cross-project
+is denied both directions, and issue escalation honors the handler/reporter rules. **The system
+is safe to pilot.** For a full release gate, run the L2/L3/L4 + mobile tracks
+(`§10 Execution Quick-Reference`) on CI or a networked host — they need Playwright + the dev
+server with live-Supabase reachability, which this sandbox lacks.
