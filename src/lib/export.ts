@@ -29,6 +29,7 @@ import type {
 import { formatHKD } from './currency'
 import { fetchPrevSnapshot, captureSnapshot } from './snapshots'
 import type { PrevSnapshot } from './snapshots'
+import { templateFor } from './progressTemplates'
 
 async function blobToBase64(blob: Blob): Promise<string> {
   const buf = await blob.arrayBuffer()
@@ -139,13 +140,16 @@ export const NO_NOTSTARTED: ProgressStatus[] = ALL_STATUSES.filter(s => s !== 'n
 
 export function exportPreset(p: 'internal' | 'owner' | 'exception', project: Project): ExportProgressOptions {
   const zoneIds = project.zones.map(z => z.id)
+  // autoZone types (e.g. small_works) hide the zone abstraction in-app;
+  // force groupByZone=false so the export stays flat and matches the UI.
+  const groupByZone = !templateFor(project.project_type).autoZone
   if (p === 'owner') {
-    return { zoneIds, includeUnzoned: true, depth: 2, statuses: [...NO_NOTSTARTED], onlyBehind: false, groupByZone: true, showSummary: true, showGap: true, reportPeriod: '', audience: 'owner' }
+    return { zoneIds, includeUnzoned: true, depth: 2, statuses: [...NO_NOTSTARTED], onlyBehind: false, groupByZone, showSummary: true, showGap: true, reportPeriod: '', audience: 'owner' }
   }
   if (p === 'exception') {
-    return { zoneIds, includeUnzoned: true, depth: 2, statuses: ['delayed', 'blocked'], onlyBehind: true, groupByZone: true, showSummary: true, showGap: true, reportPeriod: '', audience: 'internal' }
+    return { zoneIds, includeUnzoned: true, depth: 2, statuses: ['delayed', 'blocked'], onlyBehind: true, groupByZone, showSummary: true, showGap: true, reportPeriod: '', audience: 'internal' }
   }
-  return { zoneIds, includeUnzoned: true, depth: 3, statuses: [...NO_NOTSTARTED], onlyBehind: false, groupByZone: true, showSummary: true, showGap: true, reportPeriod: '', audience: 'internal' }
+  return { zoneIds, includeUnzoned: true, depth: 3, statuses: [...NO_NOTSTARTED], onlyBehind: false, groupByZone, showSummary: true, showGap: true, reportPeriod: '', audience: 'internal' }
 }
 
 const UNZONED = '__unzoned__'

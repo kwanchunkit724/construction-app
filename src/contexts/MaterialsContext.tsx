@@ -105,7 +105,7 @@ export function MaterialsProvider({
   const [fetchError, setFetchError] = useState<string | null>(null)
 
   // Same role group as the RLS INSERT/UPDATE policy:
-  // admin OR assigned PM OR approved membership in pm|main_contractor|subcontractor.
+  // admin OR assigned PM OR approved membership in pm|main_contractor|general_foreman|subcontractor.
   const canManage = useMemo(() => {
     if (!profile) return false
     if (profile.global_role === 'admin') return true

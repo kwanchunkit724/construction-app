@@ -219,8 +219,9 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   // are byte-identical to before.
   const isMaintenance = template.kpiTiles === 'maintenance'
   const isDrainage = template.kpiTiles === 'drainage'
+  const isSmallWorks = template.kpiTiles === 'small-works'
   const earliestCompletion = useMemo(() => {
-    if (!isMaintenance) return null
+    if (!isMaintenance && !isSmallWorks) return null
     const ends = items
       .filter(i => i.parent_id === null && i.planned_end)
       .map(i => i.planned_end as string)
@@ -232,7 +233,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
     if (Number.isNaN(endMs)) return null
     const days = Math.ceil((endMs - todayMs) / 86400000)
     return { date: earliest, days }
-  }, [isMaintenance, items])
+  }, [isMaintenance, isSmallWorks, items])
 
   // Maintenance KPI: 已簽收 / 已修復 counts across all unit_status leaves.
   const maintenanceCounts = useMemo(() => {
@@ -384,6 +385,9 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
           <>
             {isMaintenance && earliestCompletion && (
               <EarliestCompletionTile date={earliestCompletion.date} days={earliestCompletion.days} />
+            )}
+            {isSmallWorks && earliestCompletion && (
+              <EarliestCompletionTile date={earliestCompletion.date} days={earliestCompletion.days} label="距交場" />
             )}
             {isMaintenance && maintenanceCounts && maintenanceCounts.total > 0 && (
               <div className="grid grid-cols-3 gap-2 mb-3">
@@ -937,7 +941,7 @@ function Stat({ label, count, color }: { label: string; count: number; color: st
 // P3: 大樓維修 earliest-completion banner. Relabelled 最早完工目標 instead of
 // 法定限期 — the date is the earliest L1 planned_end, not a statutory order.
 // days < 0 = 已逾期 (red), ≤ 14 = 緊迫 (amber), else informational (blue).
-function EarliestCompletionTile({ date, days }: { date: string; days: number }) {
+function EarliestCompletionTile({ date, days, label }: { date: string; days: number; label?: string }) {
   const overdue = days < 0
   const urgent = days >= 0 && days <= 14
   const color = overdue
@@ -945,14 +949,18 @@ function EarliestCompletionTile({ date, days }: { date: string; days: number }) 
     : urgent
       ? 'bg-amber-50 border-amber-200 text-amber-700'
       : 'bg-blue-50 border-blue-200 text-blue-700'
+  const heading = label ?? '最早完工目標'
+  const body = overdue
+    ? `已逾期 ${Math.abs(days)} 日`
+    : label
+      ? `${label} ${days} 日`
+      : `距完工目標 ${days} 日`
   return (
     <div className={`rounded-xl border p-3 mb-3 flex items-center gap-3 ${color}`}>
       <CalendarClock size={22} className="flex-shrink-0" />
       <div className="flex-1 min-w-0">
-        <p className="text-[11px] font-medium opacity-80">最早完工目標</p>
-        <p className="text-sm font-bold">
-          {overdue ? `已逾期 ${Math.abs(days)} 日` : `距完工目標 ${days} 日`}
-        </p>
+        <p className="text-[11px] font-medium opacity-80">{heading}</p>
+        <p className="text-sm font-bold">{body}</p>
       </div>
       <span className="text-xs font-mono font-semibold flex-shrink-0">{date}</span>
     </div>
