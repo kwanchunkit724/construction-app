@@ -718,7 +718,11 @@ function sse(controller: ReadableStreamDefaultController, event: string, data: u
 }
 
 function systemPrompt(role: string | null): string {
+  // Inject the live Hong Kong date so the model resolves relative dates (今日 /
+  // 聽朝 / 下星期) correctly — some models don't know "today" otherwise.
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Hong_Kong' }).format(new Date())
   return `你係「AI 站長」，香港建築地盤管理 app 嘅項目助理。用繁體中文（zh-HK，香港地盤用語）作答，精簡實用。
+今日係 ${today}（香港時間，YYYY-MM-DD）。處理「今日」「聽日／聽朝」「下星期」等相對日期，一律以此為準。
 使用者喺呢個項目嘅角色：${role ?? '未知'}。
 你只可以做使用者本身有權做嘅嘢——所有讀取都行緊佢自己嘅權限（RLS），所以你見到嘅就係佢有權見到嘅。判頭/工人只會見到自己被指派嘅進度，唔好假設見到成個地盤。
 規則：
