@@ -282,6 +282,21 @@ export function DocumentsProvider({
     onProgress?: (pct: number) => void
   }): Promise<{ documentId: string | null; error: string | null }> {
     if (!profile) return { documentId: null, error: '未登入' }
+    // Module gate (v59): if an admin disabled 文件 for this project, the documents
+    // INSERT is RLS-rejected — but next_document_number ALREADY incremented the
+    // per-(project,type) counter, leaving a permanent gap (DWG-007 with no row).
+    // Guard BEFORE allocating a number. DocumentsProvider is NOT mounted inside a
+    // ModulesProvider (it lives in ProjectDetail, route /project/:id, which is not
+    // wrapped by ModuleRoute), so we can't call useModules() here — query the
+    // security-definer helper directly. Fail-open like ModulesContext: only block
+    // on an explicit `false`; a transient RPC error must not stop a valid upload.
+    const { data: docsEnabled, error: moduleErr } = await supabase.rpc(
+      'project_module_enabled',
+      { p_project_id: projectId, p_module_key: 'documents' },
+    )
+    if (!moduleErr && docsEnabled === false) {
+      return { documentId: null, error: '此工地已停用文件功能' }
+    }
     // Drawing-type carve-out (D-25): block before next_document_number so a
     // 判頭 / 老總 never burns a DWG counter number on a write the DB will reject.
     if (documentType === 'drawing' && !canUploadDrawingType) {

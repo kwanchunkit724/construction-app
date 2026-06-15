@@ -325,8 +325,8 @@ export async function executeReadTool(supa: Supa, projectId: string, name: strin
       let rows = (data ?? []) as Record<string, unknown>[]
       if (input?.status) rows = rows.filter((r) => r.status === input.status)
       return rows.slice(0, CAP).map((r) => pick(r, [
-        'id', 'parent_id', 'code', 'name', 'status', 'tracking_mode', 'planned_start', 'planned_end',
-        'percent', 'percent_complete', 'floors_total', 'floors_completed', 'qty_total', 'qty_done',
+        'id', 'parent_id', 'code', 'title', 'status', 'tracking_mode', 'planned_start', 'planned_end',
+        'planned_progress', 'actual_progress', 'floor_labels', 'floors_completed', 'qty_total', 'qty_done', 'qty_unit',
         'blocked_reason', 'assigned_to', 'delegated_to', 'zone_id',
       ]))
     }

@@ -37,7 +37,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useStepUp } from '../contexts/StepUpContext'
 import { usePtwFlag } from '../contexts/PtwFlagContext'
 import { useFilesFlag } from '../contexts/FilesFlagContext'
-import { useModules } from '../contexts/ModulesContext'
+import { ModulesProvider, useModules } from '../contexts/ModulesContext'
 import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH, deriveStatus, plannedProgressOf, CATEGORY_DOMAIN_ZH, CATEGORY_STREAM_ZH } from '../types'
 import type { ProgressItem, ProgressStatus, Zone, CategoryDomain, CategoryStream } from '../types'
 import { templateFor } from '../lib/progressTemplates'
@@ -63,17 +63,23 @@ export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>()
   if (!id) return <Navigate to="/home" replace />
   return (
-    <ProgressProvider projectId={id}>
-      <IssuesProvider projectId={id}>
-        <DrawingsProvider projectId={id}>
-          <DocumentsProvider projectId={id}>
-            <MaterialsProvider projectId={id}>
-              <ProjectDetailInner projectId={id} />
-            </MaterialsProvider>
-          </DocumentsProvider>
-        </DrawingsProvider>
-      </IssuesProvider>
-    </ProgressProvider>
+    // ModulesProvider must wrap the stack: ProjectDetailInner (+ its tab/tool
+    // children) call useModules() to gate the in-page tabs. The /project/:id
+    // route is NOT a ModuleRoute, so without this wrap useModules() throws
+    // ('must be used within ModulesProvider') and the project home crashes.
+    <ModulesProvider projectId={id}>
+      <ProgressProvider projectId={id}>
+        <IssuesProvider projectId={id}>
+          <DrawingsProvider projectId={id}>
+            <DocumentsProvider projectId={id}>
+              <MaterialsProvider projectId={id}>
+                <ProjectDetailInner projectId={id} />
+              </MaterialsProvider>
+            </DocumentsProvider>
+          </DrawingsProvider>
+        </IssuesProvider>
+      </ProgressProvider>
+    </ModulesProvider>
   )
 }
 

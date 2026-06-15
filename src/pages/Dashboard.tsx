@@ -175,6 +175,12 @@ export default function Dashboard() {
         <StatCard label="處理中問題" count={openIssues} icon={AlertCircle} color="bg-amber-50 text-amber-700 border-amber-200" />
       </div>
 
+      {/* 處理中問題 是跨工地匯總，行級權限會過濾停用咗「問題」模組嘅工地（RLS 回傳 0 行），
+          而呢個全域頁面冇 ModulesProvider，無法逐項目標示，所以加一句註腳避免誤會少計。 */}
+      <p className="text-[11px] text-site-400 -mt-3 mb-5 md:mb-6">
+        ※ 已停用「問題」模組嘅工地唔計入「處理中問題」數
+      </p>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         {/* Project progress overview — takes 2/3 on desktop */}
         <section className="lg:col-span-2">
