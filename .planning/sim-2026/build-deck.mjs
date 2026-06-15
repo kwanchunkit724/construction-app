@@ -128,6 +128,8 @@ function buildHtml() {
       : kind === 'section' ? '過場'
       : kind === 'stats' ? '數據'
       : kind === 'closing' ? '總結'
+      : kind === 'voices' ? '多方討論'
+      : kind === 'questions' ? '研討問題'
       : '功能'
     const kickerHtml = `<span class="kicker">${esc(kicker)}</span>`
     const subHtml = s.subtitle ? `<p class="subtitle">${esc(s.subtitle)}</p>` : ''
@@ -258,6 +260,8 @@ function buildPdf() {
       : kind === 'section' ? '過場'
       : kind === 'stats' ? '數據'
       : kind === 'closing' ? '總結'
+      : kind === 'voices' ? '多方討論'
+      : kind === 'questions' ? '研討問題'
       : '功能'
     doc.setFont(FONT, 'normal'); doc.setFontSize(11)
     doc.setTextColor(orange[0], orange[1], orange[2])
@@ -711,17 +715,13 @@ fs.writeFileSync(htmlPath, html, 'utf8')
 const htmlSize = fs.statSync(htmlPath).size
 console.log(`  presentation.html  ${fmtKB(htmlSize)}  (${htmlSize} bytes)`)
 
-// PDF
+// PDF — delegated to render-pdf.mjs (chromium print of the HTML). The jsPDF path
+// (buildPdf, kept for reference) can't embed emoji / full CJK because the subset
+// font misses those glyphs and silently writes a broken file, so we DON'T emit
+// presentation.pdf here anymore — it would clobber the good Playwright render.
 let pdfSize = 0
-try {
-  const pdf = buildPdf()
-  const pdfPath = path.join(OUT, 'presentation.pdf')
-  fs.writeFileSync(pdfPath, pdf)
-  pdfSize = fs.statSync(pdfPath).size
-  console.log(`  presentation.pdf   ${fmtKB(pdfSize)}  (${pdfSize} bytes)`)
-} catch (e) {
-  console.error('  presentation.pdf  FAILED:', e.message)
-}
+console.log('  presentation.pdf   -> run `node .planning/sim-2026/render-pdf.mjs` (chromium, full CJK + emoji)')
+void buildPdf
 
 // PPTX
 let pptxSize = 0
