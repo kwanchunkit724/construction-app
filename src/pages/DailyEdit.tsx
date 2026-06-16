@@ -213,7 +213,7 @@ function DailyEditInner({ projectId }: { projectId: string }) {
       return
     }
     if (!canAuthor) {
-      setSubmitError('只有總承建商管工或工程師可以填寫日誌')
+      setSubmitError('只有項目經理、工地主任或總承建商成員可以填寫施工日誌')
       return
     }
     setSubmitting(true)
@@ -298,7 +298,7 @@ function DailyEditInner({ projectId }: { projectId: string }) {
 
       {!canAuthor && (
         <div className="bg-red-50 text-red-600 border border-red-200 rounded-xl px-3 py-2 text-sm mb-3">
-          只有總承建商管工或工程師可以填寫日誌。
+          只有項目經理、工地主任或總承建商成員可以填寫施工日誌。
         </div>
       )}
 

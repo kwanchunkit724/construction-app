@@ -34,7 +34,7 @@ export function WeatherBanner() {
       {w.stopWork && (
         <div className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 mb-1.5 flex items-center gap-2">
           <AlertTriangle size={18} className="text-red-600 flex-shrink-0" />
-          <span className="text-sm font-semibold text-red-700">惡劣天氣警告生效 — 應停止戶外高空/吊運工作</span>
+          <span className="text-sm font-semibold text-red-700">惡劣天氣警告生效 — 應評估並暫停受影響的戶外工作</span>
         </div>
       )}
       <div className="flex flex-wrap items-center gap-1.5 text-xs">

@@ -4,6 +4,7 @@ import { Calendar, ChevronLeft, ChevronRight, Plus, Pencil } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { useAuth } from '../contexts/AuthContext'
+import { useProjects } from '../contexts/ProjectsContext'
 import {
   EventsProvider,
   useEvents,
@@ -86,10 +87,23 @@ function TimetableInner({ projectId }: { projectId: string }) {
     rangeFrom, rangeTo, setRange,
   } = useTimetable()
   const { events } = useEvents()
+  const { memberships, projects } = useProjects()
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Event | null>(null)
 
-  const canWrite = !!profile && ['admin', 'pm', 'main_contractor', 'general_foreman'].includes(profile.global_role)
+  // Match the server events_insert RLS (v72): admin OR assigned-PM OR an approved
+  // MEMBERSHIP role in pm/general_foreman/main_contractor — NOT global_role (which
+  // let a non-member global MC write and locked out an approved-member 老總).
+  const canWrite = (() => {
+    if (!profile) return false
+    if (profile.global_role === 'admin') return true
+    const project = projects.find(p => p.id === projectId)
+    if (project?.assigned_pm_ids.includes(profile.id)) return true
+    const m = memberships.find(
+      mb => mb.user_id === profile.id && mb.project_id === projectId && mb.status === 'approved',
+    )
+    return !!m && ['pm', 'general_foreman', 'main_contractor'].includes(m.role)
+  })()
 
   // Range picker derived state — represent endpoints as local YYYY-MM-DD.
   const fromDateValue = useMemo(() => isoToDateInputValue(rangeFrom), [rangeFrom])

@@ -5,6 +5,7 @@ import { useProjects } from './ProjectsContext'
 import { cacheGet, cacheSet, getOnline, subscribeOnline } from '../lib/offline'
 import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import { getInitialHandler, getNextHandler } from '../types'
+import { compressImage } from '../lib/image-compress'
 import type { Issue, IssueComment, IssueHandlerRole, GlobalRole } from '../types'
 
 interface IssuesContextType {
@@ -125,11 +126,14 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
 
   async function uploadPhoto(file: File): Promise<{ url: string | null; error: string | null }> {
     if (!profile) return { url: null, error: '未登入' }
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+    // Compress before upload — issue photos are a top storage consumer on the
+    // Supabase Free 1GB tier (CLAUDE.md). compressImage falls back to the original.
+    const toUpload = await compressImage(file)
+    const ext = toUpload.name.split('.').pop()?.toLowerCase() || 'jpg'
     const fileName = `${profile.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
     const { error: upErr } = await supabase.storage
       .from('issue-photos')
-      .upload(fileName, file, { contentType: file.type, upsert: false })
+      .upload(fileName, toUpload, { contentType: toUpload.type, upsert: false })
     if (upErr) return { url: null, error: upErr.message }
     // Store the storage PATH, not a public URL — issue-photos is becoming a private
     // bucket (v74) and photos are rendered via short-lived signed URLs (lib/issuePhotos +
