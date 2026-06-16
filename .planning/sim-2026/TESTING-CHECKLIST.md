@@ -87,6 +87,26 @@
 
 ---
 
+## ✅ Android（BlueStacks）— 我（Claude）嘅測試結果 2026-06-16
+
+本機 build 新 debug APK（12.7MB）→ 裝落 BlueStacks（SM-G998B / Android Pie）→ 登入 admin 行清單。
+**app 全程冇 crash、logcat 冇任何 error**（pid 6273 行緊）。
+
+| 項目 | 結果 |
+|---|---|
+| 啟動 + 登入（admin）C1 | ☑ 通過 |
+| 首頁「待我審批 4 份文件」格（Home rewire，冇 dark-ship 旗）| ☑ 顯示正常 |
+| A2 機械/表格（Forms）**已上線** | ☑ 開到，有 EQ-001/EQ-002、KPI 格、新增/匯出/QR |
+| A1 文件（Documents）+ 工作許可證（PTW）喺側邊欄 = 上線 + 單一模組閘 B4 | ☑ 兩個都喺側邊欄 |
+| C2 進度樹 + KPI（9/12/4/10）自動加總 | ☑ render 正常 |
+| C7 天氣 banner（雷暴警告 26°C；字句通用） | ☑ 顯示正常 |
+| C3 問題列表 + 詳情 + 活動記錄 + 上呈/解決掣 | ☑ #001 開到，timeline 齊 |
+| B1/B2 問題相（簽名 URL）| ◐ 後端已證（sign 200 → 圖 200）+ web 已驗；Android 上同一 webview 程式碼，未逐張視覺重驗（demo 嗰幾張相唔喺呢幾單） |
+
+⚠️ 註：我裝咗 **debug build** 落 BlueStacks（覆蓋咗舊 prod app）。要返 prod 版就重裝 Play/sideload 版。
+
+---
+
 ## D. 測完之後
 兩邊（你 iOS / 我 Android）行完 A+B+C，冇 S1/S2 問題 →
 1. **Wave 4** — apply v74（issue-photos 轉私有）+ T2.1（close_out_ptw 強制）+ 開簽名強制旗 #22。
