@@ -314,5 +314,17 @@ Applied in order v68 → v70 → v69 → v71 → v72 (v70 before v69 per the rev
 - **No DB backfill** — the shim extracts the path from legacy full-URL rows too. Verified end-to-end on live data: extractor output == `storage.objects.name`, sign endpoint 200, signed-URL fetch `200 image/jpeg`. tsc clean. Committed `1f65eef`.
 - **v74** (bucket private + authenticated-read) authored + STAGED — apply in Wave 4 AFTER the shim is live (web-deploy-gated). Object paths don't encode project, so scope = private + authenticated-read; per-project scoping deferred (needs re-pathing).
 
+### Wave 3 — native bundle ✅ (2026-06-16, client; ships on next web/native build)
+- **T2.2** issue-photo compress (drawings intentionally NOT compressed — legibility). `651f103`
+- **T2.6** DailyEdit deny copy matches canAuthorDaily. `651f103`
+- **C.3** WeatherBanner copy site-generic (daily 天氣 field kept — legitimate diary record). `651f103`
+- **T2.3** TimetablePage canWrite → membership role (matches v72). `651f103`
+- **C.1 — Documents + Forms LAUNCHED + dark-ship layer removed.** User chose to launch. Flipped `files_enabled`+`forms_enabled` ON live (app_config); verified in preview as admin that Documents (20 docs) + Forms (9) + PTW all render with real data, no console errors. Then removed the whole dark-ship gating layer (deleted useFilesEnabled/usePtwEnabled/FilesFlagContext/PtwFlagContext/FilesGate/PtwGate; rewired App/Sidebar/ProjectDetail/ProgressItemCard/SiSubmitForm/AdminProjects/Home to the per-project module switch as the SINGLE gate). `128ea7c`
+- **C.4** /demo slimmed — value modules lead, platform plumbing demoted to 平台保證（底層）. `919fa1d`
+
 ### Remaining (not yet done)
-Wave 3 (native bundle: T2.2 compress-on-upload · T2.3-client timetable gate · T2.6 DailyEdit copy · C.1 dark-ship flags · C.3 weather dedup · C.4 Demo slim) → native rebuild #21 · Wave 4 (apply v74 + T2.1 + enforcement flags) · Wave 5 (freeze regression + tag).
+- Native rebuild **#21** (merge to main → Codemagic → TestFlight/Play) — STOPPED here per user (outward-facing). All Wave-2/3 client edits ship in it.
+- Wave 4: apply **v74** (issue-photos private — web-deploy-gated, ships after the shim is live on web) + **T2.1** (close_out_ptw enforcement, re-emit live body during flag-flip) + enforcement flags **#22** (native-gated).
+- Wave 5: freeze regression matrix + storage/egress re-baseline + version tag.
+
+NOTE: C.1 LAUNCHED Documents + Forms LIVE (web + existing iOS read the flag at runtime). The plumbing-removal code ships with the next web deploy / native build; until then the live app reads the now-true flags (consistent).
