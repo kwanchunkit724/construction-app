@@ -124,7 +124,7 @@ const INVENTORY: FnEntry[] = [
     key: 'ptw',
     title_zh: '工作許可證 PTW（動火／高空／吊運 + QR 核實）',
     route_or_location:
-      '/project/:id/ptw + /:ptwId（PtwList/PtwDetail），/verify/:token QR 核實；ModuleGate 疊 PtwGate（org app_config.ptw_enabled）',
+      '/project/:id/ptw + /:ptwId（PtwList/PtwDetail），/verify/:token QR 核實；逐項目模組開關控制顯示',
     what_it_does_zh:
       '高風險工序開工前嘅電子許可證：建立草稿→提交簽核→安全主任／總承建商簽署→生效並出 QR 碼→（動火）等夠 30 分鐘火警監察→簽名完工關閉。現場掃 QR 即時核實真偽同有效期。PTW 預設冇審批鏈，要先喺簽核流程設定設好（建議 安全主任→總承建商）。',
     roles_zh:
@@ -285,7 +285,7 @@ const INVENTORY: FnEntry[] = [
     key: 'documents',
     title_zh: '文件 / 圖則版本管理（文件登記冊 + 圖則）',
     route_or_location:
-      '/project/:id/files（ProjectFiles，route 後綴 files）+ /reviews 跨項目待審；ModuleGate 疊 FilesGate（org files_enabled）。另：圖則亦掛喺進度細項',
+      '/project/:id/files（ProjectFiles，route 後綴 files）+ /reviews 跨項目待審；逐項目模組開關控制顯示。另：圖則亦掛喺進度細項',
     what_it_does_zh:
       '文件登記冊嘅入口，同埋將圖則 PDF／相片掛喺最底層細項工序上嘅版本管理。每次上傳新版會自動把舊版標『已取代』，但舊版永遠保留做版本歷史同存證。檔案放私有儲存，經臨時連結開啟。',
     roles_zh:
@@ -605,15 +605,23 @@ const SECTIONS: SectionDef[] = [
   },
   {
     id: 'security',
-    title: '安全與簽名',
-    blurb: '簽名證本人、離線唯讀、推送限額、App Store 合規刪帳號。',
-    keys: ['signature-proof', 'offline-cache', 'push-notifications', 'account-deletion'],
+    title: '簽名證本人',
+    blurb: '簽核要密碼重新認證，配 get_signature_proof 證書 — 簽咗就賴唔甩。',
+    keys: ['signature-proof'],
   },
   {
     id: 'admin',
     title: '管理與匯出',
     blurb: '管理員開工地、派PM、開關模組；一鍵匯出業主版／內部版報告。',
     keys: ['project-zone-admin', 'report-export'],
+  },
+  // Platform plumbing — these are GUARANTEES the app stands on, not headline
+  // features. Demoted to the end so the value modules above lead the demo.
+  {
+    id: 'platform',
+    title: '平台保證（底層）',
+    blurb: '底層保障，平時睇唔到但一直喺度：離線唯讀、推送限額、App Store 合規刪帳號。',
+    keys: ['offline-cache', 'push-notifications', 'account-deletion'],
   },
 ]
 
