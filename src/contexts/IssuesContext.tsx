@@ -131,8 +131,11 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
       .from('issue-photos')
       .upload(fileName, file, { contentType: file.type, upsert: false })
     if (upErr) return { url: null, error: upErr.message }
-    const { data } = supabase.storage.from('issue-photos').getPublicUrl(fileName)
-    return { url: data.publicUrl, error: null }
+    // Store the storage PATH, not a public URL — issue-photos is becoming a private
+    // bucket (v74) and photos are rendered via short-lived signed URLs (lib/issuePhotos +
+    // IssuePhoto). The legacy public-URL rows still resolve because signIssuePhoto
+    // extracts the path from either form.
+    return { url: fileName, error: null }
   }
 
   async function fetchComments(issueId: string): Promise<IssueComment[]> {

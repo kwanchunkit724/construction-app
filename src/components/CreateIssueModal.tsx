@@ -9,7 +9,7 @@ import { ISSUE_HANDLER_ZH, getInitialHandler } from '../types'
 interface PhotoSlot {
   localId: string
   preview: string  // object URL for preview
-  url: string | null  // public URL after upload
+  url: string | null  // storage path after upload (private bucket; rendered via signed URL)
   uploading: boolean
   error: string | null
   file: File

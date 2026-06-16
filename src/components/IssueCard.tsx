@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { AlertCircle, CheckCircle2, ChevronRight, ArrowUp, Camera, MapPin } from 'lucide-react'
 import { ISSUE_HANDLER_ZH, ISSUE_STATUS_ZH, formatIssueNo } from '../types'
 import type { Issue } from '../types'
+import { IssuePhoto } from './IssuePhoto'
 
 export function IssueCard({ issue, projectId }: { issue: Issue; projectId: string }) {
   const isOpen = issue.status === 'open'
@@ -19,7 +20,7 @@ export function IssueCard({ issue, projectId }: { issue: Issue; projectId: strin
         {/* Cover thumbnail */}
         {issue.photos.length > 0 ? (
           <div className="relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-site-100">
-            <img src={issue.photos[0]} alt="" className="w-full h-full object-cover" />
+            <IssuePhoto stored={issue.photos[0]} imgClassName="w-full h-full object-cover" />
             {issue.photos.length > 1 && (
               <span className="absolute bottom-0.5 right-0.5 inline-flex items-center gap-0.5 text-[9px] bg-black/60 text-white px-1 py-0.5 rounded">
                 <Camera size={9} />{issue.photos.length}

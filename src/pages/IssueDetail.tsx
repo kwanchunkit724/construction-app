@@ -7,6 +7,7 @@ import {
 import { Spinner } from '../components/Spinner'
 import { Sidebar } from '../components/Sidebar'
 import { Modal } from '../components/Modal'
+import { IssuePhoto } from '../components/IssuePhoto'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import {
@@ -195,15 +196,13 @@ function IssueDetailInner({ projectId, issueId }: { projectId: string; issueId: 
           {issue.photos.length > 0 && (
             <div className="mt-3 grid grid-cols-3 gap-2">
               {issue.photos.map((url, i) => (
-                <a
+                <IssuePhoto
                   key={i}
-                  href={url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="aspect-square rounded-xl overflow-hidden bg-site-100 border border-site-200"
-                >
-                  <img src={url} alt={`照片 ${i + 1}`} className="w-full h-full object-cover" />
-                </a>
+                  stored={url}
+                  alt={`照片 ${i + 1}`}
+                  imgClassName="w-full h-full object-cover"
+                  linkClassName="aspect-square rounded-xl overflow-hidden bg-site-100 border border-site-200 block"
+                />
               ))}
             </div>
           )}
