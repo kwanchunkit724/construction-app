@@ -322,9 +322,16 @@ Applied in order v68 → v70 → v69 → v71 → v72 (v70 before v69 per the rev
 - **C.1 — Documents + Forms LAUNCHED + dark-ship layer removed.** User chose to launch. Flipped `files_enabled`+`forms_enabled` ON live (app_config); verified in preview as admin that Documents (20 docs) + Forms (9) + PTW all render with real data, no console errors. Then removed the whole dark-ship gating layer (deleted useFilesEnabled/usePtwEnabled/FilesFlagContext/PtwFlagContext/FilesGate/PtwGate; rewired App/Sidebar/ProjectDetail/ProgressItemCard/SiSubmitForm/AdminProjects/Home to the per-project module switch as the SINGLE gate). `128ea7c`
 - **C.4** /demo slimmed — value modules lead, platform plumbing demoted to 平台保證（底層）. `919fa1d`
 
-### Remaining (not yet done)
-- Native rebuild **#21** (merge to main → Codemagic → TestFlight/Play) — STOPPED here per user (outward-facing). All Wave-2/3 client edits ship in it.
-- Wave 4: apply **v74** (issue-photos private — web-deploy-gated, ships after the shim is live on web) + **T2.1** (close_out_ptw enforcement, re-emit live body during flag-flip) + enforcement flags **#22** (native-gated).
-- Wave 5: freeze regression matrix + storage/egress re-baseline + version tag.
+### Native rebuild #21 ✅ (2026-06-16)
+- Merged branch → main (`f0a7a6c`, reconciled the PR#1 divergence). Production build passed; cap-synced @capacitor/share into native.
+- Push fired Codemagic ios-testflight + android-internal-test + e2e-tests. ios-app-store (App Store Release) is manual — NOT auto.
+- **Tested:** iOS TestFlight green (user). Android BlueStacks: built debug APK locally, installed, ran the checklist on the new build — all green, no crashes/logcat errors (TESTING-CHECKLIST.md).
 
-NOTE: C.1 LAUNCHED Documents + Forms LIVE (web + existing iOS read the flag at runtime). The plumbing-removal code ships with the next web deploy / native build; until then the live app reads the now-true flags (consistent).
+### Wave 4 ✅/deferred (2026-06-16)
+- **v74 APPLIED** — issue-photos bucket → PRIVATE + authenticated-read. Verified live: anon sign → 400 (blocked), authenticated user sign → 200, image fetch → 200 image/jpeg. Guessable-URL + un-authed egress hole closed; new (logged-in) client reads fine.
+- **T2.1 + #22 DEFERRED** — enforcement flags gated on the `SUPABASE_SERVICE_ROLE_KEY` secret (USER action — credential entry is prohibited for me; flipping without it breaks signing for the new client too). Signing works fine without them. To enable later: set the secret, then `update app_config set sign_reauth_enforced=true, step_up_enforced=true` + re-wire close_out_ptw with the asserts.
+
+### Wave 5 ✅ FROZEN (2026-06-16)
+- Wave 1-3 integrity re-verified live (guard/FK/ledger/limits/cron/flags all hold). Storage ~13MB/1GB (freeze-baseline/wave5-freeze-baseline.json).
+- **Tagged `v1.4.0`** on the frozen commit (`f0a7a6c` = the TestFlight build).
+- Remaining USER actions to fully ship: (1) submit the new build to the App Store (Codemagic ios-app-store → App Store Connect → Submit for Review) + Android Play rollout; (2) set the service-role secret + flip #22 when desired.
