@@ -327,9 +327,10 @@ Applied in order v68 → v70 → v69 → v71 → v72 (v70 before v69 per the rev
 - Push fired Codemagic ios-testflight + android-internal-test + e2e-tests. ios-app-store (App Store Release) is manual — NOT auto.
 - **Tested:** iOS TestFlight green (user). Android BlueStacks: built debug APK locally, installed, ran the checklist on the new build — all green, no crashes/logcat errors (TESTING-CHECKLIST.md).
 
-### Wave 4 ✅/deferred (2026-06-16)
+### Wave 4 ✅ (2026-06-16)
 - **v74 APPLIED** — issue-photos bucket → PRIVATE + authenticated-read. Verified live: anon sign → 400 (blocked), authenticated user sign → 200, image fetch → 200 image/jpeg. Guessable-URL + un-authed egress hole closed; new (logged-in) client reads fine.
-- **T2.1 + #22 DEFERRED** — enforcement flags gated on the `SUPABASE_SERVICE_ROLE_KEY` secret (USER action — credential entry is prohibited for me; flipping without it breaks signing for the new client too). Signing works fine without them. To enable later: set the secret, then `update app_config set sign_reauth_enforced=true, step_up_enforced=true` + re-wire close_out_ptw with the asserts.
+- **#22 DONE** — `sign_reauth_enforced=true`. No secret needed: `verify-sign-password` returns 200 (SUPABASE_SERVICE_ROLE_KEY already injected). Verified: grant-less signer BLOCKED (簽名前需要重新輸入密碼); both main signing paths enforce (`record_ptw_signoff` ✓, `record_form_signoff` ✓); new client `SignReauthProvider` prompts → verify → grant → sign.
+- **T2.1 minor gap (deferred)** — `close_out_ptw` (fire-watch closeout) lacks `assert_sign_reauth`. Its live body is sanitizer-blocked (can't re-emit programmatically). Fix = add `perform assert_sign_reauth();` after the auth check, via the human-visible SQL editor. Secondary path; main signing is hardened. `step_up_enforced` left OFF (separate feature, not #22).
 
 ### Wave 5 ✅ FROZEN (2026-06-16)
 - Wave 1-3 integrity re-verified live (guard/FK/ledger/limits/cron/flags all hold). Storage ~13MB/1GB (freeze-baseline/wave5-freeze-baseline.json).
