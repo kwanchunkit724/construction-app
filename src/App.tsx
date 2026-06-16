@@ -5,11 +5,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import { StepUpProvider } from './contexts/StepUpContext'
 import { SignReauthProvider } from './contexts/SignReauthContext'
 import { ProjectsProvider } from './contexts/ProjectsContext'
-import { PtwFlagProvider } from './contexts/PtwFlagContext'
-import { FilesFlagProvider } from './contexts/FilesFlagContext'
 import { ModulesProvider } from './contexts/ModulesContext'
-import { PtwGate } from './components/PtwGate'
-import { FilesGate } from './components/FilesGate'
 import { ModuleGate } from './components/ModuleGate'
 import type { ModuleKey } from './types'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -38,12 +34,10 @@ const PtwVerifyPage = lazy(() => import('./pages/PtwVerify'))
 // the 助理 AI chat). Lazy-loaded so it stays out of the entry chunk (CI 800 KB guard).
 const ProjectDetail = lazy(() => import('./pages/ProjectDetail'))
 
-// Phase D documents register — lazy + flag-gated (app_config.files_enabled).
-// Only resolves when files_enabled (admins bypass via FilesGate); when OFF the
-// FilesGate redirects to /home so the route is unreachable and the surface is
-// pixel-identical to today.
+// Documents register — lazy. Visibility is governed by the per-project documents
+// module switch (ModuleRoute); the old org-wide files_enabled dark-ship flag was removed.
 const ProjectFilesPage = lazy(() => import('./pages/ProjectFiles'))
-// 待我審批 cross-project review feed (S8) — gated like the register.
+// 待我審批 cross-project review feed (S8) — login-gated only (cross-project, no :id).
 const PendingReviewsPage = lazy(() => import('./pages/PendingReviews'))
 // 資料完整性 — admin tamper-evident ledger verify/export (Security Phase 1).
 const DataIntegrityPage = lazy(() => import('./pages/DataIntegrity'))
@@ -106,7 +100,7 @@ function lazyRoute(node: React.ReactNode) {
 // when the module is OFF (admins bypass). Default-enabled, so absence of a
 // row / loading window keeps the surface visible (backwards-compat).
 //
-// Mounted INSIDE ProtectedRoute (auth first) — mirror PtwGate/FilesGate.
+// Mounted INSIDE ProtectedRoute (auth first).
 function ModuleRoute({ module, children }: { module: ModuleKey; children: ReactNode }) {
   const { id } = useParams<{ id: string }>()
   if (!id) return <Navigate to="/home" replace />
@@ -133,8 +127,6 @@ export default function App() {
       <StepUpProvider>
       <SignReauthProvider>
       <ProjectsProvider>
-        <PtwFlagProvider>
-        <FilesFlagProvider>
         <HashRouter>
           <Routes>
           <Route path="/login" element={<Login />} />
@@ -163,16 +155,16 @@ export default function App() {
           <Route path="/project/:id/si/:siId" element={<ProtectedRoute><ModuleRoute module="si"><SiDetailPage /></ModuleRoute></ProtectedRoute>} />
           <Route path="/project/:id/vo" element={<ProtectedRoute><ModuleRoute module="vo"><VoListPage /></ModuleRoute></ProtectedRoute>} />
           <Route path="/project/:id/vo/:voId" element={<ProtectedRoute><ModuleRoute module="vo"><VoDetailPage /></ModuleRoute></ProtectedRoute>} />
-          {/* PTW composes ModuleGate (per-project switch) over PtwGate (org-wide app_config flag). */}
-          <Route path="/project/:id/ptw" element={<ProtectedRoute><ModuleRoute module="ptw"><PtwGate>{lazyRoute(<PtwListPage />)}</PtwGate></ModuleRoute></ProtectedRoute>} />
-          <Route path="/project/:id/ptw/:ptwId" element={<ProtectedRoute><ModuleRoute module="ptw"><PtwGate>{lazyRoute(<PtwDetailPage />)}</PtwGate></ModuleRoute></ProtectedRoute>} />
-          {/* /verify/:token has no :id (it's an equipment/permit deep-link), so it stays org-flag-gated only. */}
-          <Route path="/verify/:token" element={<ProtectedRoute><PtwGate>{lazyRoute(<PtwVerifyPage />)}</PtwGate></ProtectedRoute>} />
-          {/* Phase D documents register — composes ModuleGate (per-project 文件 switch) over
-              FilesGate (org-wide files_enabled flag). /reviews is cross-project (no :id) so
-              it stays FilesGate-only. */}
-          <Route path="/project/:id/files" element={<ProtectedRoute><ModuleRoute module="documents"><FilesGate>{lazyRoute(<ProjectFilesPage />)}</FilesGate></ModuleRoute></ProtectedRoute>} />
-          <Route path="/reviews" element={<ProtectedRoute><FilesGate>{lazyRoute(<PendingReviewsPage />)}</FilesGate></ProtectedRoute>} />
+          {/* PTW visibility = the per-project module switch (ModuleRoute). The
+              org-wide ptw_enabled dark-ship gate has been removed. */}
+          <Route path="/project/:id/ptw" element={<ProtectedRoute><ModuleRoute module="ptw">{lazyRoute(<PtwListPage />)}</ModuleRoute></ProtectedRoute>} />
+          <Route path="/project/:id/ptw/:ptwId" element={<ProtectedRoute><ModuleRoute module="ptw">{lazyRoute(<PtwDetailPage />)}</ModuleRoute></ProtectedRoute>} />
+          {/* /verify/:token is a permit QR deep-link (no :id) — login-gated only. */}
+          <Route path="/verify/:token" element={<ProtectedRoute>{lazyRoute(<PtwVerifyPage />)}</ProtectedRoute>} />
+          {/* Documents register — per-project 文件 module switch (ModuleRoute).
+              /reviews is cross-project (no :id) so it is login-gated only. */}
+          <Route path="/project/:id/files" element={<ProtectedRoute><ModuleRoute module="documents">{lazyRoute(<ProjectFilesPage />)}</ModuleRoute></ProtectedRoute>} />
+          <Route path="/reviews" element={<ProtectedRoute>{lazyRoute(<PendingReviewsPage />)}</ProtectedRoute>} />
           {/* v1.2: site diary, on-site materials, and the unified timetable. Per-project module-gated. */}
           <Route path="/project/:id/daily" element={<ProtectedRoute><ModuleRoute module="dailies">{lazyRoute(<DailyListPage />)}</ModuleRoute></ProtectedRoute>} />
           <Route path="/project/:id/daily/edit" element={<ProtectedRoute><ModuleRoute module="dailies">{lazyRoute(<DailyEditPage />)}</ModuleRoute></ProtectedRoute>} />
@@ -197,8 +189,6 @@ export default function App() {
           <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </HashRouter>
-        </FilesFlagProvider>
-        </PtwFlagProvider>
       </ProjectsProvider>
       </SignReauthProvider>
       </StepUpProvider>

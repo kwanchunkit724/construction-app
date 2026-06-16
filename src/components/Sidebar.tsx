@@ -2,8 +2,6 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { Home, Building2, User, Shield, ShieldCheck, HardHat, LogOut, LayoutDashboard, Users, FileText, Receipt, BookOpen, Package, CalendarDays, Contact as ContactIcon, GraduationCap, FolderOpen, Wrench, CloudRain } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
-import { usePtwFlag } from '../contexts/PtwFlagContext'
-import { useFilesFlag } from '../contexts/FilesFlagContext'
 import { useModules } from '../contexts/ModulesContext'
 import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
 
@@ -18,12 +16,8 @@ type NavItem = { to: string; label: string; icon: typeof Home }
 export function Sidebar() {
   const { profile, signOut } = useAuth()
   const { projects, memberships } = useProjects()
-  const { enabled: ptwEnabled } = usePtwFlag()
-  const { enabled: filesEnabled } = useFilesFlag()
   const location = useLocation()
   const isAdmin = profile?.global_role === 'admin'
-  const showPtw = ptwEnabled || isAdmin
-  const showFiles = filesEnabled || isAdmin
   const isPM = !!profile && projects.some(p => p.assigned_pm_ids.includes(profile.id))
   const showDashboard = isAdmin || isPM
 
@@ -83,8 +77,6 @@ export function Sidebar() {
         {projectId && (
           <ProjectNavLinks
             projectId={projectId}
-            showPtw={showPtw}
-            showFiles={showFiles}
             showEquipment={showEquipment}
           />
         )}
@@ -144,25 +136,23 @@ function SidebarLink({ item: { to, label, icon: Icon } }: { item: NavItem }) {
 // where there is no ModulesProvider. Each module link only renders when its
 // module is enabled (default-true while the RPC loads, so nothing flickers off).
 function ProjectNavLinks({
-  projectId, showPtw, showFiles, showEquipment,
+  projectId, showEquipment,
 }: {
   projectId: string
-  showPtw: boolean
-  showFiles: boolean
   showEquipment: boolean
 }) {
   const { isModuleEnabled } = useModules()
   const items: NavItem[] = [
     ...(isModuleEnabled('si') ? [{ to: `/project/${projectId}/si`, label: '工地指令', icon: FileText }] : []),
     ...(isModuleEnabled('vo') ? [{ to: `/project/${projectId}/vo`, label: '變更指令', icon: Receipt }] : []),
-    ...(showPtw && isModuleEnabled('ptw') ? [{ to: `/project/${projectId}/ptw`, label: '工作許可證', icon: HardHat }] : []),
+    ...(isModuleEnabled('ptw') ? [{ to: `/project/${projectId}/ptw`, label: '工作許可證', icon: HardHat }] : []),
     ...(isModuleEnabled('weather') ? [{ to: `/project/${projectId}/weather`, label: '天氣記錄', icon: CloudRain }] : []),
     ...(showEquipment && isModuleEnabled('equipment') ? [{ to: `/project/${projectId}/equipment`, label: '機械/表格', icon: Wrench }] : []),
     ...(isModuleEnabled('dailies') ? [{ to: `/project/${projectId}/daily`, label: '每日日誌', icon: BookOpen }] : []),
     ...(isModuleEnabled('materials') ? [{ to: `/project/${projectId}/materials`, label: '物料', icon: Package }] : []),
     ...(isModuleEnabled('timetable') ? [{ to: `/project/${projectId}/timetable`, label: '行事曆', icon: CalendarDays }] : []),
     ...(isModuleEnabled('contacts') ? [{ to: `/project/${projectId}/contacts`, label: '聯絡人', icon: ContactIcon }] : []),
-    ...(showFiles && isModuleEnabled('documents') ? [{ to: `/project/${projectId}/files`, label: '文件', icon: FolderOpen }] : []),
+    ...(isModuleEnabled('documents') ? [{ to: `/project/${projectId}/files`, label: '文件', icon: FolderOpen }] : []),
   ]
   return <>{items.map(t => <SidebarLink key={t.to} item={t} />)}</>
 }

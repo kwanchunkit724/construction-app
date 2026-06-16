@@ -3,7 +3,6 @@ import { X, Camera, Image as ImageIcon, FileUp, Trash2, Plus } from 'lucide-reac
 import { useSi } from '../../contexts/SiContext'
 import { useDrawings } from '../../contexts/DrawingsContext'
 import { DocumentsContext } from '../../contexts/DocumentsContext'
-import { useFilesFlag } from '../../contexts/FilesFlagContext'
 import { uploadSiPhotos, uploadSiVoice } from '../../lib/si'
 import { Spinner } from '../Spinner'
 import { VoiceRecorder } from './VoiceRecorder'
@@ -34,11 +33,11 @@ interface PinVersion {
 export function SiSubmitForm({ projectId, onSubmitted, onCancel }: SiSubmitFormProps) {
   const { createDraftSi, saveVersion, submitSi } = useSi()
   const { drawings, versionsByDrawing } = useDrawings()
-  const { enabled: filesEnabled } = useFilesFlag()
   // Optional — null when no DocumentsProvider is mounted (older mount sites).
   const documentsCtx = useContext(DocumentsContext)
-  // Files mode only when the flag is on AND a DocumentsProvider is in scope.
-  const filesMode = filesEnabled && !!documentsCtx
+  // Files mode when a DocumentsProvider is in scope (the 文件 module is now gated
+  // solely by the per-project module switch; the files_enabled flag was removed).
+  const filesMode = !!documentsCtx
 
   // Source the drawing-reference picker from documents (document_type==='drawing')
   // when in files mode, else from drawings. version ids are identical post-backfill

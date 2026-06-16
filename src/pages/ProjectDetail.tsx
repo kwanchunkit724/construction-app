@@ -36,8 +36,6 @@ import { MaterialsProvider } from '../contexts/MaterialsContext'
 import { useProjects } from '../contexts/ProjectsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useStepUp } from '../contexts/StepUpContext'
-import { usePtwFlag } from '../contexts/PtwFlagContext'
-import { useFilesFlag } from '../contexts/FilesFlagContext'
 import { ModulesProvider, useModules } from '../contexts/ModulesContext'
 import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH, deriveStatus, plannedProgressOf, CATEGORY_DOMAIN_ZH, CATEGORY_STREAM_ZH, unitStatusCounts } from '../types'
 import type { ProgressItem, ProgressStatus, Zone, CategoryDomain, CategoryStream, UnitState } from '../types'
@@ -725,11 +723,10 @@ function ZoneSection({
 
 function SiVoSwitcher({ projectId }: { projectId: string }) {
   const navigate = useNavigate()
-  const { profile } = useAuth()
-  const { enabled: ptwEnabled } = usePtwFlag()
   const { isModuleEnabled } = useModules()
-  // PTW gates on BOTH its legacy app_config flag AND the per-project module.
-  const showPtw = (ptwEnabled || profile?.global_role === 'admin') && isModuleEnabled('ptw')
+  // PTW visibility is governed solely by the per-project module switch
+  // (the legacy org-wide ptw_enabled dark-ship flag has been removed).
+  const showPtw = isModuleEnabled('ptw')
   return (
     <div className="space-y-3">
       <p className="text-sm text-site-600 px-1">
@@ -790,20 +787,15 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const { projects, memberships } = useProjects()
-  const { enabled: filesEnabled } = useFilesFlag()
   const { isModuleEnabled } = useModules()
-  // 文件 card appears only when files_enabled is ON (admins bypass to pilot),
-  // matching the route gate (FilesGate) — flag OFF = no new surface. Also gated
-  // on the per-project documents module.
-  const showFiles = (filesEnabled || profile?.global_role === 'admin') && isModuleEnabled('documents')
+  // 文件 visibility is governed solely by the per-project documents module switch
+  // (the legacy org-wide files_enabled dark-ship flag has been removed).
+  const showFiles = isModuleEnabled('documents')
 
-  // 機械/表格 (地盤表格管理) entry. The v55 migration ships forms_enabled=false but
-  // exposes NO get_forms_enabled RPC, so there is no flag hook to mirror
-  // useFilesFlag. Per the F2 plan we gate the ENTRY on the same canManage role
-  // set the equipment_register INSERT RLS uses (admin OR assigned PM OR approved
-  // pm/main_contractor/safety_officer). Read-only members reach the surface only
-  // via a reminder deep-link; managers get the card here. (A future migration
-  // can add get_forms_enabled + a FormsFlagContext to gate this like files/ptw.)
+  // 機械/表格 (地盤表格管理) entry. Gated on the per-project equipment module AND the
+  // same canManage role set the equipment_register INSERT RLS uses (admin OR
+  // assigned PM OR approved pm/main_contractor/safety_officer). Read-only members
+  // reach the surface only via a reminder deep-link; managers get the card here.
   const showEquipment = isModuleEnabled('equipment') && (() => {
     if (!profile) return false
     if (profile.global_role === 'admin') return true

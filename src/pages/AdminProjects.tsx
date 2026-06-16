@@ -1,24 +1,20 @@
 import { useEffect, useState } from 'react'
-import { Plus, Building2, UserCog, Trash2, RefreshCw, Download, GitBranch, Shield, ToggleLeft } from 'lucide-react'
+import { Plus, Building2, UserCog, Trash2, RefreshCw, Download, GitBranch, ToggleLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { CreateProjectModal } from '../components/CreateProjectModal'
 import { AssignPMModal } from '../components/AssignPMModal'
 import { useProjects } from '../contexts/ProjectsContext'
-import { usePtwFlag } from '../contexts/PtwFlagContext'
 import { supabase } from '../lib/supabase'
 import type { Project, UserProfile } from '../types'
 
 export default function AdminProjects() {
   const { loading, projects, fetchError, refetch, deleteProject } = useProjects()
-  const { enabled: ptwEnabled, loading: ptwLoading, setEnabled: setPtwEnabled } = usePtwFlag()
   const [createOpen, setCreateOpen] = useState(false)
   const [assigning, setAssigning] = useState<Project | null>(null)
   const [confirmDelId, setConfirmDelId] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
-  const [ptwSaving, setPtwSaving] = useState(false)
-  const [ptwError, setPtwError] = useState<string | null>(null)
 
   // Force a fresh fetch every time admin opens this page
   useEffect(() => { refetch() }, [refetch])
@@ -46,45 +42,8 @@ export default function AdminProjects() {
     await exportProjectsToExcel(projects, users)
   }
 
-  async function togglePtw() {
-    setPtwError(null)
-    setPtwSaving(true)
-    const { error } = await setPtwEnabled(!ptwEnabled)
-    if (error) setPtwError(error)
-    setPtwSaving(false)
-  }
-
   return (
     <AppLayout title="管理">
-      <div className="card p-4 mb-4">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-red-50 text-red-700 flex items-center justify-center flex-shrink-0">
-            <Shield size={20} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-site-900">工作許可證 (PTW) 功能</p>
-            <p className="text-xs text-site-500 mt-0.5">
-              關閉時：除管理員外所有用戶介面隱藏 PTW 入口
-            </p>
-            {ptwError && (
-              <p className="text-xs text-red-600 mt-1">⚠ {ptwError}</p>
-            )}
-          </div>
-          <button
-            onClick={togglePtw}
-            disabled={ptwSaving || ptwLoading}
-            className={`flex-shrink-0 px-4 h-10 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${
-              ptwEnabled
-                ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                : 'bg-site-100 text-site-600 hover:bg-site-200'
-            }`}
-            aria-label="切換 PTW 功能"
-          >
-            {ptwLoading ? '...' : ptwEnabled ? '已啟用' : '已關閉'}
-          </button>
-        </div>
-      </div>
-
       <div className="flex gap-2 mb-4">
         <button
           onClick={() => setCreateOpen(true)}

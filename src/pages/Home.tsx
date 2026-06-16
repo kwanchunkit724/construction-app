@@ -5,7 +5,6 @@ import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
-import { useFilesFlag } from '../contexts/FilesFlagContext'
 import { supabase } from '../lib/supabase'
 import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
 import type { Project, ProjectRole } from '../types'
@@ -179,20 +178,18 @@ export default function Home() {
 // when files_enabled AND the reviewer has ≥1 document waiting. The push from
 // v41 deep-links into /project/:id/files; this is the pull-side counterpart.
 function PendingReviewsTile() {
-  const { enabled } = useFilesFlag()
   const [count, setCount] = useState(0)
 
   useEffect(() => {
-    if (!enabled) return
     let cancelled = false
     supabase.rpc('list_my_pending_reviews').then(({ data, error }) => {
       if (cancelled || error || !data) return
       setCount((data as unknown[]).length)
     })
     return () => { cancelled = true }
-  }, [enabled])
+  }, [])
 
-  if (!enabled || count === 0) return null
+  if (count === 0) return null
 
   return (
     <Link

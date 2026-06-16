@@ -10,7 +10,6 @@ import { DrawingsContext } from '../contexts/DrawingsContext'
 import { DocumentsContext } from '../contexts/DocumentsContext'
 import { DrawingsSection } from './drawings/DrawingsSection'
 import { DocumentsSection } from './documents/DocumentsSection'
-import { useFilesFlag } from '../contexts/FilesFlagContext'
 import { MaterialItemsPanel } from './material/MaterialItemsPanel'
 import { PROGRESS_STATUS_ZH, computeRollup, getDescendantLeaves, plannedProgressOf, deriveStatus, isScheduled, unitStatusCounts } from '../types'
 import { displayStatusOf } from '../lib/progressTemplates'
@@ -122,15 +121,13 @@ export function ProgressItemCard({
   const isLeaf = children.length === 0
   const isOpen = expanded.has(item.id)
 
-  // files_enabled flag (Phase C). When ON, the per-item drawings surface is
-  // replaced by the documents register. When OFF the app is PIXEL-IDENTICAL to
-  // today — every documents branch below early-returns to the drawings path.
-  const { enabled: filesEnabled } = useFilesFlag()
+  // The per-item file affordance uses the documents register when a
+  // DocumentsProvider is mounted in scope, else falls back to the drawings path.
+  // (The 文件 module is now governed solely by the per-project module switch;
+  // the old org-wide files_enabled dark-ship flag has been removed.)
   const drawingsCtx = useDrawingsOptional()
   const documentsCtx = useDocumentsOptional()
-  // Which context/section drives the per-item file affordance. Flag ON →
-  // documents (only if a DocumentsProvider is actually mounted); else drawings.
-  const filesMode = filesEnabled && !!documentsCtx
+  const filesMode = !!documentsCtx
   const fileCtxPresent = filesMode ? !!documentsCtx : !!drawingsCtx
   const drawingCount = useMemo(
     () => drawingsCtx ? drawingsCtx.drawings.filter(d => d.leaf_item_id === item.id).length : 0,
