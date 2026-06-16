@@ -1,0 +1,25 @@
+{
+  "captured": "2026-06-16 (Wave 5 finalization — post Wave 1-3, pre Wave 4 flag flips)",
+  "freeze_candidate_commit": "f0a7a6c (main; the build in TestFlight + the local Android debug APK)",
+  "wave1_3_integrity_LIVE": {
+    "issues_forgery_guard_trigger": "present",
+    "dailies_user_id_on_delete": "n (SET NULL)",
+    "audit_ledger_dispute_tables_covered": "6/6 (issues, issue_comments, dailies, materials, drawings, drawing_versions)",
+    "buckets_with_file_size_limit": "5/5",
+    "old_daily_ptw_expiry_cron": "removed (0)",
+    "launch_flags_files_forms_ptw": "true/true/true (Documents + Forms launched)"
+  },
+  "storage_usage": [
+    { "bucket_id": "issue-photos", "objects": 5, "bytes": 6823748 },
+    { "bucket_id": "project-drawings", "objects": 23, "bytes": 6020881 },
+    { "bucket_id": "project-si-vo", "objects": 1, "bytes": 141488 },
+    { "bucket_id": "project-docs", "objects": 6, "bytes": 918 }
+  ],
+  "storage_total_mb_approx": 12.4,
+  "free_tier_limit_gb": 1,
+  "testing": {
+    "android_bluestacks_new_build": "all green, no crashes/logcat errors (see TESTING-CHECKLIST.md)",
+    "ios_testflight": "green (user-confirmed)"
+  },
+  "WAVE4_GATE": "v74 (issue-photos -> private) and #22 (enforcement flags) are HELD. They break LIVE iOS App Store users (old client: no signed-URL shim, no re-auth UI). TestFlight is a beta, NOT the App Store release. v74 + #22 may only be applied AFTER the new build is RELEASED to the App Store (submit -> Apple review -> release) so live users are not broken. T2.1 (close_out_ptw enforcement) is bundled with #22 (no-op until flags flip)."
+}
