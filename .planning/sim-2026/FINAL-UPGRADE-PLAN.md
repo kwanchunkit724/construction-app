@@ -308,5 +308,11 @@ Applied in order v68 → v70 → v69 → v71 → v72 (v70 before v69 per the rev
 - **T2.1 (close_out_ptw enforcement) moved to Wave 4** — its live body spans v10→v32→v53→v60; re-emit it when the live definition is readable during the flag-flip (it's dormant until enforcement is on anyway).
 - **v70 made additive-only** (see Wave 0 catch).
 
+### Wave 2 — photo-privacy shim ✅ (2026-06-16, client; ships on next web/native build)
+- `lib/issuePhotos.ts` (path normaliser + signer) + `components/IssuePhoto.tsx` (signs via state).
+- `uploadPhoto` now stores the storage PATH; `IssueCard` + `IssueDetail` render via `<IssuePhoto>`; CreateIssueModal unchanged (previews via local object URL).
+- **No DB backfill** — the shim extracts the path from legacy full-URL rows too. Verified end-to-end on live data: extractor output == `storage.objects.name`, sign endpoint 200, signed-URL fetch `200 image/jpeg`. tsc clean. Committed `1f65eef`.
+- **v74** (bucket private + authenticated-read) authored + STAGED — apply in Wave 4 AFTER the shim is live (web-deploy-gated). Object paths don't encode project, so scope = private + authenticated-read; per-project scoping deferred (needs re-pathing).
+
 ### Remaining (not yet done)
-Wave 2 (photo-privacy shim) · Wave 3 (native bundle: T2.2/T2.3-client/T2.6/C.1/C.3/C.4) · Wave 4 (bucket-private flip v74 + T2.1 + enforcement flags) · Wave 5 (freeze regression + tag). The bucket-private flip ships on the next **web** deploy (not native).
+Wave 3 (native bundle: T2.2 compress-on-upload · T2.3-client timetable gate · T2.6 DailyEdit copy · C.1 dark-ship flags · C.3 weather dedup · C.4 Demo slim) → native rebuild #21 · Wave 4 (apply v74 + T2.1 + enforcement flags) · Wave 5 (freeze regression + tag).
