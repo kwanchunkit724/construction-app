@@ -1,0 +1,41 @@
+{
+  "captured": "2026-06-16 (pre Wave-1 apply, via Management API)",
+  "purpose": "Freeze-time baseline + pre-apply snapshot for the final upgrade (FINAL-UPGRADE-PLAN.md Wave 0). Diff future state against this.",
+  "counts": {
+    "dailies": 17,
+    "issues": 31,
+    "issue_comments": 54,
+    "materials": 38,
+    "dailies_orphan_userid": 0,
+    "events_narrowing_risk": 0
+  },
+  "cron_jobs": [
+    { "jobname": "ptw-expiry", "schedule": "0 16 * * *", "active": true, "note": "v10 DAILY — to be dropped by v72 (superseded by ptw-expiry-15min)" },
+    { "jobname": "ptw-expiry-15min", "schedule": "*/15 * * * *", "active": true, "note": "v67 — keep" },
+    { "jobname": "rebuild-memory-graph", "schedule": "0 */6 * * *", "active": true, "note": "v63 — keep" }
+  ],
+  "storage_buckets": [
+    { "id": "issue-photos", "public": true, "file_size_limit": null, "allowed_mime_types": null, "note": "v71 -> 10MB + image mimes; v74 Wave-4 -> private" },
+    { "id": "project-docs", "public": false, "file_size_limit": null, "allowed_mime_types": null, "note": "v71 -> 20MB size-only" },
+    { "id": "project-drawings", "public": false, "file_size_limit": null, "allowed_mime_types": null, "note": "v71 -> 25MB + image/pdf" },
+    { "id": "project-si-vo", "public": false, "file_size_limit": null, "allowed_mime_types": null, "note": "v71 -> 20MB size-only (audio voice notes)" },
+    { "id": "project-files", "public": true, "file_size_limit": 10485760, "allowed_mime_types": ["image/jpeg","image/png","image/webp","image/heic","image/gif"], "note": "5th bucket, already limited, 0 objects — OUT of v71 scope. PUBLIC: flag for later review if it ever holds private data." }
+  ],
+  "storage_usage": [
+    { "bucket_id": "issue-photos", "objects": 5, "bytes": 6823748 },
+    { "bucket_id": "project-drawings", "objects": 23, "bytes": 6020881 },
+    { "bucket_id": "project-si-vo", "objects": 1, "bytes": 141488 },
+    { "bucket_id": "project-docs", "objects": 6, "bytes": 918 }
+  ],
+  "storage_total_bytes": 12987035,
+  "storage_total_mb_approx": 12.4,
+  "free_tier_limit_gb": 1,
+  "audit_ledger_watched_tables_LIVE_19": [
+    "ai_actions", "approvals", "document_events", "document_versions", "documents",
+    "equipment_register", "form_instances", "form_signoffs", "permit_signoffs",
+    "permit_versions", "permits_to_work", "progress_history", "project_members",
+    "si_versions", "site_instructions", "user_credentials", "user_profiles",
+    "variation_orders", "vo_versions"
+  ],
+  "audit_ledger_NOTE": "LIVE list includes ai_actions (a post-v55 migration added it) which the static v55-based list did NOT. v70 was changed to ADDITIVE-ONLY (touch only the 6 new tables) so it cannot drop any existing trigger. v70 adds: issues, issue_comments, dailies, materials, drawings, drawing_versions."
+}

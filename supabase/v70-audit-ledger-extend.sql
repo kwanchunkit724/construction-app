@@ -7,28 +7,21 @@
 -- edit or an admin DELETE on these leaves NO trace today — and an admin issue
 -- DELETE cascade-vaporizes the whole issue_comments thread (v4:35) silently.
 --
--- IMPORTANT: the EFFECTIVE watch-list is v55's, NOT v51's. v55-equipment-forms-
--- schema.sql:395-401 superseded the v51 loop and added equipment_register /
--- form_instances / form_signoffs / user_credentials (+ the permit_versions typo
--- fix). The DO-loop does `drop trigger if exists` then recreates ONLY listed
--- tables, so re-applying v51's 14-table array would DROP trg_audit_ledger off
--- those 4 forms/credential tables. This migration re-emits the FULL superset:
--- v55's 18 + 6 new (issues, issue_comments, dailies, materials, drawings,
--- drawing_versions) = 24 tables, and becomes the single source of truth going
--- forward. Idempotent; uses the existing audit_ledger_append() (v51).
+-- IMPORTANT — ADDITIVE-ONLY. This migration touches ONLY the 6 new tables and
+-- leaves every existing trg_audit_ledger untouched. Re-emitting the full watch-
+-- list (as v55 did) is fragile: the LIVE list has DRIFTED past the v55 static set
+-- — a post-v55 migration added `ai_actions` to the ledger (verified live 2026-06-16:
+-- 19 watched tables incl ai_actions, which no static migration source lists).
+-- Re-emitting a static superset would silently DROP whatever the live set has that
+-- the source doesn't (e.g. ai_actions). So we add triggers to ONLY the 6 dispute
+-- tables and never drop/recreate the others. Idempotent (drop-if-exists per new
+-- table). Uses the existing audit_ledger_append() (v51).
 -- =============================================================
 
 do $$
 declare t text;
 begin
   foreach t in array array[
-    -- v55 effective superset (do not drop any of these):
-    'approvals','site_instructions','si_versions','variation_orders','vo_versions',
-    'permits_to_work','permit_versions','permit_signoffs',
-    'documents','document_versions','document_events',
-    'progress_history','project_members','user_profiles',
-    'equipment_register','form_instances','form_signoffs','user_credentials',
-    -- v70 additions — the WhatsApp-replacement dispute records:
     'issues','issue_comments','dailies','materials','drawings','drawing_versions'
   ] loop
     if to_regclass('public.'||t) is not null then
