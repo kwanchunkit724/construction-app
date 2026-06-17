@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ChevronLeft, Clock, Flame, Users, Shield } from 'lucide-react'
+import { ChevronLeft, Clock, Flame, Users, Shield, Download } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { PtwApproverBar } from '../components/ptw/PtwApproverBar'
@@ -13,8 +13,9 @@ import { useIsOnline } from '../hooks/useIsOnline'
 import { PtwProvider, usePtw } from '../contexts/PtwContext'
 import { mintPtwQrToken } from '../lib/ptw-jwt'
 import { remainingFireWatchSeconds, hotWorkFireWatchEligible, isPtwExpired, effectivePtwStatus } from '../lib/ptw'
-import { PTW_TYPE_ZH, PTW_STATUS_ZH } from '../types'
+import { PTW_TYPE_ZH, PTW_STATUS_ZH, ROLE_ZH } from '../types'
 import { dwssRef } from '../lib/dwss'
+import { exportComplianceProofPack } from '../lib/export'
 import type { PTW, PtwPayload } from '../types'
 
 function PtwDetailInner() {
@@ -119,6 +120,22 @@ function PtwDetailInner() {
           {/* DWSS Annex A §3.1.8 format reference (derived from the serial) */}
           <p className="text-xs font-mono text-site-400">DWSS: {dwssRef('ptw', parseInt(ptw.number.match(/\d+/)?.[0] ?? '0', 10))}</p>
           <p className="text-sm text-site-600">{PTW_TYPE_ZH[ptw.ptw_type]}</p>
+          <button
+            type="button"
+            onClick={() => exportComplianceProofPack({
+              docKindZh: '工作許可證 (PTW)',
+              docNumber: ptw.number,
+              dwssRefStr: dwssRef('ptw', parseInt(ptw.number.match(/\d+/)?.[0] ?? '0', 10)),
+              statusZh: PTW_STATUS_ZH[ptw.status],
+              detailZh: PTW_TYPE_ZH[ptw.ptw_type],
+              chainRolesZh: Array.isArray(ptw.chain_snapshot)
+                ? (ptw.chain_snapshot as any[]).map(s => ROLE_ZH[s?.required_role as keyof typeof ROLE_ZH] ?? s?.required_role ?? '—')
+                : undefined,
+            })}
+            className="btn-ghost w-full mt-1 inline-flex items-center justify-center gap-1.5 text-xs"
+          >
+            <Download size={14} /> 匯出合規證明 (PDF)
+          </button>
           {ptw.status === 'active' && ptw.expires_at && (
             <p className={'text-sm flex items-center gap-1 ' + (expired ? 'text-red-600' : 'text-site-600')}>
               <Clock size={14} />

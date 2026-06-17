@@ -27,6 +27,7 @@ import type {
   Equipment, FormInstance, FormSignoff, FormTemplate, FormsDashboard, FormStatus,
 } from '../types'
 import { formatHKD } from './currency'
+import { supabase } from './supabase'
 import { fetchPrevSnapshot, captureSnapshot } from './snapshots'
 import type { PrevSnapshot } from './snapshots'
 import { templateFor } from './progressTemplates'
@@ -1109,6 +1110,98 @@ export async function exportSignatureProofPdf(input: SignatureProofInput): Promi
   const blob = doc.output('blob') as Blob
   const filename = `簽名證明_${safeName(input.docNumber ?? input.kind)}_${dateStr()}.pdf`
   await shareOrDownloadBlob(blob, filename, `簽名證明 — ${input.docNumber ?? input.docKindZh}`)
+}
+
+// ── Compliance proof pack (DWSS §5.4-style record proof) ──────────
+// Doc-level proof bundling record identity + its approval chain + the
+// tamper-evident-ledger integrity attestation into one PDF. Usable on any doc
+// type (PTW / SI / VO). Reuses the Noto Sans HK font + native/web share helper.
+export interface ProofPackInput {
+  docKindZh: string          // e.g. '工作許可證 (PTW)'
+  docNumber: string          // e.g. 'PTW-001'
+  dwssRefStr?: string        // e.g. 'SSR/PTW/000001'
+  projectName?: string
+  statusZh?: string
+  detailZh?: string          // type / title
+  chainRolesZh?: string[]    // approval-chain role labels, in order
+}
+
+export async function exportComplianceProofPack(input: ProofPackInput): Promise<void> {
+  // Global ledger integrity attestation (per-record audit lives in the same chain).
+  let integrity: any = null
+  try {
+    const { data } = await supabase.rpc('verify_integrity')
+    integrity = data
+  } catch { /* best-effort */ }
+
+  const jspdfMod = await import('jspdf')
+  const jsPDFCtor = (jspdfMod as any).default
+  const doc: any = new jsPDFCtor({ unit: 'pt', format: 'a4' })
+  await ensureChineseFont(doc)
+
+  doc.setFontSize(18)
+  doc.text('合規證明書 (Compliance Proof)', 40, 52)
+  doc.setFontSize(10)
+  doc.text('CK工程 — 數碼工地記錄合規證明（對標 DEVB DWSS Annex A）', 40, 70)
+
+  let y = 104
+  const line = (label: string, val: string) => {
+    doc.setFontSize(10)
+    doc.text(`${label}：${val}`, 40, y, { maxWidth: 515 })
+    y += 18
+  }
+  const heading = (t: string) => {
+    y += 8
+    if (y > 760) { doc.addPage(); y = 50 }
+    doc.setFontSize(12)
+    doc.text(t, 40, y)
+    y += 18
+    doc.setFontSize(10)
+  }
+
+  heading('文件')
+  line('類型', input.docKindZh)
+  line('編號', input.docNumber)
+  if (input.dwssRefStr) line('DWSS 格式編號', input.dwssRefStr)
+  if (input.projectName) line('項目', input.projectName)
+  if (input.statusZh) line('狀態', input.statusZh)
+  if (input.detailZh) line('內容', input.detailZh)
+
+  if (input.chainRolesZh && input.chainRolesZh.length) {
+    heading('審批流程')
+    line('審批鏈', `${input.chainRolesZh.length} 步`)
+    input.chainRolesZh.forEach((r, i) => line(`第 ${i + 1} 步`, r))
+  }
+
+  heading('防篡改記錄')
+  doc.text(
+    '本記錄載於 CK工程防篡改審計帳本（append-only、sha256 雜湊鏈）。任何對歷史記錄嘅竄改都會打斷雜湊鏈，可被偵測。',
+    40, y, { maxWidth: 515 }
+  )
+  y += 30
+  if (integrity) {
+    line('帳本完整性', integrity.intact ? '完整（未被竄改）' : `已破損${integrity.reason ? `：${integrity.reason}` : ''}`)
+    if (integrity.head_seq != null) line('帳本序號 (head)', String(integrity.head_seq))
+    if (integrity.head_hash) line('鏈頭雜湊', String(integrity.head_hash))
+    if (integrity.verified_at) line('驗證時間', `${integrity.verified_at}（UTC）`)
+  } else {
+    line('帳本完整性', '未能即時取得（請於系統「資料完整性」頁覆核）')
+  }
+
+  heading('證明聲明')
+  doc.text(
+    '本證明由 CK工程系統自動產生，列明上述記錄之審批流程及其喺防篡改審計帳本中嘅完整性狀態。' +
+    '第三方可透過系統 verify_integrity / export_ledger_proof 函數離線覆核雜湊鏈。' +
+    '本聲明為自我評估；CK工程並非政府 DWSS，亦未經第三方認證。',
+    40, y, { maxWidth: 515 }
+  )
+
+  doc.setFontSize(8)
+  doc.text(`產生時間：${new Date().toLocaleString('zh-HK')} — 由 CK工程系統產生`, 40, 820)
+
+  const blob = doc.output('blob') as Blob
+  const filename = `合規證明_${safeName(input.docNumber)}_${dateStr()}.pdf`
+  await shareOrDownloadBlob(blob, filename, `合規證明 — ${input.docNumber}`)
 }
 
 // ── 天氣記錄 / 極端天氣 EOT 申索 export (Weather Part 2) ──────────
