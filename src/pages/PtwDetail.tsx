@@ -14,6 +14,7 @@ import { PtwProvider, usePtw } from '../contexts/PtwContext'
 import { mintPtwQrToken } from '../lib/ptw-jwt'
 import { remainingFireWatchSeconds, hotWorkFireWatchEligible, isPtwExpired, effectivePtwStatus } from '../lib/ptw'
 import { PTW_TYPE_ZH, PTW_STATUS_ZH } from '../types'
+import { dwssRef } from '../lib/dwss'
 import type { PTW, PtwPayload } from '../types'
 
 function PtwDetailInner() {
@@ -115,6 +116,8 @@ function PtwDetailInner() {
               {displayStatus ? PTW_STATUS_ZH[displayStatus] : PTW_STATUS_ZH[ptw.status]}
             </span>
           </div>
+          {/* DWSS Annex A §3.1.8 format reference (derived from the serial) */}
+          <p className="text-xs font-mono text-site-400">DWSS: {dwssRef('ptw', parseInt(ptw.number.match(/\d+/)?.[0] ?? '0', 10))}</p>
           <p className="text-sm text-site-600">{PTW_TYPE_ZH[ptw.ptw_type]}</p>
           {ptw.status === 'active' && ptw.expires_at && (
             <p className={'text-sm flex items-center gap-1 ' + (expired ? 'text-red-600' : 'text-site-600')}>
