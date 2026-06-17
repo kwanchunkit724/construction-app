@@ -1387,3 +1387,50 @@ export const DEFAULT_CLEANSING_CHECKLIST: readonly string[] = [
   '食物殘渣已清理（防鼠防蟲）',
   '防蚊滅蟲措施已執行',
 ] as const
+
+// ── v82: 不符合事項報告 / 糾正措施 (NCR / CAR) ───────────────────
+// A formal quality non-conformity: work failing a spec/drawing/standard is
+// RAISED, the responsible party submits root-cause + corrective + preventive
+// actions (CAR), then a verifier CLOSES it. The physical table is `ncr_reports`
+// (a sim table squats `ncrs`); column names mirror the SQL verbatim.
+
+export type NcrSeverity = 'minor' | 'major' | 'critical'
+export type NcrStatus = 'open' | 'corrective_submitted' | 'closed' | 'void'
+
+export interface Ncr {
+  id: string
+  project_id: string
+  number: string                  // NCR-001
+  title: string
+  description: string
+  location: string | null
+  spec_ref: string | null
+  severity: NcrSeverity
+  responsible_party: string | null
+  status: NcrStatus
+  raised_by: string
+  target_close_date: string | null
+  root_cause: string | null
+  corrective_action: string | null
+  preventive_action: string | null
+  corrective_by: string | null
+  corrective_at: string | null
+  closed_by: string | null
+  closed_at: string | null
+  photos: string[]
+  created_at: string
+  updated_at: string
+}
+
+export const NCR_SEVERITY_ZH: Record<NcrSeverity, string> = {
+  minor: '輕微',
+  major: '嚴重',
+  critical: '重大',
+}
+
+export const NCR_STATUS_ZH: Record<NcrStatus, string> = {
+  open: '待糾正',
+  corrective_submitted: '待核實',
+  closed: '已關閉',
+  void: '已作廢',
+}

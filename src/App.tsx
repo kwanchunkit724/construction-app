@@ -55,6 +55,9 @@ const ContactListPage = lazy(() => import('./pages/ContactList'))
 const WeatherRecordPage = lazy(() => import('./pages/WeatherRecord'))
 // 清潔檢查 (Cleansing Inspection, DWSS 模組 ④, v81) — per-project module switch.
 const CleansingListPage = lazy(() => import('./pages/CleansingList'))
+// 不符合事項 / NCR-CAR (v82) — quality non-conformity workflow, per-project switch.
+const NcrListPage = lazy(() => import('./pages/NcrList'))
+const NcrDetailPage = lazy(() => import('./pages/NcrDetail'))
 
 // 地盤表格管理 (statutory site forms + mobile e-signing, v55) — lazy + entry-
 // gated. The migration ships forms_enabled=false; v55 ships no get_forms_enabled
@@ -176,6 +179,9 @@ export default function App() {
           <Route path="/project/:id/weather" element={<ProtectedRoute><ModuleRoute module="weather">{lazyRoute(<WeatherRecordPage />)}</ModuleRoute></ProtectedRoute>} />
           {/* 清潔檢查 — DWSS 模組 ④. Dated cleansing checklist + verify. */}
           <Route path="/project/:id/cleansing" element={<ProtectedRoute><ModuleRoute module="cleansing">{lazyRoute(<CleansingListPage />)}</ModuleRoute></ProtectedRoute>} />
+          {/* 不符合事項 (NCR / CAR) — raise → corrective → verify-close workflow. */}
+          <Route path="/project/:id/ncr" element={<ProtectedRoute><ModuleRoute module="ncr">{lazyRoute(<NcrListPage />)}</ModuleRoute></ProtectedRoute>} />
+          <Route path="/project/:id/ncr/:ncrId" element={<ProtectedRoute><ModuleRoute module="ncr">{lazyRoute(<NcrDetailPage />)}</ModuleRoute></ProtectedRoute>} />
           {/* 地盤表格管理 — register + per-equipment forms / mobile e-signing. */}
           <Route path="/project/:id/equipment" element={<ProtectedRoute><ModuleRoute module="equipment">{lazyRoute(<EquipmentListPage />)}</ModuleRoute></ProtectedRoute>} />
           <Route path="/project/:id/equipment/:equipmentId" element={<ProtectedRoute><ModuleRoute module="equipment">{lazyRoute(<EquipmentDetailPage />)}</ModuleRoute></ProtectedRoute>} />
