@@ -1,0 +1,42 @@
+name: Security
+
+# ISO/IEC 27001 A.8.8 (technical vulnerabilities), A.8.12 (data-leakage / secrets),
+# A.8.28 (secure coding) evidence — automated dependency-vuln + secret scanning.
+# Runs independently of the Codemagic build pipeline (no build risk). Currently
+# REPORT-ONLY (|| true) so historical findings don't block; flip to blocking once
+# the baseline is clean.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 2 * * 1' # weekly Monday 02:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  npm-audit:
+    name: npm vulnerability audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Audit (high+)
+        run: npm audit --audit-level=high || true
+
+  secret-scan:
+    name: gitleaks secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest \
+            detect --source=/repo --redact -v || true
