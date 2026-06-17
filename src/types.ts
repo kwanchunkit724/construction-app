@@ -1320,3 +1320,70 @@ export interface ModuleState {
   module_key: string
   enabled: boolean
 }
+
+// ── v81: 清潔檢查 (Cleansing Inspection, DWSS 模組 ④) ──────────────
+// A dated, signed site-cleanliness inspection (DEVB TC(W) 2/2023 Annex A). An
+// editor records a numbered (CLEAN-001) checklist with photos; a manager then
+// verifies (one-way close-out → the row locks). Column names mirror the SQL
+// (cleansing_inspections) verbatim.
+
+export type CleansingFrequency = 'daily' | 'weekly' | 'ad_hoc'
+export type CleansingResult = 'pass' | 'pass_with_remarks' | 'fail'
+export type CleansingItemStatus = 'pass' | 'fail' | 'na'
+
+// One checklist row inside cleansing_inspections.checklist (jsonb array).
+export interface CleansingChecklistItem {
+  label: string
+  status: CleansingItemStatus
+  remark?: string
+}
+
+export interface CleansingInspection {
+  id: string
+  project_id: string
+  number: string                // CLEAN-001
+  inspected_on: string          // date (YYYY-MM-DD)
+  frequency: CleansingFrequency
+  area: string
+  checklist: CleansingChecklistItem[]
+  result: CleansingResult
+  notes: string | null
+  photos: string[]              // issue-photos bucket storage paths
+  created_by: string
+  verified_by: string | null
+  verified_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export const CLEANSING_FREQUENCY_ZH: Record<CleansingFrequency, string> = {
+  daily: '每日',
+  weekly: '每週',
+  ad_hoc: '臨時',
+}
+
+export const CLEANSING_RESULT_ZH: Record<CleansingResult, string> = {
+  pass: '合格',
+  pass_with_remarks: '合格（有備註）',
+  fail: '不合格',
+}
+
+export const CLEANSING_ITEM_STATUS_ZH: Record<CleansingItemStatus, string> = {
+  pass: '合格',
+  fail: '不合格',
+  na: '不適用',
+}
+
+// Default HK site-cleansing checklist (editable per record). Items reflect the
+// real cleanliness concerns on a HK site — public-area/road cleanliness and
+// wheel-washing (EPD), standing water (anti-mosquito / dengue), waste sorting.
+export const DEFAULT_CLEANSING_CHECKLIST: readonly string[] = [
+  '公共通道暢通、無雜物阻塞',
+  '建築廢料已分類及妥善棄置',
+  '積水已清除（防蚊滅蟲）',
+  '車輛出口洗車設施運作正常',
+  '行人路 / 公眾地方保持清潔',
+  '廁所 / 茶水間清潔衞生',
+  '食物殘渣已清理（防鼠防蟲）',
+  '防蚊滅蟲措施已執行',
+] as const

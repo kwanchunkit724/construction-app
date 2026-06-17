@@ -7,6 +7,7 @@ import {
   FileText, Receipt, Shield, Bot, CloudRain,
   Wrench, BookOpen, Package, CalendarDays,
   Contact as ContactIcon, FolderOpen, CalendarClock,
+  Sparkles,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { UserProfile, IssueComment } from '../types'
@@ -107,6 +108,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const showToolsTab = isModuleEnabled('weather') || isModuleEnabled('documents')
     || isModuleEnabled('materials') || isModuleEnabled('contacts')
     || isModuleEnabled('timetable') || isModuleEnabled('dailies') || isModuleEnabled('equipment')
+    || isModuleEnabled('cleansing')
   const showAssistantTab = aiEnabled && isModuleEnabled('assistant')
 
   const [tab, setTab] = useState<Tab>('progress')
@@ -913,6 +915,21 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
         <div className="flex-1 min-w-0">
           <p className="font-bold text-site-900">聯絡人</p>
           <p className="text-xs text-site-500 mt-0.5">行頭通訊錄 · 一鍵打電話</p>
+        </div>
+        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
+      </button>
+      )}
+      {isModuleEnabled('cleansing') && (
+      <button
+        onClick={() => navigate(`/project/${projectId}/cleansing`)}
+        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
+      >
+        <div className="w-11 h-11 rounded-xl bg-cyan-50 text-cyan-700 flex items-center justify-center flex-shrink-0">
+          <Sparkles size={22} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-site-900">清潔檢查</p>
+          <p className="text-xs text-site-500 mt-0.5">每日 / 每週清潔巡查 · 簽核存證 (DWSS ④)</p>
         </div>
         <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
       </button>
