@@ -390,51 +390,16 @@ export function DrawingsProvider({
   async function withdrawVersion(versionId: string): Promise<{ error: string | null }> {
     if (!profile) return { error: '未登入' }
 
-    // Look up the version to know its drawing_id (for current_version_id rebind)
-    const { data: versionRow, error: lookupErr } = await supabase
-      .from('drawing_versions')
-      .select('id, drawing_id, status')
-      .eq('id', versionId)
-      .single()
-    if (lookupErr) return { error: `找不到版本：${lookupErr.message}` }
-
-    const wasCurrent = (versionRow as { status: string }).status === 'current'
-    const drawingId = (versionRow as { drawing_id: string }).drawing_id
-
-    const { error: updateErr } = await supabase
-      .from('drawing_versions')
-      .update({ status: 'withdrawn', withdrawn_at: new Date().toISOString() })
-      .eq('id', versionId)
-    if (updateErr) {
-      if (updateErr.message.toLowerCase().includes('row-level security')) {
+    // v78: withdraw + current_version_id rebind in ONE atomic RPC transaction
+    // (was 3 separate client statements — a concurrent upload of the same drawing
+    // could repoint 'current' to an older version). Mirrors withdraw_document_version.
+    const { error } = await supabase.rpc('withdraw_drawing_version', { p_version_id: versionId })
+    if (error) {
+      const m = error.message.toLowerCase()
+      if (m.includes('上載者或管理員') || m.includes('row-level security')) {
         return { error: '只有上載者或管理員可以撤回' }
       }
-      return { error: updateErr.message }
-    }
-
-    // If we just withdrew the current version, promote the highest non-withdrawn one
-    if (wasCurrent) {
-      const { data: candidate, error: pickErr } = await supabase
-        .from('drawing_versions')
-        .select('id')
-        .eq('drawing_id', drawingId)
-        .neq('status', 'withdrawn')
-        .order('version_no', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      if (pickErr) {
-        await refetch()
-        return { error: `已撤回，但重選現行版本失敗：${pickErr.message}` }
-      }
-      const nextCurrentId = (candidate as { id: string } | null)?.id ?? null
-      const { error: rebindErr } = await supabase
-        .from('drawings')
-        .update({ current_version_id: nextCurrentId })
-        .eq('id', drawingId)
-      if (rebindErr) {
-        await refetch()
-        return { error: `已撤回，但更新現行指標失敗：${rebindErr.message}` }
-      }
+      return { error: error.message }
     }
 
     await refetch()

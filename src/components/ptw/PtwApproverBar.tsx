@@ -192,7 +192,10 @@ export function PtwApproverBar({ ptw, onAction }: Props) {
             </button>
           </>
         )}
-        {isAdmin && (
+        {/* v76: a mandatory safety_officer PTW step cannot be satisfied by
+            admin_override (server-enforced in submit_approval) — hide the
+            affordance so an admin isn't offered a button that would error. */}
+        {isAdmin && requiredRole !== 'safety_officer' && (
           <button
             type="button"
             className="btn-ghost flex-1 min-w-[8rem] text-purple-700"

@@ -105,6 +105,17 @@ function TimetableInner({ projectId }: { projectId: string }) {
     return !!m && ['pm', 'general_foreman', 'main_contractor'].includes(m.role)
   })()
 
+  // FUNCTION-REVIEW fix #4: edit/delete affordance must match the events_update /
+  // events_delete RLS (created_by OR global admin/pm) — canWrite alone (which
+  // includes general_foreman/main_contractor for CREATE) wrongly showed 編輯 on
+  // OTHER people's events, then failed with a raw RLS error on save/delete.
+  const canMutateEvent = (ev: Event | undefined) =>
+    !!profile && !!ev && (
+      profile.global_role === 'admin' ||
+      profile.global_role === 'pm' ||
+      ev.created_by === profile.id
+    )
+
   // Range picker derived state — represent endpoints as local YYYY-MM-DD.
   const fromDateValue = useMemo(() => isoToDateInputValue(rangeFrom), [rangeFrom])
   const toDateValue = useMemo(() => isoToDateInputValue(rangeTo), [rangeTo])
@@ -255,7 +266,7 @@ function TimetableInner({ projectId }: { projectId: string }) {
                         <span className="text-xs font-mono text-site-600">
                           {formatTime(entry.occurs_at)}
                         </span>
-                        {entry.source === 'event' && canWrite && (
+                        {entry.source === 'event' && canMutateEvent(events.find(e => e.id === entry.ref_id)) && (
                           <button
                             type="button"
                             onClick={() => openEditFor(entry)}
