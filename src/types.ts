@@ -947,6 +947,7 @@ export type PtwType =
   | 'excavation'
   | 'electrical'
   | 'scaffold'
+  | 'lift'
 
 export type PtwStatus =
   | 'draft'
@@ -1052,13 +1053,14 @@ export const PTW_TYPE_ZH: Record<PtwType, string> = {
   excavation: '掘地',
   electrical: '電力',
   scaffold: '棚架',
+  lift: '升降機',
 }
 
-// PTW types shipping in v1; rest stub "敬請期待". confined_space (密閉空間) and
-// excavation (掘地) are THE permits a 渠務 site lives on — the seed already
-// authors them, so they must be authorable from the UI (their checklist
-// templates land in src/lib/ptw.ts). electrical / scaffold stay stubbed.
-export const PTW_TYPE_V1: PtwType[] = ['hot_work', 'work_at_height', 'lifting', 'confined_space', 'excavation']
+// PTW types authorable from the UI; every one ships a checklist template in
+// src/lib/ptw.ts. 電力 (electrical) / 棚架 (scaffold) / 升降機 (lift) joined the
+// 渠務 pair (confined_space 密閉空間 + excavation 掘地). Any PtwType NOT listed
+// here renders in the picker as a disabled 敬請期待 stub.
+export const PTW_TYPE_V1: PtwType[] = ['hot_work', 'work_at_height', 'lifting', 'confined_space', 'excavation', 'electrical', 'scaffold', 'lift']
 
 export const PTW_STATUS_ZH: Record<PtwStatus, string> = {
   draft: '草稿',

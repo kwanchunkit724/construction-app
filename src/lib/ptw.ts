@@ -142,10 +142,38 @@ export function checklistTemplate(ptwType: PtwType): PtwChecklistItem[] {
         { key: 'dewatering', label_zh: '積水/排水安排妥當', required: true, value: null },
         { key: 'slope_monitoring', label_zh: '邊坡監測安排', required: true, value: null },
       ]
-    // Stubs — picker shows these types with '敬請期待' label.
     case 'electrical':
+      return [
+        { key: 'isolation_loto', label_zh: '電源已隔離並上鎖掛牌 (LOTO)', required: true, value: null },
+        { key: 'prove_dead', label_zh: '已用合格驗電器確認無電 (test-before-touch)', required: true, value: null },
+        { key: 'rew', label_zh: '由相應級別註冊電業工程人員 (REW) 執行', required: true, value: null },
+        { key: 'ppe', label_zh: '絕緣手套/工具/防電弧個人防護就位', required: true, value: null },
+        { key: 'live_parts_shielded', label_zh: '鄰近帶電部分已遮蔽/隔離', required: true, value: null },
+        { key: 'barricade', label_zh: '工作區圍封 + 警告標誌', required: true, value: null },
+        { key: 'earthing', label_zh: '必要時加裝接地/短路裝置', required: false, value: null },
+      ]
     case 'scaffold':
-      return []
+      return [
+        { key: 'competent_erector', label_zh: '由合資格搭棚工人 (竹棚/金屬棚) 搭建', required: true, value: null },
+        { key: 'foundation', label_zh: '棚腳基礎穩固、底板/墊板就位', required: true, value: null },
+        { key: 'ties', label_zh: '連牆件/拉結按設計安裝', required: true, value: null },
+        { key: 'fall_protection', label_zh: '搭棚工人佩戴安全帶 + 獨立救生繩', required: true, value: null },
+        { key: 'material_ok', label_zh: '棚架物料無破損、認可', required: true, value: null },
+        { key: 'exclusion_zone', label_zh: '下方範圍圍封、無無關人員', required: true, value: null },
+        { key: 'weather', label_zh: '天氣許可 (無強風/雷暴)', required: true, value: null },
+        { key: 'scaff_tag', label_zh: '完成後經檢驗掛牌 (棚架標籤/綠卡)', required: true, value: null },
+      ]
+    case 'lift':
+      return [
+        { key: 'rlc', label_zh: '由註冊升降機承辦商 (RLC)/註冊工程人員執行', required: true, value: null },
+        { key: 'out_of_service', label_zh: '升降機停用、主開關上鎖掛牌 (LOTO)', required: true, value: null },
+        { key: 'machine_room', label_zh: '機房上鎖、限制進入', required: true, value: null },
+        { key: 'pit_protection', label_zh: '槽內工作有防墮 + 槽底護欄/緩衝', required: true, value: null },
+        { key: 'signage', label_zh: '各層門口貼「升降機維修」警告 + 圍封', required: true, value: null },
+        { key: 'comms', label_zh: '機房/廂內/槽底通訊正常', required: true, value: null },
+        { key: 'brake_test', label_zh: '制動/安全鉗測試妥當', required: true, value: null },
+        { key: 'estop', label_zh: '緊急停止裝置可用', required: true, value: null },
+      ]
     default:
       return []
   }
