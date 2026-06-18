@@ -22,6 +22,7 @@ import {
 } from '../lib/credentials'
 import { shareFormSignoffPdf } from '../lib/export'
 import { SignatureProofCard } from '../components/SignatureProofCard'
+import { dwssRef } from '../lib/dwss'
 
 const RESULT_OPTIONS: FormSignoffResult[] = ['pass', 'pass_with_remarks', 'fail']
 
@@ -108,6 +109,8 @@ function EquipmentDetailInner() {
                 {EQUIPMENT_KIND_ZH[eq.kind as EquipmentKind] ?? eq.kind}
               </span>
             </div>
+            {/* DWSS Annex A §3.1.8 format reference */}
+            <p className="text-xs font-mono text-site-400 mt-0.5">DWSS: {dwssRef('equipment', parseInt(eq.ref_no.match(/\d+/)?.[0] ?? '0', 10))}</p>
             <h2 className="text-lg font-bold text-site-900 mt-1">{eq.name_zh}</h2>
             <div className="text-[11px] text-site-500 mt-1 space-y-0.5">
               {eq.location_zh && <p>位置：{eq.location_zh}</p>}

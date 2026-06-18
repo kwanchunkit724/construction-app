@@ -19,6 +19,7 @@ import { SiApproverBar } from '../components/si/SiApproverBar'
 import { ProtestCommentBar } from '../components/si/ProtestCommentBar'
 import { SI_STATUS_ZH } from '../types'
 import type { SI, SiStatus, UserProfile } from '../types'
+import { dwssRef } from '../lib/dwss'
 
 type Tab = 'detail' | 'versions' | 'approvals' | 'protest'
 
@@ -165,6 +166,10 @@ function SiDetailInner({ projectId, siId }: { projectId: string; siId: string })
             {SI_STATUS_ZH[si.status]}
           </span>
           <span className="text-sm font-mono text-site-600">{si.number}</span>
+        </div>
+        {/* DWSS Annex A §3.1.8 format reference */}
+        <p className="text-xs font-mono text-site-400 mt-0.5">DWSS: {dwssRef('si', parseInt(si.number.match(/\d+/)?.[0] ?? '0', 10))}</p>
+        <div className="flex items-center gap-2 flex-wrap">
           {creatorName && (
             <span className="text-xs text-site-500">由 {creatorName} 建立</span>
           )}

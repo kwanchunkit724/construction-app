@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { phoneToEmail, normalizePhone } from '../lib/phone'
 import { pushLoginUser, pushLogoutUser, consumePendingDeepLink } from '../lib/push'
 import { cacheGet, cacheSet, cacheClearAll, getOnline } from '../lib/offline'
+import { clearBiometricCredential } from '../lib/biometric'
 import type { UserProfile, GlobalRole, SubRole } from '../types'
 
 interface AuthContextType {
@@ -163,6 +164,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // surfaced — sign-out should always succeed.
     await pushLogoutUser().catch(() => {})
     await supabase.auth.signOut()
+    // Clear any biometric-stored step-up password + its opt-in flag so they do
+    // NOT survive sign-out on a shared device (construction crews share phones).
+    await clearBiometricCredential().catch(() => {})
+    try { localStorage.removeItem('ck_stepup_biometric_optin') } catch { /* noop */ }
     // Drop all cached reads (profile + data) so the next user on a shared
     // device never sees the previous user's offline data.
     cacheClearAll()

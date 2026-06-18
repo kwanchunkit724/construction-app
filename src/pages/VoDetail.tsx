@@ -16,6 +16,7 @@ import {
   APPROVAL_ACTION_ZH,
   LINE_ITEM_CATEGORY_ZH,
 } from '../types'
+import { dwssRef } from '../lib/dwss'
 import type {
   VO, VoStatus, UserProfile, DrawingVersion,
 } from '../types'
@@ -173,6 +174,8 @@ function VoDetailInner({ projectId, voId }: { projectId: string; voId: string })
             <span className="text-xs text-site-500">由 {creatorName} 提出</span>
           )}
         </div>
+        {/* DWSS Annex A §3.1.8 format reference */}
+        <p className="text-xs font-mono text-site-400 mt-0.5">DWSS: {dwssRef('vo', parseInt(vo.number.match(/\d+/)?.[0] ?? '0', 10))}</p>
         {parentSi && (
           <p className="text-xs text-site-500 mt-1">
             引用工地指令 <span className="font-mono">{parentSi.number}</span>

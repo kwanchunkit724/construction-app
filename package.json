@@ -25,6 +25,7 @@
     "@capacitor/share": "^8.0.1",
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
+    "@capgo/capacitor-native-biometric": "^8.4.10",
     "@supabase/supabase-js": "^2.104.0",
     "@types/react-signature-canvas": "^1.0.7",
     "capacitor-voice-recorder": "^7.0.6",

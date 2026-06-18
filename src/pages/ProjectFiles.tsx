@@ -31,6 +31,7 @@ import { DocumentsProvider, useDocuments } from '../contexts/DocumentsContext'
 import { DocumentUploadSheet } from '../components/documents/DocumentUploadSheet'
 import { DocumentReviewBar } from '../components/documents/DocumentReviewBar'
 import { revisionLabelOrDefault } from '../lib/documents'
+import { dwssRef } from '../lib/dwss'
 import {
   DOCUMENT_TYPE_ZH,
   DOCUMENT_STATUS_ZH,
@@ -762,6 +763,8 @@ function DocumentDetailSheet({
                   {DOCUMENT_TYPE_ZH[doc.document_type]}
                 </span>
               </div>
+              {/* DWSS Annex A §3.1.8 format reference */}
+              <p className="text-xs font-mono text-site-400 mt-0.5">DWSS: {dwssRef('document', parseInt((doc.doc_number ?? '').match(/\d+/)?.[0] ?? '0', 10))}</p>
               <h3 className="font-bold text-site-900 mt-0.5">{doc.title}</h3>
             </div>
             <button

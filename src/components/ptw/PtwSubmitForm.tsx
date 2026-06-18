@@ -98,17 +98,33 @@ export function PtwSubmitForm({ open, onClose, onSubmitted }: PtwSubmitFormProps
       // storage paths. Use versionNo=1 — fresh draft, no prior versions.
       let ppePaths: string[] = []
       let scenePaths: string[] = []
+      // B2 helper: fire-and-forget metadata record for a single path.
+      // Defined here so it shares geoPromise + profile closure and can be
+      // called right after each individual upload, avoiding the stranded-
+      // metadata problem when an early-return halts the submit mid-way.
+      function persistMeta(path: string) {
+        if (!profile) return
+        void geoPromise.then(geo => {
+          void recordPhotoMeta({
+            projectId, bucket: 'project-si-vo', photoPath: path,
+            capturedAt: new Date().toISOString(), geo, uploadedBy: profile.id,
+          })
+        })
+      }
+
       if (ppePhotos.length > 0) {
         setProgressMsg(`上載 PPE 相片 (${ppePhotos.length}) ...`)
         const r = await uploadPpePhotos(projectId, id, 1, ppePhotos)
         if (r.error) { setError(r.error); return }
         ppePaths = r.paths
+        ppePaths.forEach(persistMeta)
       }
       if (scenePhotos.length > 0) {
         setProgressMsg(`上載現場相片 (${scenePhotos.length}) ...`)
         const r = await uploadScenePhotos(projectId, id, 1, scenePhotos)
         if (r.error) { setError(r.error); return }
         scenePaths = r.paths
+        scenePaths.forEach(persistMeta)
       }
 
       setProgressMsg('儲存版本...')
@@ -131,25 +147,14 @@ export function PtwSubmitForm({ open, onClose, onSubmitted }: PtwSubmitFormProps
           const up = await uploadWorkerPhoto(projectId, id, workerId, w.photo)
           if (up.error || !up.path) { setError(up.error || '工人相片上載失敗'); return }
           workerPhotoPaths.push(up.path)
+          // Fire metadata right after this worker's upload succeeds so a later
+          // worker failure doesn't strand this photo without a metadata record.
+          persistMeta(up.path)
           const { error: updErr } = await supabase
             .from('permit_workers')
             .update({ worker_photo_path: up.path })
             .eq('id', workerId)
           if (updErr) { setError(updErr.message); return }
-        }
-      }
-
-      // B2: persist capture metadata (GPS + timestamp) for every uploaded photo
-      // on this permit, append-only (photo_metadata, v79). Fire-and-forget.
-      if (profile) {
-        const allPhotoPaths = [...ppePaths, ...scenePaths, ...workerPhotoPaths]
-        if (allPhotoPaths.length > 0) {
-          void geoPromise.then(geo => {
-            const capturedAt = new Date().toISOString()
-            allPhotoPaths.forEach(p => void recordPhotoMeta({
-              projectId, bucket: 'project-si-vo', photoPath: p, capturedAt, geo, uploadedBy: profile.id,
-            }))
-          })
         }
       }
 

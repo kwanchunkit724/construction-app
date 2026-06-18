@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-  ChevronLeft, ClipboardX, ShieldCheck, RotateCcw, Ban, Trash2, Send, AlertTriangle,
+  ChevronLeft, ClipboardX, ShieldCheck, RotateCcw, Ban, Trash2, Send, AlertTriangle, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
@@ -10,6 +10,16 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { severityBadge, statusBadge, NcrThumb } from './NcrList'
 import { NCR_SEVERITY_ZH, NCR_STATUS_ZH } from '../types'
+
+interface NcrCorrectiveHistory {
+  id: string
+  ncr_id: string
+  root_cause: string | null
+  corrective_action: string | null
+  preventive_action: string | null
+  submitted_by: string
+  submitted_at: string
+}
 
 export default function NcrDetailPage() {
   const { id, ncrId } = useParams<{ id: string; ncrId: string }>()
@@ -40,6 +50,8 @@ function NcrDetailInner({ projectId, ncrId }: { projectId: string; ncrId: string
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [history, setHistory] = useState<NcrCorrectiveHistory[]>([])
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   // CAR form
   const [rootCause, setRootCause] = useState('')
@@ -58,6 +70,28 @@ function NcrDetailInner({ projectId, ncrId }: { projectId: string; ncrId: string
       setNames(m)
     })
   }, [ncr])
+
+  // Fetch corrective history; extend the names map with any new submitter ids.
+  useEffect(() => {
+    supabase
+      .from('ncr_corrective_history')
+      .select('*')
+      .eq('ncr_id', ncrId)
+      .order('submitted_at', { ascending: false })
+      .then(({ data }) => {
+        if (!data) return
+        setHistory(data as NcrCorrectiveHistory[])
+        const newIds = data
+          .map((r: NcrCorrectiveHistory) => r.submitted_by)
+          .filter((id: string) => !!id)
+        if (newIds.length === 0) return
+        supabase.from('user_profiles').select('id, name').in('id', newIds).then(({ data: ud }) => {
+          const extra: Record<string, string> = {}
+          ;(ud ?? []).forEach((r: { id: string; name: string | null }) => { extra[r.id] = r.name || '—' })
+          setNames(prev => ({ ...prev, ...extra }))
+        })
+      })
+  }, [ncrId])
 
   if (loading && !ncr) return <AppLayout><Spinner size={24} className="mx-auto my-12" /></AppLayout>
   if (!ncr) return (
@@ -131,10 +165,17 @@ function NcrDetailInner({ projectId, ncrId }: { projectId: string; ncrId: string
           )}
         </div>
 
-        {/* CAR (corrective action) — shown once submitted */}
+        {/* CAR (corrective action) — shown once a corrective_action or root_cause exists.
+            When the NCR is 'open' AND a corrective_action already exists it means the
+            verifier reopened (退回) it, so we label the card with the stale-provenance
+            heading so the editor knows this is the last rejected attempt. */}
         {(ncr.corrective_action || ncr.root_cause) && (
           <div className="card p-4 space-y-2 border-l-4 border-blue-300">
-            <h2 className="font-bold text-site-900 text-sm">糾正措施 (CAR)</h2>
+            <h2 className="font-bold text-site-900 text-sm">
+              {ncr.status === 'open'
+                ? '上一次糾正措施（已退回）'
+                : '糾正措施 (CAR)'}
+            </h2>
             <Field label="根本原因" value={ncr.root_cause} />
             <Field label="糾正措施" value={ncr.corrective_action} />
             <Field label="預防措施" value={ncr.preventive_action} />
@@ -142,6 +183,35 @@ function NcrDetailInner({ projectId, ncrId }: { projectId: string; ncrId: string
               <p className="text-[11px] text-site-400 border-t border-site-100 pt-2">
                 由 {names[ncr.corrective_by ?? ''] ?? '…'} 於 {new Date(ncr.corrective_at).toLocaleString('zh-HK')} 提交
               </p>
+            )}
+          </div>
+        )}
+
+        {/* Corrective history — collapsed accordion, shown when there are past
+            submissions (every submit_ncr_corrective call appends a row via v84). */}
+        {history.length > 0 && (
+          <div className="card overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setHistoryOpen(o => !o)}
+              className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-site-700 hover:bg-site-50 min-h-[44px]"
+            >
+              <span>歷次糾正措施 ({history.length})</span>
+              {historyOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+            {historyOpen && (
+              <div className="divide-y divide-site-100 border-t border-site-100">
+                {history.map((h, i) => (
+                  <div key={h.id} className="px-4 py-3 space-y-1">
+                    <p className="text-[11px] text-site-400 font-medium">
+                      第 {history.length - i} 次 · {names[h.submitted_by] ?? '…'} · {new Date(h.submitted_at).toLocaleString('zh-HK')}
+                    </p>
+                    {h.root_cause && <Field label="根本原因" value={h.root_cause} />}
+                    {h.corrective_action && <Field label="糾正措施" value={h.corrective_action} />}
+                    {h.preventive_action && <Field label="預防措施" value={h.preventive_action} />}
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         )}

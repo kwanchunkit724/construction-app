@@ -57,6 +57,8 @@
 	<string>需要從相簿選取現場問題照片</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>需要儲存照片到相簿</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>使用 Face ID 確認你的身分以進行高風險操作</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
