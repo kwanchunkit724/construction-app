@@ -550,8 +550,9 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
               </div>
             )}
 
-            {/* (b) Manual password entry. */}
-            {modal.phase === 'password' && (
+            {/* (b) Manual password entry. Hidden while the post-success biometric-save
+                offer is up so the two don't render stacked (#9). */}
+            {modal.phase === 'password' && !modal.offerBiometricSave && (
               <form
                 onSubmit={(e) => {
                   e.preventDefault()
