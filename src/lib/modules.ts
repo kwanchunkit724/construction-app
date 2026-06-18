@@ -25,6 +25,7 @@ export type ModuleKey =
   | 'cleansing'
   | 'ncr'
   | 'risc'
+  | 'labour'
   | 'assistant'
 
 export interface ModuleDef {
@@ -55,6 +56,7 @@ export const MODULES: ModuleDef[] = [
   { key: 'cleansing', labelZh: '清潔檢查', icon: 'Sparkles', route: 'cleansing' },
   { key: 'ncr', labelZh: '不符合事項', icon: 'ClipboardX', route: 'ncr' },
   { key: 'risc', labelZh: '申請檢查', icon: 'ClipboardCheck', route: 'risc' },
+  { key: 'labour', labelZh: '勞工人力', icon: 'UsersRound', route: 'labour' },
   { key: 'assistant', labelZh: '助理', icon: 'Bot', tabId: 'assistant' },
 ]
 
@@ -74,5 +76,6 @@ export const MODULE_LABELS_ZH: Record<ModuleKey, string> = {
   cleansing: '清潔檢查',
   ncr: '不符合事項',
   risc: '申請檢查',
+  labour: '勞工人力',
   assistant: '助理',
 }

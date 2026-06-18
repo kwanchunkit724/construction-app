@@ -750,7 +750,7 @@ function safeName(name: string): string {
 
 let _fontLoaded = false
 
-async function ensureChineseFont(doc: any): Promise<void> {
+export async function ensureChineseFont(doc: any): Promise<void> {
   if (_fontLoaded) {
     doc.setFont('NotoHK')
     return
