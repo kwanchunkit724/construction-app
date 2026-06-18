@@ -7,7 +7,7 @@ import {
   FileText, Receipt, Shield, Bot, CloudRain,
   Wrench, BookOpen, Package, CalendarDays,
   Contact as ContactIcon, FolderOpen, CalendarClock,
-  Sparkles, ClipboardX,
+  Sparkles, ClipboardX, ClipboardCheck,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { UserProfile, IssueComment } from '../types'
@@ -108,7 +108,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const showToolsTab = isModuleEnabled('weather') || isModuleEnabled('documents')
     || isModuleEnabled('materials') || isModuleEnabled('contacts')
     || isModuleEnabled('timetable') || isModuleEnabled('dailies') || isModuleEnabled('equipment')
-    || isModuleEnabled('cleansing') || isModuleEnabled('ncr')
+    || isModuleEnabled('cleansing') || isModuleEnabled('ncr') || isModuleEnabled('risc')
   const showAssistantTab = aiEnabled && isModuleEnabled('assistant')
 
   const [tab, setTab] = useState<Tab>('progress')
@@ -945,6 +945,21 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
         <div className="flex-1 min-w-0">
           <p className="font-bold text-site-900">不符合事項 (NCR)</p>
           <p className="text-xs text-site-500 mt-0.5">品質不符合報告 · 糾正措施 · 核實關閉</p>
+        </div>
+        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
+      </button>
+      )}
+      {isModuleEnabled('risc') && (
+      <button
+        onClick={() => navigate(`/project/${projectId}/risc`)}
+        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
+      >
+        <div className="w-11 h-11 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center flex-shrink-0">
+          <ClipboardCheck size={22} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-site-900">申請檢查 (RISC)</p>
+          <p className="text-xs text-site-500 mt-0.5">申請工序檢查 / 驗收 · 檢查員簽核通過</p>
         </div>
         <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
       </button>

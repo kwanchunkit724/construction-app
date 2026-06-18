@@ -1434,3 +1434,52 @@ export const NCR_STATUS_ZH: Record<NcrStatus, string> = {
   closed: '已關閉',
   void: '已作廢',
 }
+
+// ── v89: 申請檢查 / 驗收 (Request for Inspection, RISC-lite) ─────
+// A contractor requests that work is ready for inspection; an inspector responds
+// pass / fail with a comment. Column names mirror risc_requests verbatim.
+
+export type RiscWorkType =
+  | 'rebar' | 'formwork' | 'concreting' | 'masonry' | 'waterproofing'
+  | 'finishes' | 'mep' | 'drainage' | 'completion' | 'other'
+export type RiscStatus = 'submitted' | 'passed' | 'failed' | 'cancelled'
+
+export interface Risc {
+  id: string
+  project_id: string
+  number: string                  // RISC-001
+  title: string
+  work_type: RiscWorkType
+  location: string | null
+  spec_ref: string | null
+  proposed_at: string | null
+  description: string | null
+  status: RiscStatus
+  raised_by: string
+  result_comment: string | null
+  inspected_by: string | null
+  inspected_at: string | null
+  photos: string[]
+  created_at: string
+  updated_at: string
+}
+
+export const RISC_WORK_TYPE_ZH: Record<RiscWorkType, string> = {
+  rebar: '鋼筋紮鐵',
+  formwork: '模板',
+  concreting: '混凝土澆灌',
+  masonry: '砌磚 / 砌塊',
+  waterproofing: '防水',
+  finishes: '飾面 / 裝修',
+  mep: '機電裝置',
+  drainage: '渠務',
+  completion: '完工驗收',
+  other: '其他',
+}
+
+export const RISC_STATUS_ZH: Record<RiscStatus, string> = {
+  submitted: '待檢查',
+  passed: '通過',
+  failed: '不通過',
+  cancelled: '已取消',
+}
