@@ -130,6 +130,14 @@ Deno.serve(async (req) => {
   }
   if ((count ?? 0) >= RATE_LIMIT_MAX) return json({ ok: false, error: '發送次數過多，請稍後再試' }, 429)
 
+  // Global send cap (anti mass-abuse / Twilio cost guard): refuse if total OTP
+  // sends across ALL phones in the last 10 min exceed a ceiling.
+  const { count: globalCount } = await admin
+    .from('phone_verifications')
+    .select('id', { count: 'exact', head: true })
+    .gte('created_at', windowStart)
+  if ((globalCount ?? 0) >= 100) return json({ ok: false, error: '系統繁忙，請稍後再試' }, 429)
+
   // 4) Generate code + 5) store hash via service role.
   const code     = randomCode()
   const codeHash = await sha256Hex(code)

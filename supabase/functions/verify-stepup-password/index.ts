@@ -81,6 +81,19 @@ Deno.serve(async (req) => {
   const email = user.email
   if (!email) return json({ ok: false, error: '帳戶無法以密碼驗證' }, 400)
 
+  const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
+
+  // App-level lockout (defence-in-depth atop GoTrue's own /token rate-limit):
+  // refuse if there have been >=5 failed step-up password attempts for this user
+  // in the last 15 minutes (v88 stepup_pw_attempts).
+  const lockWindow = new Date(Date.now() - 15 * 60_000).toISOString()
+  const { count: failCount } = await admin
+    .from('stepup_pw_attempts')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .gte('failed_at', lockWindow)
+  if ((failCount ?? 0) >= 5) return json({ ok: false, error: '嘗試次數過多，請稍後再試' }, 429)
+
   // 2) Verify the password against GoTrue WITHOUT minting a session.
   let pwOk = false
   try {
@@ -95,10 +108,15 @@ Deno.serve(async (req) => {
     console.error('stepup password verify request failed', e instanceof Error ? e.message : String(e))
     return json({ ok: false, error: '密碼驗證服務暫時無法使用' }, 502)
   }
-  if (!pwOk) return json({ ok: false, error: '密碼錯誤' }, 401)
+  if (!pwOk) {
+    // Record the failed attempt (feeds the lockout above).
+    await admin.from('stepup_pw_attempts').insert({ user_id: user.id })
+    return json({ ok: false, error: '密碼錯誤' }, 401)
+  }
 
   // 3) Mint the step-up grant via the SERVICE ROLE (table has no client write policy).
-  const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
+  // Correct password — clear this user's failed-attempt streak.
+  await admin.from('stepup_pw_attempts').delete().eq('user_id', user.id)
   // Clear this caller's expired grants first (mirrors mint_step_up_grant).
   await admin.from('step_up_grants').delete().eq('user_id', user.id).lte('expires_at', new Date().toISOString())
   const expires = new Date(Date.now() + GRANT_MINUTES * 60_000)
