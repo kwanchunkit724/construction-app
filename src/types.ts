@@ -1483,3 +1483,43 @@ export const RISC_STATUS_ZH: Record<RiscStatus, string> = {
   failed: '不通過',
   cancelled: '已取消',
 }
+
+// ── v91: 受控文件登記冊 (Controlled-Document Register) ────────────
+// A controlled document at a revision. Issuing a new revision supersedes the
+// prior row. Column names mirror controlled_documents verbatim.
+
+export type ControlledDocCategory =
+  | 'drawing' | 'spec' | 'method_statement' | 'procedure' | 'form' | 'manual' | 'other'
+export type ControlledDocStatus = 'current' | 'superseded' | 'withdrawn'
+
+export interface ControlledDoc {
+  id: string
+  project_id: string
+  number: string                  // CD-001 (stable across revisions)
+  title: string
+  doc_category: ControlledDocCategory
+  revision: string
+  status: ControlledDocStatus
+  holders: string | null
+  notes: string | null
+  issued_by: string
+  issued_at: string
+  created_at: string
+  updated_at: string
+}
+
+export const CONTROLLED_DOC_CATEGORY_ZH: Record<ControlledDocCategory, string> = {
+  drawing: '圖則',
+  spec: '規範',
+  method_statement: '施工方案',
+  procedure: '程序',
+  form: '表格',
+  manual: '手冊',
+  other: '其他',
+}
+
+export const CONTROLLED_DOC_STATUS_ZH: Record<ControlledDocStatus, string> = {
+  current: '生效',
+  superseded: '已被取代',
+  withdrawn: '已撤回',
+}

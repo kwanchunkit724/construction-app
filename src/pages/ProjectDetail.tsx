@@ -7,7 +7,7 @@ import {
   FileText, Receipt, Shield, Bot, CloudRain,
   Wrench, BookOpen, Package, CalendarDays,
   Contact as ContactIcon, FolderOpen, CalendarClock,
-  Sparkles, ClipboardX, ClipboardCheck, UsersRound,
+  Sparkles, ClipboardX, ClipboardCheck, UsersRound, FileStack,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { UserProfile, IssueComment } from '../types'
@@ -109,7 +109,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
     || isModuleEnabled('materials') || isModuleEnabled('contacts')
     || isModuleEnabled('timetable') || isModuleEnabled('dailies') || isModuleEnabled('equipment')
     || isModuleEnabled('cleansing') || isModuleEnabled('ncr') || isModuleEnabled('risc')
-    || isModuleEnabled('labour')
+    || isModuleEnabled('labour') || isModuleEnabled('controlled_docs')
   const showAssistantTab = aiEnabled && isModuleEnabled('assistant')
 
   const [tab, setTab] = useState<Tab>('progress')
@@ -976,6 +976,21 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
         <div className="flex-1 min-w-0">
           <p className="font-bold text-site-900">勞工人力日報 (G.F.527)</p>
           <p className="text-xs text-site-500 mt-0.5">按日誌人力彙總工種人次 · 匯出法定申報表</p>
+        </div>
+        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
+      </button>
+      )}
+      {isModuleEnabled('controlled_docs') && (
+      <button
+        onClick={() => navigate(`/project/${projectId}/controlled-docs`)}
+        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
+      >
+        <div className="w-11 h-11 rounded-xl bg-violet-50 text-violet-700 flex items-center justify-center flex-shrink-0">
+          <FileStack size={22} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-site-900">受控文件登記冊</p>
+          <p className="text-xs text-site-500 mt-0.5">受控文件版本 · 生效/取代/撤回 · 持有人</p>
         </div>
         <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
       </button>

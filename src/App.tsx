@@ -63,6 +63,8 @@ const RiscListPage = lazy(() => import('./pages/RiscList'))
 const RiscDetailPage = lazy(() => import('./pages/RiscDetail'))
 // 勞工人力日報 / GF527 (v90) — labour return derived from dailies.manpower.
 const LabourReturnPage = lazy(() => import('./pages/LabourReturn'))
+// 受控文件登記冊 (v91) — controlled-document register, per-project switch.
+const ControlledDocsListPage = lazy(() => import('./pages/ControlledDocsList'))
 
 // 地盤表格管理 (statutory site forms + mobile e-signing, v55) — lazy + entry-
 // gated. The migration ships forms_enabled=false; v55 ships no get_forms_enabled
@@ -192,6 +194,8 @@ export default function App() {
           <Route path="/project/:id/risc/:riscId" element={<ProtectedRoute><ModuleRoute module="risc">{lazyRoute(<RiscDetailPage />)}</ModuleRoute></ProtectedRoute>} />
           {/* 勞工人力日報 (G.F.527) — labour return report from dailies.manpower. */}
           <Route path="/project/:id/labour" element={<ProtectedRoute><ModuleRoute module="labour">{lazyRoute(<LabourReturnPage />)}</ModuleRoute></ProtectedRoute>} />
+          {/* 受控文件登記冊 — controlled-document register. */}
+          <Route path="/project/:id/controlled-docs" element={<ProtectedRoute><ModuleRoute module="controlled_docs">{lazyRoute(<ControlledDocsListPage />)}</ModuleRoute></ProtectedRoute>} />
           {/* 地盤表格管理 — register + per-equipment forms / mobile e-signing. */}
           <Route path="/project/:id/equipment" element={<ProtectedRoute><ModuleRoute module="equipment">{lazyRoute(<EquipmentListPage />)}</ModuleRoute></ProtectedRoute>} />
           <Route path="/project/:id/equipment/:equipmentId" element={<ProtectedRoute><ModuleRoute module="equipment">{lazyRoute(<EquipmentDetailPage />)}</ModuleRoute></ProtectedRoute>} />
