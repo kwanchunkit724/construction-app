@@ -4,6 +4,8 @@ import { useSi } from '../../contexts/SiContext'
 import { useDrawings } from '../../contexts/DrawingsContext'
 import { DocumentsContext } from '../../contexts/DocumentsContext'
 import { uploadSiPhotos, uploadSiVoice } from '../../lib/si'
+import { useAuth } from '../../contexts/AuthContext'
+import { recordPhotoMeta } from '../../lib/photoMeta'
 import { Spinner } from '../Spinner'
 import { VoiceRecorder } from './VoiceRecorder'
 import { GeoPicker, type GeoValue } from './GeoPicker'
@@ -32,6 +34,7 @@ interface PinVersion {
 
 export function SiSubmitForm({ projectId, onSubmitted, onCancel }: SiSubmitFormProps) {
   const { createDraftSi, saveVersion, submitSi } = useSi()
+  const { profile } = useAuth()
   const { drawings, versionsByDrawing } = useDrawings()
   // Optional — null when no DocumentsProvider is mounted (older mount sites).
   const documentsCtx = useContext(DocumentsContext)
@@ -159,6 +162,16 @@ export function SiSubmitForm({ projectId, onSubmitted, onCancel }: SiSubmitFormP
       if (e2) {
         setError(e2)
         return
+      }
+      // B2 (DWSS §3.3.3): record per-photo capture metadata in the central
+      // photo_metadata store (v79), reusing the SI's GeoPicker location + now.
+      // Append-only, best-effort — never blocks the SI submit.
+      if (profile && photoPaths.length > 0) {
+        const capturedAt = new Date().toISOString()
+        const g = geo ? { lat: geo.lat, lng: geo.lng, accuracy_m: geo.accuracy_m ?? 0 } : null
+        photoPaths.forEach(p => void recordPhotoMeta({
+          projectId, bucket: 'project-si-vo', photoPath: p, capturedAt, geo: g, uploadedBy: profile.id,
+        }))
       }
       let voicePath: string | null = null
       if (voiceBlob) {

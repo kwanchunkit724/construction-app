@@ -9,6 +9,8 @@ import { useIsOnline } from '../../hooks/useIsOnline'
 import { OfflineBanner } from '../OfflineBanner'
 import { PtwPhotoPicker } from './PtwPhotoPicker'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
+import { capturePhotoGeo, recordPhotoMeta } from '../../lib/photoMeta'
 
 interface WorkerDraft {
   name: string
@@ -24,6 +26,7 @@ interface PtwSubmitFormProps {
 
 export function PtwSubmitForm({ open, onClose, onSubmitted }: PtwSubmitFormProps) {
   const { createDraft, saveVersion, submit, addWorker, projectId } = usePtw()
+  const { profile } = useAuth()
   const online = useIsOnline()
   const [ptwType, setPtwType] = useState<PtwType>('hot_work')
   const [description, setDescription] = useState('')
@@ -77,6 +80,12 @@ export function PtwSubmitForm({ open, onClose, onSubmitted }: PtwSubmitFormProps
     setSubmitting(true)
     setError(null)
     setProgressMsg(null)
+    // B2 (DWSS §3.3.3): capture coarse GPS once, non-blocking, for the photos on
+    // this permit. recordPhotoMeta is best-effort and never blocks submit.
+    const geoPromise = (ppePhotos.length > 0 || scenePhotos.length > 0 || validWorkers.some(w => w.photo))
+      ? capturePhotoGeo()
+      : Promise.resolve(null)
+    const workerPhotoPaths: string[] = []
     try {
       setProgressMsg('建立草稿...')
       const { id, error: createErr } = await createDraft(ptwType)
@@ -121,11 +130,26 @@ export function PtwSubmitForm({ open, onClose, onSubmitted }: PtwSubmitFormProps
         if (w.photo) {
           const up = await uploadWorkerPhoto(projectId, id, workerId, w.photo)
           if (up.error || !up.path) { setError(up.error || '工人相片上載失敗'); return }
+          workerPhotoPaths.push(up.path)
           const { error: updErr } = await supabase
             .from('permit_workers')
             .update({ worker_photo_path: up.path })
             .eq('id', workerId)
           if (updErr) { setError(updErr.message); return }
+        }
+      }
+
+      // B2: persist capture metadata (GPS + timestamp) for every uploaded photo
+      // on this permit, append-only (photo_metadata, v79). Fire-and-forget.
+      if (profile) {
+        const allPhotoPaths = [...ppePaths, ...scenePaths, ...workerPhotoPaths]
+        if (allPhotoPaths.length > 0) {
+          void geoPromise.then(geo => {
+            const capturedAt = new Date().toISOString()
+            allPhotoPaths.forEach(p => void recordPhotoMeta({
+              projectId, bucket: 'project-si-vo', photoPath: p, capturedAt, geo, uploadedBy: profile.id,
+            }))
+          })
         }
       }
 
