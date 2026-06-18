@@ -6,7 +6,15 @@ import { cacheGet, cacheSet, getOnline, subscribeOnline } from '../lib/offline'
 import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import { getInitialHandler, getNextHandler } from '../types'
 import { compressImage } from '../lib/image-compress'
-import type { Issue, IssueComment, IssueHandlerRole, GlobalRole } from '../types'
+import type { Issue, IssueComment, IssueHandlerRole, GlobalRole, SnagType } from '../types'
+
+export interface QuickSnagInput {
+  title: string
+  snag_type: SnagType
+  location: string
+  description: string
+  photos: string[]
+}
 
 interface IssuesContextType {
   loading: boolean
@@ -15,6 +23,8 @@ interface IssuesContextType {
   myRoleInProject: GlobalRole | null  // user's role in this project (for permission checks)
   refetch: () => Promise<void>
   createIssue: (title: string, description: string, photos: string[], location?: string) => Promise<{ error: string | null; id?: string }>
+  createQuickIssue: (input: QuickSnagInput) => Promise<{ error: string | null; id?: string }>
+  graduateToFormal: (issueId: string) => Promise<{ error: string | null }>
   uploadPhoto: (file: File) => Promise<{ url: string | null; error: string | null }>
   fetchComments: (issueId: string) => Promise<IssueComment[]>
   addComment: (issueId: string, body: string) => Promise<{ error: string | null }>
@@ -122,6 +132,55 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
 
     await refetch()
     return { error: null, id: data.id }
+  }
+
+  // 即時問題 (snag): a lightweight, self-handled, push-silent issue. is_quick=true →
+  // the v93 triggers skip the formal issue_no + OneSignal; it carries snag_type +
+  // a floor/zone location for fast on-site logging.
+  async function createQuickIssue(input: QuickSnagInput) {
+    if (!profile) return { error: '未登入' }
+    if (!myRoleInProject) return { error: '你不是此工地的成員' }
+
+    const handler = getInitialHandler(myRoleInProject)
+    const { data, error } = await supabase.from('issues').insert({
+      project_id: projectId,
+      reporter_id: profile.id,
+      reporter_role: myRoleInProject,
+      title: input.title.trim(),
+      description: input.description.trim(),
+      location: input.location.trim() || null,
+      snag_type: input.snag_type,
+      photos: input.photos,
+      current_handler_role: handler,
+      status: 'open',
+      is_quick: true,
+    }).select().single()
+    if (error) return { error: error.message }
+
+    await supabase.from('issue_comments').insert({
+      issue_id: data.id, author_id: profile.id, action: 'reported', body: '', to_role: handler,
+    })
+
+    await refetch()
+    return { error: null, id: data.id }
+  }
+
+  // Graduate a snag into a formal numbered issue (one-way). The DB guard
+  // (v93 guard_issue_quick) assigns the per-project issue_no on this flip and
+  // the push trigger notifies the handler exactly once.
+  async function graduateToFormal(issueId: string) {
+    if (!profile) return { error: '未登入' }
+    const { error } = await supabase.from('issues').update({
+      is_quick: false, updated_at: new Date().toISOString(),
+    }).eq('id', issueId)
+    if (error) return { error: error.message }
+
+    await supabase.from('issue_comments').insert({
+      issue_id: issueId, author_id: profile.id, action: 'commented',
+      body: '已將即時問題升級為正式問題',
+    })
+    await refetch()
+    return { error: null }
   }
 
   async function uploadPhoto(file: File): Promise<{ url: string | null; error: string | null }> {
@@ -239,7 +298,7 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
   return (
     <IssuesContext.Provider value={{
       loading, issues, fetchError, myRoleInProject, refetch,
-      createIssue, uploadPhoto, fetchComments, addComment,
+      createIssue, createQuickIssue, graduateToFormal, uploadPhoto, fetchComments, addComment,
       escalateIssue, resolveIssue, reopenIssue,
     }}>
       {children}

@@ -27,6 +27,7 @@ export type ModuleKey =
   | 'risc'
   | 'labour'
   | 'controlled_docs'
+  | 'inspection'
   | 'assistant'
 
 export interface ModuleDef {
@@ -59,6 +60,7 @@ export const MODULES: ModuleDef[] = [
   { key: 'risc', labelZh: '申請檢查', icon: 'ClipboardCheck', route: 'risc' },
   { key: 'labour', labelZh: '勞工人力', icon: 'UsersRound', route: 'labour' },
   { key: 'controlled_docs', labelZh: '受控文件', icon: 'FileStack', route: 'controlled-docs' },
+  { key: 'inspection', labelZh: '巡查', icon: 'Footprints', route: 'inspection' },
   { key: 'assistant', labelZh: '助理', icon: 'Bot', tabId: 'assistant' },
 ]
 
@@ -80,5 +82,6 @@ export const MODULE_LABELS_ZH: Record<ModuleKey, string> = {
   risc: '申請檢查',
   labour: '勞工人力',
   controlled_docs: '受控文件',
+  inspection: '巡查',
   assistant: '助理',
 }

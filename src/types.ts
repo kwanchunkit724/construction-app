@@ -509,6 +509,8 @@ export function computeRollup(leaves: ProgressItem[], today: Date = new Date()):
 export type IssueStatus = 'open' | 'resolved'
 export type IssueHandlerRole = 'pm' | 'main_contractor' | 'subcontractor' | 'admin'
 export type IssueAction = 'reported' | 'commented' | 'escalated' | 'resolved' | 'reopened'
+// v93: 即時問題 (snag) category chips — fast one-tap title fill.
+export type SnagType = 'leak' | 'electrical' | 'drainage' | 'finish' | 'plaster' | 'other'
 
 export interface Issue {
   id: string
@@ -524,6 +526,10 @@ export interface Issue {
   // never send it) + free-text location. Null on pre-v47 rows until backfill.
   issue_no: number | null
   location: string | null
+  // ── v93: 即時問題 (snag). is_quick rows are self-handled, push-silent, and carry
+  // issue_no = NULL until graduated (升級為正式問題) to a formal numbered issue.
+  is_quick: boolean
+  snag_type: SnagType | null
   resolved_by: string | null
   resolved_at: string | null
   created_at: string
@@ -534,6 +540,15 @@ export interface Issue {
 // for un-numbered (pre-backfill) rows.
 export function formatIssueNo(n: number | null): string {
   return n ? '#' + String(n).padStart(3, '0') : '—'
+}
+
+export const SNAG_TYPE_ZH: Record<SnagType, string> = {
+  leak: '漏水',
+  electrical: '電力 / 燈',
+  drainage: '渠務 / 去水',
+  finish: '飾面 / 雲石',
+  plaster: '批盪 / 牆身',
+  other: '其他',
 }
 
 export interface IssueComment {
@@ -1522,4 +1537,69 @@ export const CONTROLLED_DOC_STATUS_ZH: Record<ControlledDocStatus, string> = {
   current: '生效',
   superseded: '已被取代',
   withdrawn: '已撤回',
+}
+
+// ── v95: 巡查 (recurring site inspection) ─────────────────────────
+// A round sweeps a set of floors/units for a category; each floor gets ONE mark
+// (pass/fail/na) with a photo. A 'fail' mark spawns a 即時問題 snag, linked back.
+// Coverage (floors marked / total) drives the "今日巡查 N/M 層" bar. Column names
+// mirror inspection_rounds / inspection_marks verbatim.
+
+export type InspectionCategory = 'leak' | 'cleanliness' | 'safety' | 'defect' | 'other'
+export type InspectionRoundStatus = 'open' | 'done' | 'cancelled'
+export type InspectionResult = 'pass' | 'fail' | 'na'
+
+export interface InspectionRound {
+  id: string
+  project_id: string
+  title: string
+  category: InspectionCategory
+  floor_labels: string[]
+  status: InspectionRoundStatus
+  notes: string | null
+  opened_by: string
+  opened_at: string
+  closed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface InspectionMark {
+  id: string
+  round_id: string
+  project_id: string
+  floor_label: string
+  result: InspectionResult
+  note: string | null
+  photos: string[]
+  linked_issue_id: string | null
+  marked_by: string
+  marked_at: string
+}
+
+export interface InspectionCoverage {
+  round_id: string
+  total: number
+  marked: number
+  failed: number
+}
+
+export const INSPECTION_CATEGORY_ZH: Record<InspectionCategory, string> = {
+  leak: '漏水',
+  cleanliness: '清潔',
+  safety: '安全',
+  defect: '缺陷 / 執漏',
+  other: '其他',
+}
+
+export const INSPECTION_ROUND_STATUS_ZH: Record<InspectionRoundStatus, string> = {
+  open: '進行中',
+  done: '已完成',
+  cancelled: '已取消',
+}
+
+export const INSPECTION_RESULT_ZH: Record<InspectionResult, string> = {
+  pass: '合格',
+  fail: '不合格',
+  na: '不適用',
 }

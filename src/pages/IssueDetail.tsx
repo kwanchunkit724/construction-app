@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Navigate } from 'react-router-dom'
 import {
   ChevronLeft, AlertCircle, CheckCircle2, ArrowUp, MessageCircle,
-  Send, RefreshCw, RotateCcw, MapPin,
+  Send, RefreshCw, RotateCcw, MapPin, Zap,
 } from 'lucide-react'
 import { Spinner } from '../components/Spinner'
 import { Sidebar } from '../components/Sidebar'
@@ -40,7 +40,7 @@ function IssueDetailInner({ projectId, issueId }: { projectId: string; issueId: 
   const { projects } = useProjects()
   const {
     issues, myRoleInProject, fetchComments, addComment,
-    escalateIssue, resolveIssue, reopenIssue,
+    escalateIssue, resolveIssue, reopenIssue, graduateToFormal,
   } = useIssues()
 
   const issue = issues.find(i => i.id === issueId)
@@ -142,6 +142,14 @@ function IssueDetailInner({ projectId, issueId }: { projectId: string; issueId: 
     }
   }
 
+  async function handleGraduate() {
+    setError('')
+    setBusy(true)
+    const { error } = await graduateToFormal(issueId)
+    setBusy(false)
+    if (error) setError(error)
+  }
+
   const dialogTitle = dialog?.type === 'escalate' ? `上呈到 ${nextRole ? ISSUE_HANDLER_ZH[nextRole] : ''}`
     : dialog?.type === 'resolve' ? '標記為已解決'
     : '重新開啟此問題'
@@ -211,6 +219,11 @@ function IssueDetailInner({ projectId, issueId }: { projectId: string; issueId: 
             <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-semibold ${statusStyle}`}>
               <StatusIcon size={11} /> {ISSUE_STATUS_ZH[issue.status]}
             </span>
+            {issue.is_quick && (
+              <span className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full font-medium">
+                <Zap size={11} /> 即時問題
+              </span>
+            )}
             {issue.location && (
               <span className="inline-flex items-center gap-1 text-xs bg-site-100 text-site-600 px-2 py-1 rounded-full font-medium">
                 <MapPin size={11} /> {issue.location}
@@ -235,12 +248,21 @@ function IssueDetailInner({ projectId, issueId }: { projectId: string; issueId: 
                 <CheckCircle2 size={16} /> 標記為已解決
               </button>
             )}
-            {canAct && isOpen && nextRole && (
+            {canAct && isOpen && nextRole && !issue.is_quick && (
               <button
                 onClick={() => { setDialog({ type: 'escalate' }); setDialogText('') }}
                 className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-xl py-2.5 flex items-center justify-center gap-1.5 text-sm"
               >
                 <ArrowUp size={16} /> 上呈到 {ISSUE_HANDLER_ZH[nextRole]}
+              </button>
+            )}
+            {issue.is_quick && isOpen && (
+              <button
+                onClick={handleGraduate}
+                disabled={busy}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl py-2.5 flex items-center justify-center gap-1.5 text-sm"
+              >
+                <ArrowUp size={16} /> 升級為正式問題
               </button>
             )}
             {!isOpen && (isReporter || canAct) && (

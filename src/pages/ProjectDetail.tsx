@@ -7,7 +7,7 @@ import {
   FileText, Receipt, Shield, Bot, CloudRain,
   Wrench, BookOpen, Package, CalendarDays,
   Contact as ContactIcon, FolderOpen, CalendarClock,
-  Sparkles, ClipboardX, ClipboardCheck, UsersRound, FileStack,
+  Sparkles, ClipboardX, ClipboardCheck, UsersRound, FileStack, Zap, Footprints,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { UserProfile, IssueComment } from '../types'
@@ -23,6 +23,7 @@ import { EditItemModal } from '../components/EditItemModal'
 import { HistoryModal } from '../components/HistoryModal'
 import { IssueCard } from '../components/IssueCard'
 import { CreateIssueModal } from '../components/CreateIssueModal'
+import { CreateQuickSnagSheet } from '../components/CreateQuickSnagSheet'
 import { ExportProgressModal } from '../components/ExportProgressModal'
 import { useAiAssistantEnabled } from '../components/assistant/useAiAssistantEnabled'
 import { HelpButton } from '../components/tutorial/HelpButton'
@@ -110,6 +111,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
     || isModuleEnabled('timetable') || isModuleEnabled('dailies') || isModuleEnabled('equipment')
     || isModuleEnabled('cleansing') || isModuleEnabled('ncr') || isModuleEnabled('risc')
     || isModuleEnabled('labour') || isModuleEnabled('controlled_docs')
+    || isModuleEnabled('inspection')
   const showAssistantTab = aiEnabled && isModuleEnabled('assistant')
 
   const [tab, setTab] = useState<Tab>('progress')
@@ -124,6 +126,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const [historyItem, setHistoryItem] = useState<ProgressItem | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [createIssueOpen, setCreateIssueOpen] = useState(false)
+  const [createSnagOpen, setCreateSnagOpen] = useState(false)
   const [showExport, setShowExport] = useState(false)
 
   // If the module behind the active tab gets turned off (admin toggle arrives
@@ -140,7 +143,9 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
     if (!stillVisible) setTab('progress')
   }, [tab, showIssuesTab, showSiVoTab, showToolsTab, showAssistantTab])
 
-  const openIssueCount = issues.filter(i => i.status === 'open').length
+  // The 問題 tab badge counts formal open issues only — 即時問題 (snags) are a
+  // separate self-handled lane with their own section/count inside the tab.
+  const openIssueCount = issues.filter(i => i.status === 'open' && !i.is_quick).length
 
   const roots = useMemo(() => items.filter(i => i.parent_id === null), [items])
 
@@ -474,6 +479,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
             projectId={projectId}
             canReport={!!myRoleInProject}
             onCreate={() => setCreateIssueOpen(true)}
+            onCreateSnag={() => setCreateSnagOpen(true)}
           />
         )}
 
@@ -533,6 +539,11 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
         onClose={() => setCreateIssueOpen(false)}
         projectId={projectId}
       />
+      <CreateQuickSnagSheet
+        open={createSnagOpen}
+        onClose={() => setCreateSnagOpen(false)}
+        projectId={projectId}
+      />
       {showExport && (
         <ExportProgressModal project={project} items={items} onClose={() => setShowExport(false)} />
       )}
@@ -568,22 +579,34 @@ function TabButton({
 }
 
 function IssuesTab({
-  projectId, canReport, onCreate,
+  projectId, canReport, onCreate, onCreateSnag,
 }: {
   projectId: string
   canReport: boolean
   onCreate: () => void
+  onCreateSnag: () => void
 }) {
   const { loading, issues } = useIssues()
-  const open = issues.filter(i => i.status === 'open')
-  const resolved = issues.filter(i => i.status === 'resolved')
+  // 即時問題 (snags) are a separate self-handled lane — split them out so they
+  // don't mix with the formal escalation issues.
+  const formal = issues.filter(i => !i.is_quick)
+  const snags = issues.filter(i => i.is_quick)
+  const open = formal.filter(i => i.status === 'open')
+  const resolved = formal.filter(i => i.status === 'resolved')
+  const openSnags = snags.filter(i => i.status === 'open')
+  const doneSnags = snags.filter(i => i.status === 'resolved')
 
   return (
     <>
       {canReport && (
-        <button onClick={onCreate} className="btn-primary w-full mb-4">
-          <Plus size={20} /> 報告新問題
-        </button>
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          <button onClick={onCreate} className="btn-primary flex items-center justify-center gap-1.5">
+            <Plus size={18} /> 報告問題
+          </button>
+          <button onClick={onCreateSnag} className="btn-ghost flex items-center justify-center gap-1.5">
+            <Zap size={18} /> 即時問題
+          </button>
+        </div>
       )}
 
       {loading ? (
@@ -604,13 +627,33 @@ function IssuesTab({
               {open.map(issue => <IssueCard key={issue.id} issue={issue} projectId={projectId} />)}
             </section>
           )}
+          {openSnags.length > 0 && (
+            <section className="mb-5">
+              <div className="flex items-center justify-between px-1 mb-2">
+                <h3 className="font-bold text-site-900 flex items-center gap-1.5">
+                  <Zap size={15} className="text-safety-500" /> 即時問題
+                </h3>
+                <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{openSnags.length}</span>
+              </div>
+              {openSnags.map(issue => <IssueCard key={issue.id} issue={issue} projectId={projectId} />)}
+            </section>
+          )}
           {resolved.length > 0 && (
-            <section>
+            <section className="mb-5">
               <div className="flex items-center justify-between px-1 mb-2">
                 <h3 className="font-bold text-site-900">已解決</h3>
                 <span className="text-xs font-semibold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{resolved.length}</span>
               </div>
               {resolved.map(issue => <IssueCard key={issue.id} issue={issue} projectId={projectId} />)}
+            </section>
+          )}
+          {doneSnags.length > 0 && (
+            <section>
+              <div className="flex items-center justify-between px-1 mb-2">
+                <h3 className="font-bold text-site-900">已完成即時問題</h3>
+                <span className="text-xs font-semibold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{doneSnags.length}</span>
+              </div>
+              {doneSnags.map(issue => <IssueCard key={issue.id} issue={issue} projectId={projectId} />)}
             </section>
           )}
         </>
@@ -991,6 +1034,21 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
         <div className="flex-1 min-w-0">
           <p className="font-bold text-site-900">受控文件登記冊</p>
           <p className="text-xs text-site-500 mt-0.5">受控文件版本 · 生效/取代/撤回 · 持有人</p>
+        </div>
+        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
+      </button>
+      )}
+      {isModuleEnabled('inspection') && (
+      <button
+        onClick={() => navigate(`/project/${projectId}/inspection`)}
+        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
+      >
+        <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center flex-shrink-0">
+          <Footprints size={22} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-site-900">巡查</p>
+          <p className="text-xs text-site-500 mt-0.5">定期逐層巡查 · 核查覆蓋 · 不合格自動開即時問題</p>
         </div>
         <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
       </button>

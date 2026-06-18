@@ -593,6 +593,40 @@ function DailyEditInner({ projectId }: { projectId: string }) {
         </div>
       )}
 
+      {/* 施工日誌完整度 — advisory only, NEVER blocks save (the date-locked RLS
+          means a blocked save = lost record). Encourages a dispute-grade entry by
+          showing which evidence fields are filled. */}
+      {(() => {
+        const fields = [
+          { k: '天氣', done: !!weatherAm },
+          { k: '人手', done: manpower.some(r => (Number(r.count) || 0) > 0) },
+          { k: '工序', done: selectedItemIds.size > 0 },
+          { k: '備註', done: notes.trim().length > 0 || freeform.some(s => s.trim().length > 0) },
+        ]
+        const filled = fields.filter(f => f.done).length
+        return (
+          <div className="card p-3 mb-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-semibold text-site-700">記錄完整度</p>
+              <p className="text-xs text-site-400">{filled} / {fields.length}</p>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {fields.map(f => (
+                <span
+                  key={f.k}
+                  className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium ${
+                    f.done ? 'bg-green-100 text-green-700' : 'bg-site-100 text-site-500'
+                  }`}
+                >
+                  {f.done ? '✓' : '○'} {f.k}
+                </span>
+              ))}
+            </div>
+            <p className="text-[11px] text-site-400 mt-2">越完整，越能喺爭議時作實證。並非必填。</p>
+          </div>
+        )
+      })()}
+
       {/* Spacer so form content isn't hidden behind the sticky action bar
           (persona-sim 2026-05-26: foreman's 儲存 was overlapping BottomNav). */}
       <div className="h-24 md:h-16" aria-hidden />
