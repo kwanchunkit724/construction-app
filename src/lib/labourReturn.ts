@@ -59,7 +59,8 @@ export function aggregateLabourReturn(rows: LabourDaily[]): LabourReturnAgg {
 }
 
 function safe(name: string): string {
-  return (name || 'project').replace(/[^\w一-鿿-]+/g, '_').slice(0, 40)
+  // Keep letters (incl. CJK) + digits + underscore; collapse everything else.
+  return (name || 'project').replace(/[^\p{L}\p{N}_]+/gu, '_').slice(0, 40)
 }
 
 export async function exportLabourReturnExcel(projectName: string, period: string, agg: LabourReturnAgg): Promise<void> {

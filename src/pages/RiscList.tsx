@@ -235,9 +235,9 @@ function RaiseRiscModal({ projectId, onClose, onDone }: { projectId: string; onC
           <div>
             <label className="label">相片（可選）</label>
             <div className="flex gap-2 flex-wrap items-center">
-              {photos.map((p, i) => (
-                <div key={i} className="w-16 h-16 rounded-lg bg-site-100 flex items-center justify-center text-xs text-site-400">
-                  {p.uploading ? <Spinner size={16} /> : '✓'}
+              {photos.map((p) => (
+                <div key={p.id} className="w-16 h-16 rounded-lg bg-site-100 flex items-center justify-center text-xs text-site-400">
+                  {p.uploading ? <Spinner size={16} /> : p.path ? '✓' : <span className="text-red-500" title="上載失敗">⚠</span>}
                 </div>
               ))}
               <label className="w-16 h-16 rounded-lg border-2 border-dashed border-site-200 flex items-center justify-center cursor-pointer hover:bg-site-50 text-site-400">
