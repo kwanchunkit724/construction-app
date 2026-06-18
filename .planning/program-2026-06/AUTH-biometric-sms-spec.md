@@ -85,7 +85,7 @@
 - MEDIUM send-phone-otp SMS-bombing → flag OFF 時直接 403 拒絕。
 
 **待修 — flip 相關 flag 之前必做(而家 flag OFF,未 live,唔急但唔可漏):**
-- **[flip signup_sms_required 前] #3 註冊 SMS 只係 client gate** —— 自訂 client 可繞過。要 server-enforce:`user_profiles` BEFORE INSERT trigger 喺 `signup_sms_required` ON 時要求該 phone 有近期 consumed signup verification(或改用 Edge-Function signup)。
+- ~~[flip signup_sms_required 前] #3 註冊 SMS 只係 client gate~~ **DONE (v87, server-enforce)** —— `user_profiles` BEFORE INSERT trigger `trg_enforce_signup_sms`:flag ON + 自助註冊(auth.uid()=new.id)時要求 phone 有 15 分鐘內 consumed signup verification,否則 raise。flag OFF / admin / service insert 全 no-op。
 - **[flip step_up_enforced 前] #6 verify-stepup-password 無 app-level lockout** —— 靠 GoTrue 內建 rate-limit;考慮加每帳戶 cooldown。
 - **[prod SMS 規模化前] #4 send-phone-otp 全域/IP 限流 / CAPTCHA** —— 而家得 per-phone(3/10min)+ flag-off 拒絕;大規模前加全域限流或 CAPTCHA + Twilio spend cap。
 - **[生物認證強化,可選] #13 BIOMETRY_ANY → BIOMETRY_CURRENT_SET** —— 令新增指紋/面容時令已存憑證失效(更強綁定)。
