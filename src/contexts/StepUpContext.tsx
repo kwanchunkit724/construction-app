@@ -156,6 +156,14 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
     setModal((m) => (m ? { ...m, ...p } : m))
   }
 
+  // Each requireStepUp call bumps this. Async handlers capture it at entry and
+  // bail (no patch / no settle) once a newer flow supersedes them — so a stale
+  // in-flight verification can never settle a NEWER flow's promise (a re-entry
+  // re-truthies modalRef, which would otherwise defeat the !modalRef.current guard).
+  const flowIdRef = useRef(0)
+  function isCurrent(flow: number) { return flowIdRef.current === flow && !!modalRef.current }
+  function settleFlow(flow: number, ok: boolean) { if (flowIdRef.current === flow) settle(ok) }
+
   async function requireStepUp(actionClass: StepUpActionClass): Promise<boolean> {
     // (0) Rollout gate (v54): while server enforcement is OFF, assert_step_up is
     // a no-op — so demanding a factor would be pointless friction. Skip the whole
@@ -184,6 +192,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
       // overwrite the ref (only one step-up flow runs at a time).
       if (resolverRef.current) resolverRef.current(false)
       resolverRef.current = resolve
+      flowIdRef.current += 1
       const weakAllowed = WEAK_FACTOR_CLASSES.has(actionClass)
       setModal({
         actionClass,
@@ -248,6 +257,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
   async function runBiometric() {
     const current = modalRef.current
     if (!current) return
+    const flow = flowIdRef.current
     patch({ busy: true, error: '' })
     let password: string | null = null
     try {
@@ -255,13 +265,13 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
     } catch {
       password = null
     }
-    if (!modalRef.current) return
+    if (!isCurrent(flow)) return
     if (!password) {
       // Cancelled / failed / no stored credential — let the user fall back.
       patch({ busy: false, error: '生物認證未完成，請改用其他方式' })
       return
     }
-    await verifyPassword(current.actionClass, password, false)
+    await verifyPassword(current.actionClass, password, false, flow)
   }
 
   // ── Factor (b): manual password entry ──
@@ -273,13 +283,13 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
       patch({ busy: false, error: '請輸入密碼' })
       return
     }
-    await verifyPassword(current.actionClass, password, true)
+    await verifyPassword(current.actionClass, password, true, flowIdRef.current)
   }
 
   // Shared password verification (used by both biometric-unlock and manual entry).
   // `manual` true means the secret came from a typed login password → eligible to
   // offer biometric-save afterwards.
-  async function verifyPassword(actionClass: StepUpActionClass, password: string, manual: boolean) {
+  async function verifyPassword(actionClass: StepUpActionClass, password: string, manual: boolean, flow: number) {
     patch({ busy: true, error: '' })
     let ok = false
     let serverMsg: string | undefined
@@ -297,7 +307,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
     } catch {
       serverMsg = '驗證服務暫時無法使用，請稍後再試'
     }
-    if (!modalRef.current) return
+    if (!isCurrent(flow)) return
     if (!ok) {
       patch({ busy: false, error: serverMsg || '密碼錯誤' })
       return
@@ -311,18 +321,19 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
       } catch {
         canBio = false
       }
-      if (canBio && modalRef.current) {
+      if (canBio && isCurrent(flow)) {
         patch({ busy: false, offerBiometricSave: true, pendingPassword: password, error: '' })
         return
       }
     }
-    settle(true)
+    settleFlow(flow, true)
   }
 
   // The user accepted / declined the post-password biometric-save offer.
   async function confirmBiometricSave(enable: boolean) {
     const current = modalRef.current
     if (!current) return
+    const flow = flowIdRef.current
     if (enable) {
       patch({ busy: true })
       let saved = false
@@ -334,13 +345,14 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
       if (saved) setBiometricOptedIn(true)
     }
     // Either way the step-up itself already succeeded — resolve true.
-    settle(true)
+    settleFlow(flow, true)
   }
 
   // ── Factor (c): SMS — send code, then verify ──
   async function sendSms() {
     const current = modalRef.current
     if (!current) return
+    const flow = flowIdRef.current
     patch({ busy: true, error: '' })
     let ok = false
     let serverMsg: string | undefined
@@ -357,7 +369,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
     } catch {
       serverMsg = '發送服務暫時無法使用，請稍後再試'
     }
-    if (!modalRef.current) return
+    if (!isCurrent(flow)) return
     if (!ok) {
       // Stay on whatever phase we're on (choose or sms) and surface the error.
       patch({ busy: false, error: serverMsg || '無法發送驗證碼' })
@@ -369,9 +381,10 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
   async function submitSms() {
     const current = modalRef.current
     if (!current) return
+    const flow = flowIdRef.current
     const code = current.code.trim()
     if (code.length !== 6) {
-      patch({ busy: false, error: '請輸入 6 位數字驗證碼' })
+      patch({ error: '請輸入 6 位數字驗證碼' })
       return
     }
     patch({ busy: true, error: '' })
@@ -390,21 +403,22 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
     } catch {
       serverMsg = '驗證服務暫時無法使用，請稍後再試'
     }
-    if (!modalRef.current) return
+    if (!isCurrent(flow)) return
     if (!ok) {
       patch({ busy: false, error: serverMsg || '驗證碼不正確' })
       return
     }
-    settle(true)
+    settleFlow(flow, true)
   }
 
   // ── Factor (d): TOTP — challengeAndVerify (AAL2) → mint_step_up_grant ──
   async function submitTotp() {
     const current = modalRef.current
     if (!current || !current.totpFactorId) return
+    const flow = flowIdRef.current
     const code = current.code.trim()
     if (code.length !== 6) {
-      patch({ busy: false, error: '請輸入 6 位數字驗證碼' })
+      patch({ error: '請輸入 6 位數字驗證碼' })
       return
     }
     patch({ busy: true, error: '' })
@@ -414,7 +428,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
       factorId: current.totpFactorId,
       code,
     })
-    if (!modalRef.current) return
+    if (!isCurrent(flow)) return
     if (verifyErr) {
       patch({ busy: false, error: '驗證碼不正確，請重新輸入' })
       return
@@ -423,12 +437,12 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
     const { error: mintErr } = await supabase.rpc('mint_step_up_grant', {
       p_action_class: current.actionClass,
     })
-    if (!modalRef.current) return
+    if (!isCurrent(flow)) return
     if (mintErr) {
       patch({ busy: false, error: mintErr.message || '驗證失敗，請稍後再試' })
       return
     }
-    settle(true)
+    settleFlow(flow, true)
   }
 
   return (

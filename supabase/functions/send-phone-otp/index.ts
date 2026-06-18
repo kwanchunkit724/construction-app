@@ -96,6 +96,13 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
 
+  // Refuse entirely unless signup-SMS is actually enabled. While the flag is OFF
+  // (the default) there is NO legitimate reason to send a signup OTP, so this
+  // closes the unauthenticated SMS-bombing / Twilio-cost-abuse window completely
+  // until the feature is turned on.
+  const { data: required } = await admin.rpc('get_signup_sms_required')
+  if (required !== true) return json({ ok: false, error: '此功能尚未啟用' }, 403)
+
   // Rate-limit: count unconsumed signup rows for this phone in the last 10 min.
   const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW * 60_000).toISOString()
   const { count, error: cntErr } = await admin

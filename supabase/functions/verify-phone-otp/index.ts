@@ -64,56 +64,22 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
 
-  // Find the newest non-expired, non-consumed signup row for this phone.
-  const now = new Date().toISOString()
-  const { data: rows, error: selErr } = await admin
-    .from('phone_verifications')
-    .select('id, code_hash, attempts, max_attempts')
-    .eq('phone', phone)
-    .eq('purpose', 'signup')
-    .is('consumed_at', null)
-    .gt('expires_at', now)
-    .order('created_at', { ascending: false })
-    .limit(1)
-  if (selErr) {
-    console.error('phone_verifications select failed', selErr.message)
-    return json({ ok: false, error: '驗證失敗，請稍後再試' }, 500)
-  }
-  if (!rows || rows.length === 0) return json({ ok: false, error: '驗證碼已過期或不存在，請重新發送' }, 400)
-
-  const row = rows[0]
-
-  // Increment attempts before comparing (prevent timing-based retries).
-  const newAttempts = (row.attempts as number) + 1
-  const { error: updErr } = await admin
-    .from('phone_verifications')
-    .update({ attempts: newAttempts })
-    .eq('id', row.id)
-  if (updErr) {
-    console.error('attempts increment failed', updErr.message)
-    return json({ ok: false, error: '驗證失敗，請稍後再試' }, 500)
-  }
-
-  if (newAttempts > (row.max_attempts as number)) {
-    return json({ ok: false, error: '嘗試次數過多，請重新發送驗證碼' }, 429)
-  }
-
-  // Compare hashes.
+  // Verify atomically server-side (v86 verify_phone_code): row-locked attempt
+  // spend + single-use consume, so parallel guesses cannot bypass max_attempts.
   const suppliedHash = await sha256Hex(code)
-  if (suppliedHash !== row.code_hash) {
-    return json({ ok: false, error: '驗證碼不正確' }, 401)
-  }
-
-  // Mark consumed.
-  const { error: consumeErr } = await admin
-    .from('phone_verifications')
-    .update({ consumed_at: new Date().toISOString() })
-    .eq('id', row.id)
-  if (consumeErr) {
-    console.error('consume mark failed', consumeErr.message)
+  const { data: verdict, error: rpcErr } = await admin.rpc('verify_phone_code', {
+    p_phone: phone,
+    p_purpose: 'signup',
+    p_action_class: null,
+    p_code_hash: suppliedHash,
+    p_user_id: null,
+  })
+  if (rpcErr) {
+    console.error('verify_phone_code failed', rpcErr.message)
     return json({ ok: false, error: '驗證失敗，請稍後再試' }, 500)
   }
-
-  // Return success — client may now call supabase.auth.signUp().
-  return json({ ok: true })
+  if (verdict === 'ok') return json({ ok: true })  // client may now call supabase.auth.signUp()
+  if (verdict === 'locked') return json({ ok: false, error: '嘗試次數過多，請重新發送驗證碼' }, 429)
+  if (verdict === 'expired') return json({ ok: false, error: '驗證碼已過期或不存在，請重新發送' }, 400)
+  return json({ ok: false, error: '驗證碼不正確' }, 401)
 })

@@ -81,71 +81,24 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
 
-  // 3) Find the newest non-expired, non-consumed row for this phone + action_class.
-  const now = new Date().toISOString()
-  const { data: rows, error: selErr } = await admin
-    .from('phone_verifications')
-    .select('id, code_hash, attempts, max_attempts')
-    .eq('phone', phone)
-    .eq('purpose', 'step_up')
-    .eq('action_class', actionClass)
-    .is('consumed_at', null)
-    .gt('expires_at', now)
-    .order('created_at', { ascending: false })
-    .limit(1)
-  if (selErr) {
-    console.error('phone_verifications select failed', selErr.message)
-    return json({ ok: false, error: '驗證失敗，請稍後再試' }, 500)
-  }
-  if (!rows || rows.length === 0) return json({ ok: false, error: '驗證碼已過期或不存在，請重新發送' }, 400)
-
-  const row = rows[0]
-
-  // 4) Increment attempts first (before comparing) to prevent timing-based retries.
-  const newAttempts = (row.attempts as number) + 1
-  const { error: updErr } = await admin
-    .from('phone_verifications')
-    .update({ attempts: newAttempts })
-    .eq('id', row.id)
-  if (updErr) {
-    console.error('attempts increment failed', updErr.message)
-    return json({ ok: false, error: '驗證失敗，請稍後再試' }, 500)
-  }
-
-  if (newAttempts > (row.max_attempts as number)) {
-    return json({ ok: false, error: '嘗試次數過多，請重新發送驗證碼' }, 429)
-  }
-
-  // 5) Compare hashes (constant-time via String equality on equal-length hex is
-  //    acceptable; crypto.subtle.timingSafeEqual is not available in Deno Deploy).
+  // 3) Verify atomically server-side (v86 verify_phone_code): one row-locked
+  //    function does the attempt-spend + single-use consume + step_up_grants mint
+  //    (bound to the row's recorded user_id). This closes the parallel-brute-force
+  //    race that the previous JS read-then-write on attempts allowed.
   const suppliedHash = await sha256Hex(code)
-  if (suppliedHash !== row.code_hash) {
-    return json({ ok: false, error: '驗證碼不正確' }, 401)
-  }
-
-  // 6) Mark consumed and mint the step-up grant.
-  const { error: consumeErr } = await admin
-    .from('phone_verifications')
-    .update({ consumed_at: new Date().toISOString() })
-    .eq('id', row.id)
-  if (consumeErr) {
-    console.error('consume mark failed', consumeErr.message)
+  const { data: verdict, error: rpcErr } = await admin.rpc('verify_phone_code', {
+    p_phone: phone,
+    p_purpose: 'step_up',
+    p_action_class: actionClass,
+    p_code_hash: suppliedHash,
+    p_user_id: user.id,
+  })
+  if (rpcErr) {
+    console.error('verify_phone_code failed', rpcErr.message)
     return json({ ok: false, error: '驗證失敗，請稍後再試' }, 500)
   }
-
-  // Clear this caller's expired grants (mirrors verify-stepup-password).
-  await admin.from('step_up_grants').delete().eq('user_id', user.id).lte('expires_at', new Date().toISOString())
-
-  const expires = new Date(Date.now() + GRANT_MINUTES * 60_000)
-  const { error: grantErr } = await admin.from('step_up_grants').insert({
-    user_id: user.id,
-    action_class: actionClass,
-    expires_at: expires.toISOString(),
-  })
-  if (grantErr) {
-    console.error('step_up grant insert failed', grantErr.message)
-    return json({ ok: false, error: '未能建立驗證憑證' }, 500)
-  }
-
-  return json({ ok: true, expires_at: expires.toISOString() })
+  if (verdict === 'ok') return json({ ok: true })
+  if (verdict === 'locked') return json({ ok: false, error: '嘗試次數過多，請重新發送驗證碼' }, 429)
+  if (verdict === 'expired') return json({ ok: false, error: '驗證碼已過期或不存在，請重新發送' }, 400)
+  return json({ ok: false, error: '驗證碼不正確' }, 401)
 })
