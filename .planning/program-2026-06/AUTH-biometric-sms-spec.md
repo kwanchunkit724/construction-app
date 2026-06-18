@@ -42,7 +42,10 @@
 - [ ] TOTP 路徑保留做進階選項(肯裝 app 嘅)。
 
 ### Phase 2 — SMS(等 **owner 開 Twilio**)
-- [ ] Edge Functions(Twilio):
+
+**Sender 決定:** 用 **`TWILIO_FROM`**(單一寄件人字串)取代 Messaging Service SID —— 少一步、Edge Function 直接 `From=TWILIO_FROM`。Dev = trial 號碼(只寄去已驗證手機);Prod HK = upgrade 後用 **alphanumeric Sender ID**(例 `CKGONG`,香港支援、唔使買號碼)。
+
+- [ ] Edge Functions(Twilio,POST `https://api.twilio.com/2010-04-01/Accounts/{SID}/Messages.json`,Basic auth = SID:TOKEN,`From=TWILIO_FROM`):
   - `send-stepup-sms` —— 生成 6 位碼、sha256 存 `phone_verifications(purpose='step_up', user_id, action_class)`、Twilio 寄去用戶電話(+852)。
   - `verify-stepup-sms` —— 驗碼(查 hash + 未過期 + attempts<max)→ 標 consumed → service-role 插 `step_up_grants`。
   - `send-phone-otp` / `verify-phone-otp` —— 註冊用(`purpose='signup'`,冇 user_id)。
@@ -51,10 +54,12 @@
 - [ ] **Rate-limit / 防濫發** —— 每電話每 N 分鐘最多 X 次(查 `phone_verifications` created_at);Twilio cost guard。
 
 ### OWNER 必做(我做唔到 — 開戶 / 入密鑰係 owner action)
-- [ ] 開 **Twilio** 戶口 + 入數 + 攞 Account SID / Auth Token / Messaging Service SID。
-- [ ] `supabase secrets set TWILIO_ACCOUNT_SID=… TWILIO_AUTH_TOKEN=… TWILIO_MESSAGING_SERVICE_SID=…`(或 Supabase Auth 內置 SMS provider 設定)。
-- [ ] 香港 **sender ID 登記**(部分電訊商要 pre-registered alphanumeric sender)。
-- [ ] flip flag(全部 client live 之後):`select set_signup_sms_required(true)` + `select set_step_up_enforced(true)`。
+- [x] 開 **Twilio** 戶口(trial,US$13.45 credit)+ 攞 Account SID / Auth Token。 ✅ 2026-06-18
+- [x] Supabase Edge Function secrets:`TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` 已 set。 ✅ 2026-06-18
+      ⚠️ Auth Token 曾喺 chat 貼過 → owner 應 **rotate** 後更新 secret。
+- [ ] `TWILIO_FROM` secret —— 待 P2 砌 function 時決定:dev = trial 號碼;prod HK = upgrade + alphanumeric Sender ID。
+- [ ] **Upgrade Twilio**(入數)—— prod 寄畀工人前必須(trial 只可寄去已驗證號碼)。
+- [ ] flip flag(全部 client live 之後):`select set_signup_sms_required(true)` + `select set_step_up_enforced(true)` + `select set_sign_reauth_enforced(true)`。
 
 ## 風險 / 注意
 
