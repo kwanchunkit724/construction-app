@@ -156,7 +156,7 @@ function RaiseNcrModal({ projectId, onClose, onDone }: { projectId: string; onCl
   const [severity, setSeverity] = useState<NcrSeverity>('major')
   const [responsible, setResponsible] = useState('')
   const [targetDate, setTargetDate] = useState('')
-  const [photos, setPhotos] = useState<{ path: string | null; uploading: boolean }[]>([])
+  const [photos, setPhotos] = useState<{ id: string; path: string | null; uploading: boolean }[]>([])
   const [geo, setGeo] = useState<Awaited<ReturnType<typeof capturePhotoGeo>>>(null)
   const [geoAsked, setGeoAsked] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -167,13 +167,15 @@ function RaiseNcrModal({ projectId, onClose, onDone }: { projectId: string; onCl
     e.target.value = ''
     if (files.length === 0) return
     if (!geoAsked) { setGeoAsked(true); capturePhotoGeo().then(setGeo) }
-    for (const file of files) {
-      const slotIndex = photos.length
-      setPhotos(prev => [...prev, { path: null, uploading: true }])
+    // Stable id per file (not a stale positional index) so multi-select never
+    // strands a slot in a permanent 'uploading' state.
+    await Promise.all(files.map(async file => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      setPhotos(prev => [...prev, { id, path: null, uploading: true }])
       const { path, error } = await uploadPhoto(file)
       if (error) setErr(error)
-      setPhotos(prev => prev.map((p, i) => i === slotIndex ? { path, uploading: false } : p))
-    }
+      setPhotos(prev => prev.map(p => p.id === id ? { ...p, path, uploading: false } : p))
+    }))
   }
 
   async function submit() {

@@ -71,7 +71,10 @@ function NcrDetailInner({ projectId, ncrId }: { projectId: string; ncrId: string
 
   const isRaiser = profile?.id === ncr.raised_by
   const isAdmin = profile?.global_role === 'admin'
-  const canVoid = (isRaiser || isAdmin) && ncr.status !== 'closed' && ncr.status !== 'void'
+  // Raiser may void only while still 'open' (cannot dodge the verifier once a
+  // corrective action exists); admin may void any non-terminal NCR. Mirrors void_ncr.
+  const canVoid = (isAdmin && ncr.status !== 'closed' && ncr.status !== 'void')
+    || (isRaiser && ncr.status === 'open')
   const canDelete = (isRaiser && ncr.status === 'open') || isAdmin
 
   async function act(fn: () => Promise<{ error: string | null }>) {

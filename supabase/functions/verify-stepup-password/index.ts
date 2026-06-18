@@ -38,9 +38,12 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 const GRANT_MINUTES = 5
 
-// Allow-list mirrors StepUpActionClass in src/contexts/StepUpContext.tsx.
+// Password/biometric is a WEAKER factor than TOTP (it's the same secret an AAL1
+// phone+password thief already holds). The highest-impact classes — account
+// deletion and membership/role changes — therefore REQUIRE the TOTP (AAL2) path
+// (mint_step_up_grant) and are intentionally EXCLUDED from this weaker path.
 const ACTION_CLASSES = new Set([
-  'approval', 'membership', 'document', 'progress_delete', 'account_delete', 'form_signoff',
+  'approval', 'document', 'progress_delete', 'form_signoff',
 ])
 
 const CORS = {
