@@ -76,3 +76,18 @@
 - `supabase/v83-auth-stepup-sms-foundation.sql`(本次 DB)
 - `supabase/functions/verify-stepup-password/index.ts`(本次,Phase 1)
 - `src/contexts/StepUpContext.tsx` · `src/contexts/SignReauthContext.tsx` · `src/pages/Signup.tsx`(待改)
+
+## 對抗式 review 後 — 已修 (v86, c19365c) + 待修 (flip 前)
+
+**已修 (review 21 confirmed 中嘅 HIGH + exploitable medium):**
+- HIGH OTP 並行爆破 → `v86 verify_phone_code` 原子 RPC(row lock,attempts cap 守得住,code 一次性,grant 綁 server 端 user_id);兩個 verify edge fn 改用佢。
+- HIGH StepUpContext re-entry double-settle → flowId guard(isCurrent/settleFlow)。
+- MEDIUM send-phone-otp SMS-bombing → flag OFF 時直接 403 拒絕。
+
+**待修 — flip 相關 flag 之前必做(而家 flag OFF,未 live,唔急但唔可漏):**
+- **[flip signup_sms_required 前] #3 註冊 SMS 只係 client gate** —— 自訂 client 可繞過。要 server-enforce:`user_profiles` BEFORE INSERT trigger 喺 `signup_sms_required` ON 時要求該 phone 有近期 consumed signup verification(或改用 Edge-Function signup)。
+- **[flip step_up_enforced 前] #6 verify-stepup-password 無 app-level lockout** —— 靠 GoTrue 內建 rate-limit;考慮加每帳戶 cooldown。
+- **[prod SMS 規模化前] #4 send-phone-otp 全域/IP 限流 / CAPTCHA** —— 而家得 per-phone(3/10min)+ flag-off 拒絕;大規模前加全域限流或 CAPTCHA + Twilio spend cap。
+- **[生物認證強化,可選] #13 BIOMETRY_ANY → BIOMETRY_CURRENT_SET** —— 令新增指紋/面容時令已存憑證失效(更強綁定)。
+- 全部低危 cosmetic(#9 offerBiometricSave UI、#11 enroll Link、#12 cleanup delete)留待順手再執。
+- 完整 review 輸出:`tasks/wphvys308.output`(31 raw / 21 confirmed)。
