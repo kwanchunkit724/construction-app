@@ -5,15 +5,12 @@ import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import { compressImage } from '../lib/image-compress'
 import { useAuth } from './AuthContext'
 import { useProjects } from './ProjectsContext'
-import { getInitialHandler } from '../types'
 import type {
   InspectionRound,
   InspectionMark,
   InspectionCoverage,
   InspectionCategory,
   InspectionResult,
-  GlobalRole,
-  SnagType,
 } from '../types'
 
 // 巡查 (recurring site inspection, v95). A manager OPENS a round (a set of floors
@@ -60,18 +57,6 @@ const Ctx = createContext<InspectionCtx | null>(null)
 // pm|main_contractor|subcontractor): may open rounds + mark floors.
 const EDITOR_ROLES = ['pm', 'main_contractor', 'subcontractor']
 
-// A 不合格 floor mark spawns a snag — map the round's inspection category onto the
-// issue snag_type so the auto-issue carries a sensible classification.
-function categoryToSnag(c: InspectionCategory): SnagType {
-  switch (c) {
-    case 'leak': return 'leak'
-    case 'defect': return 'finish'
-    case 'cleanliness': return 'other'
-    case 'safety': return 'other'
-    default: return 'other'
-  }
-}
-
 export function InspectionProvider({ projectId, children }: { projectId: string; children: ReactNode }) {
   const { profile } = useAuth()
   const { projects, memberships } = useProjects()
@@ -82,20 +67,6 @@ export function InspectionProvider({ projectId, children }: { projectId: string;
   const [error, setError] = useState<string | null>(null)
   const projectIdRef = useRef(projectId)
   projectIdRef.current = projectId
-
-  // User's effective role in this project — admin globally, 'pm' when assigned,
-  // otherwise the approved project_members.role. Drives both the canManage gate
-  // and the reporter_role / handler on auto-spawned snags.
-  const myRole = useMemo<GlobalRole | null>(() => {
-    if (!profile) return null
-    if (profile.global_role === 'admin') return 'admin'
-    const project = projects.find(p => p.id === projectId)
-    if (project?.assigned_pm_ids.includes(profile.id)) return 'pm'
-    const m = memberships.find(
-      mb => mb.user_id === profile.id && mb.project_id === projectId && mb.status === 'approved',
-    )
-    return m?.role ?? null
-  }, [profile, projects, memberships, projectId])
 
   const canManage = useMemo(() => {
     if (!profile) return false
@@ -209,72 +180,29 @@ export function InspectionProvider({ projectId, children }: { projectId: string;
     return { error: null, id: (data?.id as string) ?? undefined }
   }, [profile, projectId, refetch])
 
+  // Mark a floor through the atomic mark_inspection_floor RPC (v96): it validates
+  // the round is open + the caller may edit, replaces any prior mark, and in ONE
+  // transaction spawns / reuses / resolves the linked 即時問題 snag for a 不合格 —
+  // so a failed mark-insert can never leave a dangling snag, and a re-mark never
+  // orphans the previous one.
   const markFloor = useCallback(async (input: MarkFloorInput) => {
     if (!profile) return { error: '未登入' }
-    if (!myRole) return { error: '你不是此工地的成員' }
     const { round, floor_label, result, photos } = input
     const note = input.note?.trim() || null
-
-    let linkedIssueId: string | null = null
-
-    // 不合格 → first spawn a 即時問題 (snag) up the normal escalation chain, then
-    // link it on the mark. Mirrors IssuesContext.createQuickIssue insert shape.
-    if (result === 'fail') {
-      const handler = getInitialHandler(myRole)
-      const { data: snag, error: snagErr } = await supabase.from('issues').insert({
-        project_id: projectId,
-        reporter_id: profile.id,
-        reporter_role: myRole,
-        title: `[巡查] ${round.title} · ${floor_label} 不合格`,
-        description: note || '',
-        location: floor_label,
-        snag_type: categoryToSnag(round.category),
-        photos,
-        current_handler_role: handler,
-        status: 'open',
-        is_quick: true,
-      }).select().single()
-      if (snagErr) {
-        console.error('markFloor snag insert error:', snagErr)
-        return { error: snagErr.message }
-      }
-      await supabase.from('issue_comments').insert({
-        issue_id: snag.id, author_id: profile.id, action: 'reported', body: '', to_role: handler,
-      })
-      linkedIssueId = snag.id as string
-    }
-
-    // Re-marking a floor replaces the prior mark — the table has unique(round_id,
-    // floor_label), so a plain duplicate insert is forbidden. Delete any existing
-    // mark for this (round, floor) first, then insert. A mark on a 'done' round is
-    // rejected by a DB trigger — surface that error.
-    const { error: delErr } = await supabase
-      .from('inspection_marks')
-      .delete()
-      .eq('round_id', round.id)
-      .eq('floor_label', floor_label)
-    if (delErr) {
-      console.error('markFloor delete-prior error:', delErr)
-      return { error: delErr.message }
-    }
-
-    const { error: insErr } = await supabase.from('inspection_marks').insert({
-      round_id: round.id,
-      project_id: projectId,
-      floor_label,
-      result,
-      note,
-      photos,
-      linked_issue_id: linkedIssueId,
-      marked_by: profile.id,
+    const { error: err } = await supabase.rpc('mark_inspection_floor', {
+      p_round_id: round.id,
+      p_floor_label: floor_label,
+      p_result: result,
+      p_note: note,
+      p_photos: photos,
     })
-    if (insErr) {
-      console.error('markFloor insert error:', insErr)
-      return { error: insErr.message }
+    if (err) {
+      console.error('markFloor error:', err)
+      return { error: err.message }
     }
     await Promise.all([fetchMarks(round.id), refetch()])
     return { error: null }
-  }, [profile, myRole, projectId, fetchMarks, refetch])
+  }, [profile, fetchMarks, refetch])
 
   const rpcAction = useCallback(async (fn: string, params: Record<string, unknown>) => {
     const { error: err } = await supabase.rpc(fn, params)
