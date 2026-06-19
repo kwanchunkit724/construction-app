@@ -450,21 +450,28 @@ function isBlockedLeaf(item: ProgressItem): boolean {
   return item.status === 'blocked' || !!item.blocked_reason
 }
 
-export function computeRollup(leaves: ProgressItem[], today: Date = new Date()): Rollup {
+export function computeRollup(leaves: ProgressItem[], today: Date = new Date(), opts?: { plainMean?: boolean }): Rollup {
   if (leaves.length === 0) {
     return {
       actual: 0, planned: 0, status: 'not-started', leafCount: 0, scheduledCount: 0,
       qtySum: null, qtyTotal: null, qtyUnit: null,
     }
   }
-  const qw = quantityWeighting(leaves)
+  // plainMean: the cross-project dashboard rolls up a project's WHOLE leaf set,
+  // which spans multiple disciplines + units — qty_total weighting there is
+  // meaningless and lets one huge quantity leaf swamp the project (a 42000 m³
+  // 大型開挖 dragged the demo大樓 to 97%). Force equal weights for that flattened
+  // view; per-branch rollups (homogeneous, one unit) keep quantity weighting.
+  const qw = opts?.plainMean ? null : quantityWeighting(leaves)
   // Quantity-weighted average when the whole branch is one-unit 渠務; else a
   // MIXED-mode weighting (sized quantity leaves by qty_total, the rest by 1) when
   // the branch mixes a metred run with %/checklist work (small-reno B 機電); else
   // the historical equal-weight mean (weight = 1 each). Math: equal weights
   // collapse to the plain average, so any branch without a sized quantity leaf —
   // i.e. every existing non-quantity project — is byte-identical.
-  const weights = qw ? qw.weights : (mixedQuantityWeights(leaves) ?? leaves.map(() => 1))
+  const weights = opts?.plainMean
+    ? leaves.map(() => 1)
+    : (qw ? qw.weights : (mixedQuantityWeights(leaves) ?? leaves.map(() => 1)))
   const weightSum = weights.reduce((s, w) => s + w, 0)
   const actual = weightSum > 0
     ? Math.round(leaves.reduce((s, x, i) => s + x.actual_progress * weights[i], 0) / weightSum)

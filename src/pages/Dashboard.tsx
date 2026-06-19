@@ -169,7 +169,10 @@ export default function Dashboard() {
   const projectStats = visibleProjects.map(p => {
     const projectItems = allItems.filter(i => i.project_id === p.id)
     const allLeaves = p.zones.flatMap(z => getZoneLeaves(projectItems, z.id))
-    const rollup = computeRollup(allLeaves)
+    // plainMean: a project's full leaf set spans disciplines/units, so qty_total
+    // weighting would let one big quantity leaf (e.g. 大型開挖 42000 m³) dominate
+    // the project % — the 97% bug. Branch rollups in ProjectDetail are unchanged.
+    const rollup = computeRollup(allLeaves, new Date(), { plainMean: true })
     return { project: p, rollup, leafCount: allLeaves.length }
   })
 

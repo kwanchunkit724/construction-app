@@ -17,8 +17,11 @@ interface DemoAccount {
   hint: string
 }
 
+// NOTE: admin is intentionally EXCLUDED — an admin account is not project-scoped
+// (it sees every project), so it must never be reachable from a public switcher.
+// Test the admin view via a real admin login instead. The 7 accounts below are
+// scoped to [DEMO] projects only (their non-DEMO memberships were removed).
 const DEMO_ACCOUNTS: DemoAccount[] = [
-  { phone: '60000099', role: '系統管理員', name: '測試管理員', hint: 'admin · 全部工地' },
   { phone: '60001001', role: '項目經理 (PM)', name: '李 PM', hint: 'pm' },
   { phone: '60001002', role: '老總', name: '王老總', hint: 'general_foreman' },
   { phone: '60001003', role: '工程師', name: '陳工程師', hint: 'main_contractor · engineer' },
