@@ -32,11 +32,14 @@ function relativeTime(iso: string): string {
 
 // Weather pill: 上晝X · 下晝Y when the new AM field is present (v45+ rows);
 // otherwise the single legacy `weather` value (pre-v45 / old-client rows).
-function weatherLabel(d: Daily): string {
+function weatherLabel(d: Daily): string | null {
   if (d.weather_am) {
     return d.weather_pm ? `上晝${d.weather_am} · 下晝${d.weather_pm}` : `上晝${d.weather_am}`
   }
-  return d.weather
+  // weather_am null = no weather actually captured. The daily no longer records
+  // weather (the form sends a hidden '晴' only to satisfy the NOT NULL column), so
+  // do NOT render a fabricated value on this dispute-survival record — suppress.
+  return null
 }
 
 // Severe HKO signals get a red badge; the rest are amber.
@@ -206,10 +209,12 @@ function DailyListInner({ projectId }: { projectId: string }) {
                     </p>
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
-                    <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 whitespace-nowrap">
-                      <CloudSun size={12} />
-                      {weatherLabel(d)}
-                    </span>
+                    {weatherLabel(d) && (
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 whitespace-nowrap">
+                        <CloudSun size={12} />
+                        {weatherLabel(d)}
+                      </span>
+                    )}
                     {d.warning_signals && d.warning_signals.length > 0 && (
                       <div className="flex flex-wrap justify-end gap-1 max-w-[160px]">
                         {d.warning_signals.map(sig => (
