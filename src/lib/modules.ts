@@ -23,9 +23,7 @@ export type ModuleKey =
   | 'dailies'
   | 'equipment'
   | 'cleansing'
-  | 'ncr'
   | 'risc'
-  | 'labour'
   | 'controlled_docs'
   | 'inspection'
   | 'assistant'
@@ -56,9 +54,7 @@ export const MODULES: ModuleDef[] = [
   { key: 'dailies', labelZh: '每日日誌', icon: 'BookOpen', route: 'daily' },
   { key: 'equipment', labelZh: '機械 / 表格', icon: 'Wrench', route: 'equipment' },
   { key: 'cleansing', labelZh: '清潔檢查', icon: 'Sparkles', route: 'cleansing' },
-  { key: 'ncr', labelZh: '不符合事項', icon: 'ClipboardX', route: 'ncr' },
   { key: 'risc', labelZh: '申請檢查', icon: 'ClipboardCheck', route: 'risc' },
-  { key: 'labour', labelZh: '勞工人力', icon: 'UsersRound', route: 'labour' },
   { key: 'controlled_docs', labelZh: '受控文件', icon: 'FileStack', route: 'controlled-docs' },
   { key: 'inspection', labelZh: '巡查', icon: 'Footprints', route: 'inspection' },
   { key: 'assistant', labelZh: '助理', icon: 'Bot', tabId: 'assistant' },
@@ -78,9 +74,7 @@ export const MODULE_LABELS_ZH: Record<ModuleKey, string> = {
   dailies: '每日日誌',
   equipment: '機械 / 表格',
   cleansing: '清潔檢查',
-  ncr: '不符合事項',
   risc: '申請檢查',
-  labour: '勞工人力',
   controlled_docs: '受控文件',
   inspection: '巡查',
   assistant: '助理',

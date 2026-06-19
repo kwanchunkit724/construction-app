@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Plus, Wrench, ChevronRight, X, QrCode, Download } from 'lucide-react'
+import { Plus, Wrench, ChevronRight, ChevronLeft, X, QrCode, Download } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { EquipmentProvider, useEquipment } from '../contexts/EquipmentContext'
@@ -89,6 +89,13 @@ function EquipmentListInner() {
   return (
     <AppLayout title="機械 / 表格" wide>
       <div className="space-y-4">
+        <button
+          onClick={() => navigate(`/project/${projectId}`)}
+          className="flex items-center gap-1.5 text-site-500 hover:text-site-800 px-1 min-h-[44px]"
+        >
+          <ChevronLeft size={18} /> 返回工地
+        </button>
+
         {fetchError && (
           <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-700">
             {fetchError}
@@ -110,45 +117,52 @@ function EquipmentListInner() {
         {/* Managers: verify members' uploaded credentials. Hidden when none. */}
         {canManage && <VerifyCredentialsPanel />}
 
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-site-900">機械登記冊</h2>
-          <div className="flex items-center gap-2">
-            {/* 匯出登記冊 — available to anyone who can view the register. */}
-            {equipment.length > 0 && (
+        <div className="space-y-3">
+          {/* Heading + primary CTA. 新增機械 is full-width on phone, auto on sm+. */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <h2 className="text-base font-semibold text-site-900">機械登記冊</h2>
+            {canManage && (
               <button
                 type="button"
-                className="btn-ghost text-sm"
+                className="btn-primary w-full sm:w-auto flex items-center justify-center gap-1.5"
+                onClick={() => setShowAdd(true)}
+              >
+                <Plus size={18} />
+                新增機械
+              </button>
+            )}
+          </div>
+
+          {/* Secondary actions — tidy responsive row, even widths on phone. */}
+          {equipment.length > 0 && (
+            <div className="flex flex-col sm:flex-row gap-2">
+              {/* 匯出登記冊 — available to anyone who can view the register. */}
+              <button
+                type="button"
+                className="btn-ghost flex-1 flex items-center justify-center gap-1.5 text-sm"
                 disabled={exporting}
                 onClick={doExport}
               >
                 {exporting
-                  ? <Spinner size={14} className="inline mr-1" />
-                  : <Download size={14} className="inline mr-1" />}
+                  ? <Spinner size={16} />
+                  : <Download size={16} />}
                 匯出登記冊
               </button>
-            )}
-            {canManage && (
-              <>
-                {equipment.length > 0 && (
-                  <button
-                    type="button"
-                    className="btn-ghost text-sm"
-                    disabled={minting}
-                    onClick={printAllQr}
-                  >
-                    {minting
-                      ? <Spinner size={14} className="inline mr-1" />
-                      : <QrCode size={14} className="inline mr-1" />}
-                    列印全部 QR
-                  </button>
-                )}
-                <button type="button" className="btn-primary" onClick={() => setShowAdd(true)}>
-                  <Plus size={16} className="inline mr-1" />
-                  新增機械
+              {canManage && (
+                <button
+                  type="button"
+                  className="btn-ghost flex-1 flex items-center justify-center gap-1.5 text-sm"
+                  disabled={minting}
+                  onClick={printAllQr}
+                >
+                  {minting
+                    ? <Spinner size={16} />
+                    : <QrCode size={16} />}
+                  列印全部 QR
                 </button>
-              </>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
 
         {exportError && (

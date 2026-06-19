@@ -526,6 +526,10 @@ export interface Issue {
   // never send it) + free-text location. Null on pre-v47 rows until backfill.
   issue_no: number | null
   location: string | null
+  // ── v100: optional link to a 進度表 (progress) leaf item. NULL on every
+  // existing row and on issues created without a picked 工序 — references
+  // progress_items(id).
+  progress_item_id: string | null
   // ── v93: 即時問題 (snag). is_quick rows are self-handled, push-silent, and carry
   // issue_no = NULL until graduated (升級為正式問題) to a formal numbered issue.
   is_quick: boolean
@@ -1403,52 +1407,8 @@ export const DEFAULT_CLEANSING_CHECKLIST: readonly string[] = [
   '防蚊滅蟲措施已執行',
 ] as const
 
-// ── v82: 不符合事項報告 / 糾正措施 (NCR / CAR) ───────────────────
-// A formal quality non-conformity: work failing a spec/drawing/standard is
-// RAISED, the responsible party submits root-cause + corrective + preventive
-// actions (CAR), then a verifier CLOSES it. The physical table is `ncr_reports`
-// (a sim table squats `ncrs`); column names mirror the SQL verbatim.
-
-export type NcrSeverity = 'minor' | 'major' | 'critical'
-export type NcrStatus = 'open' | 'corrective_submitted' | 'closed' | 'void'
-
-export interface Ncr {
-  id: string
-  project_id: string
-  number: string                  // NCR-001
-  title: string
-  description: string
-  location: string | null
-  spec_ref: string | null
-  severity: NcrSeverity
-  responsible_party: string | null
-  status: NcrStatus
-  raised_by: string
-  target_close_date: string | null
-  root_cause: string | null
-  corrective_action: string | null
-  preventive_action: string | null
-  corrective_by: string | null
-  corrective_at: string | null
-  closed_by: string | null
-  closed_at: string | null
-  photos: string[]
-  created_at: string
-  updated_at: string
-}
-
-export const NCR_SEVERITY_ZH: Record<NcrSeverity, string> = {
-  minor: '輕微',
-  major: '嚴重',
-  critical: '重大',
-}
-
-export const NCR_STATUS_ZH: Record<NcrStatus, string> = {
-  open: '待糾正',
-  corrective_submitted: '待核實',
-  closed: '已關閉',
-  void: '已作廢',
-}
+// (NCR / CAR module removed from the UI — item #7. The ncr_reports table is
+// retained in the DB; only the client surface + types are gone.)
 
 // ── v89: 申請檢查 / 驗收 (Request for Inspection, RISC-lite) ─────
 // A contractor requests that work is ready for inspection; an inspector responds

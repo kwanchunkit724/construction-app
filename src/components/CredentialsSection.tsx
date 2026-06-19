@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Award, Plus, BadgeCheck, Clock } from 'lucide-react'
+import { Award, Plus, BadgeCheck, Clock, Paperclip, FileCheck, X } from 'lucide-react'
 import { Spinner } from './Spinner'
 import { useAuth } from '../contexts/AuthContext'
 import {
-  fetchMyCredentials, addMyCredential, isCredentialValid, CREDENTIAL_TYPE_ZH,
+  fetchMyCredentials, addMyCredential, uploadCredentialDoc, signCredentialDoc,
+  isCredentialValid, CREDENTIAL_TYPE_ZH,
 } from '../lib/credentials'
 import type { UserCredential } from '../types'
 
@@ -29,6 +30,9 @@ export function CredentialsSection() {
   const [certNo, setCertNo] = useState('')
   const [issuer, setIssuer] = useState('')
   const [validUntil, setValidUntil] = useState('')
+  const [docPath, setDocPath] = useState<string | null>(null)
+  const [docName, setDocName] = useState('')
+  const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -41,6 +45,17 @@ export function CredentialsSection() {
 
   useEffect(() => { load() }, [profile])
 
+  async function pickDoc(file: File | undefined) {
+    if (!file || !profile) return
+    setError('')
+    setUploading(true)
+    const { path, error: e } = await uploadCredentialDoc(file, profile.id)
+    setUploading(false)
+    if (e || !path) { setError(e || '上載失敗'); return }
+    setDocPath(path)
+    setDocName(file.name)
+  }
+
   async function submit() {
     if (!profile) return
     setError('')
@@ -52,10 +67,12 @@ export function CredentialsSection() {
       cert_no: certNo,
       issuer,
       valid_until: validUntil || null,
+      doc_path: docPath,
     })
     setSaving(false)
     if (e) { setError(e); return }
     setCertName(''); setCertNo(''); setIssuer(''); setValidUntil('')
+    setDocPath(null); setDocName('')
     setShowAdd(false)
     await load()
   }
@@ -103,6 +120,7 @@ export function CredentialsSection() {
                       {c.cert_no && ` · ${c.cert_no}`}
                       {c.valid_until && ` · 有效至 ${c.valid_until}`}
                     </p>
+                    {c.doc_path && <CredentialDocBadge path={c.doc_path} />}
                   </div>
                 )
               })}
@@ -144,6 +162,37 @@ export function CredentialsSection() {
                 <label className="text-[11px] font-semibold text-site-500 block mb-1">發證機構</label>
                 <input value={issuer} onChange={e => setIssuer(e.target.value)} placeholder="(可選)" className="input" />
               </div>
+              <div>
+                <label className="text-[11px] font-semibold text-site-500 block mb-1">證書檔案（相片 / PDF，可選）</label>
+                {docPath ? (
+                  <div className="flex items-center gap-2 bg-green-50 text-green-700 rounded-lg px-3 py-2 text-xs">
+                    <FileCheck size={14} className="shrink-0" />
+                    <span className="truncate flex-1">已上載：{docName}</span>
+                    <button
+                      type="button"
+                      onClick={() => { setDocPath(null); setDocName('') }}
+                      className="shrink-0 text-site-400 hover:text-site-700"
+                      aria-label="移除檔案"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <label className={`flex items-center justify-center gap-1.5 text-sm border border-site-200 text-site-700 rounded-lg py-2 cursor-pointer ${
+                    uploading ? 'opacity-60 pointer-events-none' : 'hover:bg-site-50'
+                  }`}>
+                    {uploading ? <Spinner size={14} /> : <Paperclip size={14} />}
+                    {uploading ? '上載中…' : '選擇檔案'}
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      className="hidden"
+                      disabled={uploading}
+                      onChange={e => { pickDoc(e.target.files?.[0]); e.target.value = '' }}
+                    />
+                  </label>
+                )}
+              </div>
               {error && (
                 <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">{error}</p>
               )}
@@ -156,7 +205,7 @@ export function CredentialsSection() {
                 </button>
                 <button
                   onClick={submit}
-                  disabled={saving}
+                  disabled={saving || uploading}
                   className="flex-1 bg-safety-500 hover:bg-safety-600 disabled:opacity-60 text-white font-semibold rounded-lg py-2 flex items-center justify-center gap-1.5"
                 >
                   {saving ? <Spinner size={14} className="text-white" /> : null}
@@ -166,6 +215,37 @@ export function CredentialsSection() {
             </div>
           )}
         </>
+      )}
+    </div>
+  )
+}
+
+// "已上載證明" indicator for a stored credential doc. Resolves the storage path
+// to a short-lived signed URL; shows a thumbnail for images, a link for PDFs.
+function CredentialDocBadge({ path }: { path: string }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const isPdf = /\.pdf$/i.test(path)
+
+  useEffect(() => {
+    let alive = true
+    signCredentialDoc(path).then(u => { if (alive) setUrl(u) })
+    return () => { alive = false }
+  }, [path])
+
+  return (
+    <div className="mt-1.5 flex items-center gap-2">
+      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-blue-50 text-blue-700 inline-flex items-center gap-1">
+        <FileCheck size={11} /> 已上載證明
+      </span>
+      {url && !isPdf && (
+        <a href={url} target="_blank" rel="noreferrer">
+          <img src={url} alt="證明" className="h-9 w-9 rounded object-cover border border-site-200" />
+        </a>
+      )}
+      {url && isPdf && (
+        <a href={url} target="_blank" rel="noreferrer" className="text-[10px] text-blue-700 underline inline-flex items-center gap-1">
+          <Paperclip size={11} /> 查看 PDF
+        </a>
       )}
     </div>
   )

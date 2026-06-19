@@ -4,10 +4,11 @@ import { Camera, X, ImagePlus } from 'lucide-react'
 import { Modal } from './Modal'
 import { Spinner } from './Spinner'
 import { useIssues } from '../contexts/IssuesContext'
+import { useProgress } from '../contexts/ProgressContext'
 import { useAuth } from '../contexts/AuthContext'
 import { capturePhotoGeo, recordPhotoMeta, PhotoGeo } from '../lib/photoMeta'
 import { issuePhotoPath } from '../lib/issuePhotos'
-import { ISSUE_HANDLER_ZH, getInitialHandler } from '../types'
+import { ISSUE_HANDLER_ZH, getInitialHandler, isLeaf } from '../types'
 
 interface PhotoSlot {
   localId: string
@@ -30,11 +31,13 @@ export function CreateIssueModal({
 }) {
   const navigate = useNavigate()
   const { createIssue, uploadPhoto, myRoleInProject } = useIssues()
+  const { items } = useProgress()
   const { profile } = useAuth()
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState('')
   const [location, setLocation] = useState('')
+  const [progressItemId, setProgressItemId] = useState('')  // '' = none
   const [description, setDescription] = useState('')
   const [photos, setPhotos] = useState<PhotoSlot[]>([])
   const [photoGeo, setPhotoGeo] = useState<PhotoGeo | null>(null)  // captured once on first photo pick
@@ -43,10 +46,14 @@ export function CreateIssueModal({
 
   const targetHandler = myRoleInProject ? getInitialHandler(myRoleInProject) : null
 
+  // Optional 工序 link: only leaf progress items can be picked (they carry the work).
+  const leafItems = items.filter(i => isLeaf(i, items))
+
   function reset() {
     photos.forEach(p => URL.revokeObjectURL(p.preview))
     setTitle('')
     setLocation('')
+    setProgressItemId('')
     setDescription('')
     setPhotos([])
     setPhotoGeo(null)
@@ -114,7 +121,7 @@ export function CreateIssueModal({
 
     const urls = photos.map(p => p.url!)
     setSubmitting(true)
-    const { error, id } = await createIssue(title, description, urls, location)
+    const { error, id } = await createIssue(title, description, urls, location, progressItemId || null)
     setSubmitting(false)
     if (error) {
       setError(error)
@@ -179,6 +186,24 @@ export function CreateIssueModal({
             className="input"
           />
         </div>
+
+        {leafItems.length > 0 && (
+          <div>
+            <label className="label">相關工序（可選）</label>
+            <select
+              value={progressItemId}
+              onChange={e => setProgressItemId(e.target.value)}
+              className="input"
+            >
+              <option value="">— 無 —</option>
+              {leafItems.map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.code} {item.title}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Photos — required */}
         <div>

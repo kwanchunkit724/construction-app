@@ -105,13 +105,14 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   // always visible. 簽核 / 工具 are multi-module gateways: shown when ANY of the
   // modules they front is enabled; the cards inside gate themselves per-module.
   const showIssuesTab = isModuleEnabled('issues')
+  // 文書 tab now also fronts 文件 (documents) + 機械/表格 (equipment), moved out of 工具.
   const showSiVoTab = isModuleEnabled('si') || isModuleEnabled('vo') || isModuleEnabled('ptw')
-  const showToolsTab = isModuleEnabled('weather') || isModuleEnabled('documents')
+    || isModuleEnabled('documents') || isModuleEnabled('equipment')
+  const showToolsTab = isModuleEnabled('weather')
     || isModuleEnabled('materials') || isModuleEnabled('contacts')
-    || isModuleEnabled('timetable') || isModuleEnabled('dailies') || isModuleEnabled('equipment')
-    || isModuleEnabled('cleansing') || isModuleEnabled('ncr') || isModuleEnabled('risc')
-    || isModuleEnabled('labour') || isModuleEnabled('controlled_docs')
-    || isModuleEnabled('inspection')
+    || isModuleEnabled('timetable') || isModuleEnabled('dailies')
+    || isModuleEnabled('cleansing') || isModuleEnabled('risc')
+    || isModuleEnabled('controlled_docs') || isModuleEnabled('inspection')
   const showAssistantTab = aiEnabled && isModuleEnabled('assistant')
 
   const [tab, setTab] = useState<Tab>('progress')
@@ -372,7 +373,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
         <div className="max-w-2xl md:max-w-7xl mx-auto flex">
           <TabButton active={tab === 'progress'} onClick={() => setTab('progress')} icon={ListChecks} label="進度" />
           {showIssuesTab && <TabButton active={tab === 'issues'} onClick={() => setTab('issues')} icon={AlertCircle} label="問題" badge={openIssueCount} />}
-          {showSiVoTab && <TabButton active={tab === 'si-vo'} onClick={() => setTab('si-vo')} icon={FileCheck2} label="簽核" />}
+          {showSiVoTab && <TabButton active={tab === 'si-vo'} onClick={() => setTab('si-vo')} icon={FileCheck2} label="文書" />}
           {showToolsTab && <TabButton active={tab === 'tools'} onClick={() => setTab('tools')} icon={Wrench} label="工具" />}
           {showAssistantTab && <TabButton active={tab === 'assistant'} onClick={() => setTab('assistant')} icon={Bot} label="助理" />}
         </div>
@@ -417,7 +418,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
                   <button key={k} onClick={() => setCatDomain(k)} className={`text-xs px-2.5 py-1 rounded-full font-medium ${catDomain === k ? 'bg-safety-500 text-white' : 'bg-site-100 text-site-600 hover:bg-site-200'}`}>{l}</button>
                 ))}
                 <span className="text-site-300">·</span>
-                {([['all', '全工種'], ['civil', CATEGORY_STREAM_ZH.civil], ['bs', CATEGORY_STREAM_ZH.bs]] as [CategoryStream | 'all', string][]).map(([k, l]) => (
+                {([['all', '所有領域'], ['civil', CATEGORY_STREAM_ZH.civil], ['bs', CATEGORY_STREAM_ZH.bs]] as [CategoryStream | 'all', string][]).map(([k, l]) => (
                   <button key={k} onClick={() => setCatStream(k)} className={`text-xs px-2.5 py-1 rounded-full font-medium ${catStream === k ? 'bg-site-700 text-white' : 'bg-site-100 text-site-600 hover:bg-site-200'}`}>{l}</button>
                 ))}
               </div>
@@ -489,17 +490,17 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
         {tab === 'tools' && showToolsTab && (
           <ToolsSwitcher projectId={projectId} />
         )}
-        {tab === 'assistant' && showAssistantTab && (
-          <>
-            {/* In-page tab (not a /project/:id/<seg> route), so HelpButton can't
-                infer the tutorial from the path — pass the key explicitly. */}
+        {/* Keep the assistant MOUNTED across tab switches so the conversation is
+            NOT reset (item #8) — just hide it when another tab is active. */}
+        {showAssistantTab && (
+          <div style={tab === 'assistant' ? undefined : { display: 'none' }}>
             <div className="flex justify-end mb-2">
               <HelpButton tutorialKey="ai-assistant" variant="pill" />
             </div>
             <Suspense fallback={<div className="py-10 flex justify-center"><Spinner size={28} /></div>}>
               <AssistantPanel projectId={projectId} />
             </Suspense>
-          </>
+          </div>
         )}
       </main>
       </div>
@@ -567,8 +568,8 @@ function TabButton({
         active ? 'border-safety-500 text-safety-600' : 'border-transparent text-site-400 hover:text-site-700'
       }`}
     >
-      <Icon size={16} />
-      {label}
+      <Icon size={16} className="flex-shrink-0" />
+      <span className="whitespace-nowrap">{label}</span>
       {typeof badge === 'number' && badge > 0 && (
         <span className="ml-1 text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full font-bold leading-none">
           {badge}
@@ -769,14 +770,29 @@ function ZoneSection({
 
 function SiVoSwitcher({ projectId }: { projectId: string }) {
   const navigate = useNavigate()
+  const { profile } = useAuth()
+  const { projects, memberships } = useProjects()
   const { isModuleEnabled } = useModules()
-  // PTW visibility is governed solely by the per-project module switch
-  // (the legacy org-wide ptw_enabled dark-ship flag has been removed).
+  // PTW visibility is governed solely by the per-project module switch.
   const showPtw = isModuleEnabled('ptw')
+  // 文件 (documents) + 機械/表格 (equipment) now live in the 文書 tab too.
+  const showFiles = isModuleEnabled('documents')
+  // 機械/表格 — gated on the equipment module AND the equipment_register INSERT
+  // role set (admin / assigned PM / approved pm·main_contractor·safety_officer).
+  const showEquipment = isModuleEnabled('equipment') && (() => {
+    if (!profile) return false
+    if (profile.global_role === 'admin') return true
+    const project = projects.find(p => p.id === projectId)
+    if (project?.assigned_pm_ids.includes(profile.id)) return true
+    const m = memberships.find(
+      mb => mb.user_id === profile.id && mb.project_id === projectId && mb.status === 'approved',
+    )
+    return !!m && ['pm', 'main_contractor', 'safety_officer'].includes(m.role)
+  })()
   return (
     <div className="space-y-3">
       <p className="text-sm text-site-600 px-1">
-        簽核流程：選擇要查看的文件類型
+        文書管理：指令 · 文件 · 機械表格
       </p>
       {isModuleEnabled('si') && (
       <button
@@ -823,55 +839,20 @@ function SiVoSwitcher({ projectId }: { projectId: string }) {
           <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
         </button>
       )}
-    </div>
-  )
-}
-
-// v1.2 mobile entry point for the three new feature surfaces. Sidebar
-// covers desktop; mobile users land here from the 工具 tab strip.
-function ToolsSwitcher({ projectId }: { projectId: string }) {
-  const navigate = useNavigate()
-  const { profile } = useAuth()
-  const { projects, memberships } = useProjects()
-  const { isModuleEnabled } = useModules()
-  // 文件 visibility is governed solely by the per-project documents module switch
-  // (the legacy org-wide files_enabled dark-ship flag has been removed).
-  const showFiles = isModuleEnabled('documents')
-
-  // 機械/表格 (地盤表格管理) entry. Gated on the per-project equipment module AND the
-  // same canManage role set the equipment_register INSERT RLS uses (admin OR
-  // assigned PM OR approved pm/main_contractor/safety_officer). Read-only members
-  // reach the surface only via a reminder deep-link; managers get the card here.
-  const showEquipment = isModuleEnabled('equipment') && (() => {
-    if (!profile) return false
-    if (profile.global_role === 'admin') return true
-    const project = projects.find(p => p.id === projectId)
-    if (project?.assigned_pm_ids.includes(profile.id)) return true
-    const m = memberships.find(
-      mb => mb.user_id === profile.id && mb.project_id === projectId && mb.status === 'approved',
-    )
-    return !!m && ['pm', 'main_contractor', 'safety_officer'].includes(m.role)
-  })()
-
-  return (
-    <div className="space-y-3">
-      <p className="text-sm text-site-600 px-1">
-        工地工具：選擇要使用的功能
-      </p>
-      {isModuleEnabled('weather') && (
-      <button
-        onClick={() => navigate(`/project/${projectId}/weather`)}
-        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
-      >
-        <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center flex-shrink-0">
-          <CloudRain size={22} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-site-900">天氣記錄</p>
-          <p className="text-xs text-site-500 mt-0.5">實時警告 · 極端天氣日 · EOT 延期申索（天文台數據）</p>
-        </div>
-        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
-      </button>
+      {showFiles && (
+        <button
+          onClick={() => navigate(`/project/${projectId}/files`)}
+          className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
+        >
+          <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center flex-shrink-0">
+            <FolderOpen size={22} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-site-900">文件</p>
+            <p className="text-xs text-site-500 mt-0.5">物料送審 · 施工方案 · 圖則 · 檢驗記錄</p>
+          </div>
+          <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
+        </button>
       )}
       {showEquipment && (
         <button
@@ -888,21 +869,39 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
           <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
         </button>
       )}
-      {showFiles && (
-        <button
-          onClick={() => navigate(`/project/${projectId}/files`)}
-          className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
-        >
-          <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center flex-shrink-0">
-            <FolderOpen size={22} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-site-900">文件</p>
-            <p className="text-xs text-site-500 mt-0.5">物料送審 · 施工方案 · 圖則 · 檢驗記錄</p>
-          </div>
-          <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
-        </button>
+    </div>
+  )
+}
+
+// v1.2 mobile entry point for the three new feature surfaces. Sidebar
+// covers desktop; mobile users land here from the 工具 tab strip.
+function ToolsSwitcher({ projectId }: { projectId: string }) {
+  const navigate = useNavigate()
+  const { profile } = useAuth()
+  const { isModuleEnabled } = useModules()
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-site-600 px-1">
+        工地工具：選擇要使用的功能
+      </p>
+      {/* 天氣記錄 — admin interface only (item #17). */}
+      {isModuleEnabled('weather') && profile?.global_role === 'admin' && (
+      <button
+        onClick={() => navigate(`/project/${projectId}/weather`)}
+        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
+      >
+        <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center flex-shrink-0">
+          <CloudRain size={22} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-site-900">天氣記錄</p>
+          <p className="text-xs text-site-500 mt-0.5">實時警告 · 極端天氣日 · EOT 延期申索（天文台數據）</p>
+        </div>
+        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
+      </button>
       )}
+      {/* 機械/表格 + 文件 moved to the 文書 tab (items #9, #14). */}
       {isModuleEnabled('dailies') && (
       <button
         onClick={() => navigate(`/project/${projectId}/daily`)}
@@ -978,21 +977,6 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
         <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
       </button>
       )}
-      {isModuleEnabled('ncr') && (
-      <button
-        onClick={() => navigate(`/project/${projectId}/ncr`)}
-        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
-      >
-        <div className="w-11 h-11 rounded-xl bg-rose-50 text-rose-700 flex items-center justify-center flex-shrink-0">
-          <ClipboardX size={22} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-site-900">不符合事項 (NCR)</p>
-          <p className="text-xs text-site-500 mt-0.5">品質不符合報告 · 糾正措施 · 核實關閉</p>
-        </div>
-        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
-      </button>
-      )}
       {isModuleEnabled('risc') && (
       <button
         onClick={() => navigate(`/project/${projectId}/risc`)}
@@ -1004,21 +988,6 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
         <div className="flex-1 min-w-0">
           <p className="font-bold text-site-900">申請檢查 (RISC)</p>
           <p className="text-xs text-site-500 mt-0.5">申請工序檢查 / 驗收 · 檢查員簽核通過</p>
-        </div>
-        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
-      </button>
-      )}
-      {isModuleEnabled('labour') && (
-      <button
-        onClick={() => navigate(`/project/${projectId}/labour`)}
-        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
-      >
-        <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center flex-shrink-0">
-          <UsersRound size={22} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-site-900">勞工人力日報 (G.F.527)</p>
-          <p className="text-xs text-site-500 mt-0.5">按日誌人力彙總工種人次 · 匯出法定申報表</p>
         </div>
         <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
       </button>

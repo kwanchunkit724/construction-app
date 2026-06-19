@@ -55,14 +55,9 @@ const ContactListPage = lazy(() => import('./pages/ContactList'))
 const WeatherRecordPage = lazy(() => import('./pages/WeatherRecord'))
 // 清潔檢查 (Cleansing Inspection, DWSS 模組 ④, v81) — per-project module switch.
 const CleansingListPage = lazy(() => import('./pages/CleansingList'))
-// 不符合事項 / NCR-CAR (v82) — quality non-conformity workflow, per-project switch.
-const NcrListPage = lazy(() => import('./pages/NcrList'))
-const NcrDetailPage = lazy(() => import('./pages/NcrDetail'))
 // 申請檢查 / RISC (v89) — request-for-inspection workflow, per-project switch.
 const RiscListPage = lazy(() => import('./pages/RiscList'))
 const RiscDetailPage = lazy(() => import('./pages/RiscDetail'))
-// 勞工人力日報 / GF527 (v90) — labour return derived from dailies.manpower.
-const LabourReturnPage = lazy(() => import('./pages/LabourReturn'))
 // 受控文件登記冊 (v91) — controlled-document register, per-project switch.
 const ControlledDocsListPage = lazy(() => import('./pages/ControlledDocsList'))
 // 巡查 (v95) — recurring site-inspection rounds; fail marks spawn 即時問題 snags.
@@ -103,6 +98,8 @@ const TakeawayPage = lazy(() => import('./pages/Takeaway'))
 // like /sell — so it opens straight up in front of a prospect. Lazy so it
 // never weighs down the authed entry chunk.
 const DemoPage = lazy(() => import('./pages/Demo'))
+// 開發 / Demo 一鍵切換角色 (item #13). No auth — it IS the login switcher.
+const RoleSwitchPage = lazy(() => import('./pages/RoleSwitch'))
 
 function lazyRoute(node: React.ReactNode) {
   return <Suspense fallback={<FullPageSpinner label="載入中..." />}>{node}</Suspense>
@@ -189,14 +186,9 @@ export default function App() {
           <Route path="/project/:id/weather" element={<ProtectedRoute><ModuleRoute module="weather">{lazyRoute(<WeatherRecordPage />)}</ModuleRoute></ProtectedRoute>} />
           {/* 清潔檢查 — DWSS 模組 ④. Dated cleansing checklist + verify. */}
           <Route path="/project/:id/cleansing" element={<ProtectedRoute><ModuleRoute module="cleansing">{lazyRoute(<CleansingListPage />)}</ModuleRoute></ProtectedRoute>} />
-          {/* 不符合事項 (NCR / CAR) — raise → corrective → verify-close workflow. */}
-          <Route path="/project/:id/ncr" element={<ProtectedRoute><ModuleRoute module="ncr">{lazyRoute(<NcrListPage />)}</ModuleRoute></ProtectedRoute>} />
-          <Route path="/project/:id/ncr/:ncrId" element={<ProtectedRoute><ModuleRoute module="ncr">{lazyRoute(<NcrDetailPage />)}</ModuleRoute></ProtectedRoute>} />
           {/* 申請檢查 (RISC) — request inspection → inspector pass/fail. */}
           <Route path="/project/:id/risc" element={<ProtectedRoute><ModuleRoute module="risc">{lazyRoute(<RiscListPage />)}</ModuleRoute></ProtectedRoute>} />
           <Route path="/project/:id/risc/:riscId" element={<ProtectedRoute><ModuleRoute module="risc">{lazyRoute(<RiscDetailPage />)}</ModuleRoute></ProtectedRoute>} />
-          {/* 勞工人力日報 (G.F.527) — labour return report from dailies.manpower. */}
-          <Route path="/project/:id/labour" element={<ProtectedRoute><ModuleRoute module="labour">{lazyRoute(<LabourReturnPage />)}</ModuleRoute></ProtectedRoute>} />
           {/* 受控文件登記冊 — controlled-document register. */}
           <Route path="/project/:id/controlled-docs" element={<ProtectedRoute><ModuleRoute module="controlled_docs">{lazyRoute(<ControlledDocsListPage />)}</ModuleRoute></ProtectedRoute>} />
           {/* 巡查 — recurring inspection rounds + per-floor marks. */}
@@ -213,6 +205,7 @@ export default function App() {
               <Route path="/mission" element={lazyRoute(<MissionPage />)} />
               <Route path="/sell" element={lazyRoute(<SellPage />)} />
               <Route path="/demo" element={lazyRoute(<DemoPage />)} />
+              <Route path="/demo-roles" element={lazyRoute(<RoleSwitchPage />)} />
               <Route path="/takeaway" element={lazyRoute(<TakeawayPage />)} />
             </>
           )}

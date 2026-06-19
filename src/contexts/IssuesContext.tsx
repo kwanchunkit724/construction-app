@@ -14,6 +14,7 @@ export interface QuickSnagInput {
   location: string
   description: string
   photos: string[]
+  progress_item_id?: string | null
 }
 
 interface IssuesContextType {
@@ -22,7 +23,7 @@ interface IssuesContextType {
   fetchError: string | null
   myRoleInProject: GlobalRole | null  // user's role in this project (for permission checks)
   refetch: () => Promise<void>
-  createIssue: (title: string, description: string, photos: string[], location?: string) => Promise<{ error: string | null; id?: string }>
+  createIssue: (title: string, description: string, photos: string[], location?: string, progressItemId?: string | null) => Promise<{ error: string | null; id?: string }>
   createQuickIssue: (input: QuickSnagInput) => Promise<{ error: string | null; id?: string }>
   graduateToFormal: (issueId: string) => Promise<{ error: string | null }>
   uploadPhoto: (file: File) => Promise<{ url: string | null; error: string | null }>
@@ -102,7 +103,7 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
   // Re-sync on reconnect: realtime doesn't replay events missed while offline.
   useEffect(() => subscribeOnline(online => { if (online) void refetch() }), [refetch])
 
-  async function createIssue(title: string, description: string, photos: string[], location?: string) {
+  async function createIssue(title: string, description: string, photos: string[], location?: string, progressItemId?: string | null) {
     if (!profile) return { error: '未登入' }
     if (!myRoleInProject) return { error: '你不是此工地的成員' }
 
@@ -115,6 +116,7 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
       title: title.trim(),
       description: description.trim(),
       location: location?.trim() || null,
+      progress_item_id: progressItemId ?? null,
       photos,
       current_handler_role: handler,
       status: 'open',
@@ -149,6 +151,7 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
       title: input.title.trim(),
       description: input.description.trim(),
       location: input.location.trim() || null,
+      progress_item_id: input.progress_item_id ?? null,
       snag_type: input.snag_type,
       photos: input.photos,
       current_handler_role: handler,

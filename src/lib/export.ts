@@ -537,7 +537,7 @@ function reportHtml(project: Project, model: ReportModel, opts: ExportProgressOp
           <td style="padding:5px 6px; text-align:right; color:#64748b;">${r.eff.planned === null ? '未排期' : `${r.eff.planned}%`}</td>
           <td style="padding:5px 6px; text-align:right; font-weight:700; color:${r.eff.gap === null ? '#94a3b8' : gapColour(r.eff.gap)};">${r.eff.gap === null ? '—' : `${r.eff.gap >= 0 ? '+' : ''}${r.eff.gap}%`}</td>
           ${hasDelta ? `<td style="padding:5px 6px; text-align:right; font-weight:700; color:${r.eff.delta === null ? '#cbd5e1' : r.eff.delta >= 0 ? '#15803d' : '#b91c1c'};">${r.eff.delta === null ? '—' : `${r.eff.delta >= 0 ? '+' : ''}${r.eff.delta}%`}</td>` : ''}
-          <td style="padding:5px 6px; text-align:center;"><span style="background:${sp.bg}; color:${sp.fg}; padding:2px 7px; border-radius:7px; font-size:11px;">${escapeHtml(sp.mark + PROGRESS_STATUS_ZH[r.eff.status])}</span></td>
+          <td style="padding:5px 6px; text-align:center; white-space:nowrap; width:74px;"><span style="display:inline-block; background:${sp.bg}; color:${sp.fg}; padding:2px 8px; border-radius:7px; font-size:11px; line-height:1.5; white-space:nowrap; vertical-align:middle;">${escapeHtml(sp.mark + PROGRESS_STATUS_ZH[r.eff.status])}</span></td>
           <td style="padding:5px 6px; color:#475569; font-size:12px;">${escapeHtml(r.notes ?? '')}</td>
           <td style="padding:5px 6px; color:#64748b; font-size:12px;">${escapeHtml(r.end ?? '')}</td>
         </tr>`
@@ -546,7 +546,7 @@ function reportHtml(project: Project, model: ReportModel, opts: ExportProgressOp
         <div class="pgblk" style="margin-top:22px; font-size:15px; font-weight:700; color:#0f172a;">${escapeHtml(z.name)} — 詳細 <span style="font-weight:500; font-size:13px; color:#64748b;">整體 ${z.agg.actual}%（計劃 ${z.agg.planned}%）· ${z.agg.count} 項</span></div>
         <table style="width:100%; border-collapse:collapse; font-size:12px; margin-top:6px;">
           <thead><tr class="pgblk" style="background:#f97316; color:#fff; text-align:left;">
-            <th style="padding:6px;">編號</th><th style="padding:6px;">名稱</th><th style="padding:6px; text-align:right;">實際</th><th style="padding:6px; text-align:right;">計劃</th><th style="padding:6px; text-align:right;">差距</th>${hasDelta ? '<th style="padding:6px; text-align:right;">本期</th>' : ''}<th style="padding:6px; text-align:center;">狀態</th><th style="padding:6px;">說明</th><th style="padding:6px;">計劃完成</th>
+            <th style="padding:6px;">編號</th><th style="padding:6px;">名稱</th><th style="padding:6px; text-align:right;">實際</th><th style="padding:6px; text-align:right;">計劃</th><th style="padding:6px; text-align:right;">差距</th>${hasDelta ? '<th style="padding:6px; text-align:right;">本期</th>' : ''}<th style="padding:6px; text-align:center; white-space:nowrap; width:74px;">狀態</th><th style="padding:6px;">說明</th><th style="padding:6px; white-space:nowrap;">計劃完成</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>`
@@ -615,12 +615,31 @@ export async function exportProgressToPDF(project: Project, items: ProgressItem[
       startPx = endPx; first = false
     }
 
-    // ASCII footer (jsPDF core font has no CJK glyphs — keep it Latin/digits).
+    // Footer in zh-HK — embed Noto Sans HK so the Chinese renders instead of
+    // the old helvetica garble/strip. The body of each page is a raster image
+    // (html2canvas) so it's unaffected; only this footer needs the CJK font.
+    // ensureChineseFont() throws if the font asset is missing; degrade to an
+    // ASCII footer in that case rather than failing the whole export.
     const asOf = opts.reportPeriod || dateStr()
     const n = doc.getNumberOfPages()
+    let cjkFooter = true
+    try {
+      await ensureChineseFont(doc)
+    } catch {
+      cjkFooter = false
+    }
     for (let i = 1; i <= n; i++) {
-      doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(148, 163, 184)
-      doc.text(`CK 工程 · ${asOf}`.replace(/[^\x00-\x7f]+/g, 'CK'), 40, pageHpt - 9)
+      doc.setPage(i); doc.setFontSize(8); doc.setTextColor(148, 163, 184)
+      if (cjkFooter) {
+        doc.setFont('NotoHK')
+        doc.text(`CK 工程 · ${asOf}`, 40, pageHpt - 9)
+      } else {
+        doc.setFont('helvetica', 'normal')
+        doc.text(`CK · ${asOf}`, 40, pageHpt - 9)
+      }
+      // Page counter stays Latin/digits — render with a core font so it never
+      // depends on the CJK asset loading.
+      doc.setFont('helvetica', 'normal')
       doc.text(`P. ${i} / ${n}`, pageWpt - 70, pageHpt - 9)
     }
 
@@ -865,6 +884,7 @@ export async function exportVOToPDF(
 
   // Approval timeline
   doc.addPage()
+  doc.setFont('NotoHK') // re-apply CJK font: addPage() resets the active font to helvetica
   doc.setFontSize(12)
   doc.text('簽核紀錄', 40, 50)
   autoTableFn(doc, {
@@ -877,6 +897,7 @@ export async function exportVOToPDF(
   // Drawing thumbnails — 6 per page, ≤200 KB each
   for (let i = 0; i < drawings.length; i += 6) {
     doc.addPage()
+    doc.setFont('NotoHK') // re-apply CJK font: addPage() resets the active font to helvetica
     doc.text('附圖', 40, 50)
     const batch = drawings.slice(i, i + 6)
     for (let j = 0; j < batch.length; j++) {
@@ -896,7 +917,9 @@ export async function exportVOToPDF(
     }
   }
 
-  // Footer
+  // Footer — re-apply CJK font: prior autoTable / addPage paths may have left
+  // the active font as helvetica.
+  doc.setFont('NotoHK')
   doc.setFontSize(8)
   doc.text(`產生時間：${new Date().toLocaleString('zh-HK')} — 由 CK工程系統產生`, 40, 820)
 
@@ -970,12 +993,13 @@ export async function generateFormSignoffPdf(input: FormPdfInput): Promise<Blob>
     doc.text(`${mark}  ${row.label_zh}`, 48, y, { maxWidth: 500 })
     y += 16
     if (row.remark) { doc.text(`        備註：${row.remark}`, 48, y, { maxWidth: 500 }); y += 16 }
-    if (y > 720) { doc.addPage(); y = 50 }
+    if (y > 720) { doc.addPage(); doc.setFont('NotoHK'); y = 50 } // re-apply CJK font after addPage
   }
 
   // Signature block
   y += 12
   if (y > 680) { doc.addPage(); y = 50 }
+  doc.setFont('NotoHK') // re-apply CJK font: an addPage above resets the active font to helvetica
   doc.setFontSize(12)
   doc.text('簽署', 40, y); y += 8
   try {
@@ -1097,7 +1121,7 @@ export async function exportSignatureProofPdf(input: SignatureProofInput): Promi
 
   // Attestation
   y += 12
-  if (y > 720) { doc.addPage(); y = 50 }
+  if (y > 720) { doc.addPage(); doc.setFont('NotoHK'); y = 50 } // re-apply CJK font after addPage
   doc.setFontSize(12)
   doc.text('證明聲明', 40, y); y += 18
   doc.setFontSize(10)
@@ -1152,7 +1176,7 @@ export async function exportComplianceProofPack(input: ProofPackInput): Promise<
   }
   const heading = (t: string) => {
     y += 8
-    if (y > 760) { doc.addPage(); y = 50 }
+    if (y > 760) { doc.addPage(); doc.setFont('NotoHK'); y = 50 } // re-apply CJK font after addPage
     doc.setFontSize(12)
     doc.text(t, 40, y)
     y += 18
@@ -1334,6 +1358,8 @@ export async function exportWeatherEotToPDF(
     headStyles: { fillColor: [29, 78, 216] },
   })
 
+  // Re-apply CJK font: autoTable can leave the active font changed.
+  doc.setFont('NotoHK')
   doc.setFontSize(8)
   doc.text(`產生時間：${new Date().toLocaleString('zh-HK')} — 由 CK工程系統產生`, 40, 820)
 

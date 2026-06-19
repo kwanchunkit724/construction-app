@@ -1,5 +1,31 @@
 import { supabase } from './supabase'
+import { compressImage } from './image-compress'
+import { signIssuePhoto } from './issuePhotos'
 import type { UserCredential } from '../types'
+
+// Cert proof docs reuse the app's private docs bucket (issue-photos, private
+// since v74). signIssuePhoto / issuePhotoPath normalise + sign any value, so a
+// stored doc_path renders via a short-lived signed URL. PDFs upload as-is;
+// images are compressed first (Supabase Free 1GB budget — CLAUDE.md).
+export { signIssuePhoto as signCredentialDoc }
+
+const CRED_DOC_BUCKET = 'issue-photos'
+
+// Owner-upload a credential proof (image or PDF). Returns the storage PATH to
+// persist into user_credentials.doc_path. Compresses images; PDFs pass through.
+export async function uploadCredentialDoc(
+  file: File,
+  userId: string,
+): Promise<{ path: string | null; error: string | null }> {
+  const toUpload = file.type.startsWith('image/') ? await compressImage(file) : file
+  const ext = toUpload.name.split('.').pop()?.toLowerCase() || 'jpg'
+  const fileName = `${userId}/cred-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+  const { error } = await supabase.storage
+    .from(CRED_DOC_BUCKET)
+    .upload(fileName, toUpload, { contentType: toUpload.type, upsert: false })
+  if (error) return { path: null, error: error.message }
+  return { path: fileName, error: null }
+}
 
 // Helpers around user_credentials (v55). The DB is the authority — the
 // record_form_signoff RPC re-checks that the signer holds a verified, in-date
@@ -46,6 +72,7 @@ export async function addMyCredential(input: {
   issuer?: string | null
   valid_from?: string | null
   valid_until?: string | null
+  doc_path?: string | null
 }): Promise<{ error: string | null }> {
   if (!input.cert_name_zh.trim()) return { error: '請輸入證書名稱' }
   if (!input.credential_type.trim()) return { error: '請選擇證書類別' }
@@ -57,6 +84,7 @@ export async function addMyCredential(input: {
     issuer: input.issuer?.trim() || null,
     valid_from: input.valid_from || null,
     valid_until: input.valid_until || null,
+    doc_path: input.doc_path || null,
   })
   if (error) {
     if (error.message.toLowerCase().includes('row-level security')) {

@@ -91,6 +91,11 @@ export const READ_TOOLS: ToolDef[] = [
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
+    name: 'get_daily_brief',
+    description: '每日工地概況：一次過攞返呢個項目最需要跟進嘅嘢——未有施工方案（method statement）嘅工序、待處理問題、即將到期工作許可證、過期未到物料、待審文件。用嚟答「今日概況／有咩要跟進／有咩風險」。範圍係使用者眼前嘅項目（RLS 已收窄）。',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
     name: 'recall_memory',
     description: '喺地盤記憶圖（由本項目嘅進度/文件/問題/聯絡人/項目本身衍生出嘅 memory_notes）入面搵返相關記憶。可選 query（標題/摘要/標籤關鍵字模糊比對）；唔填就攞晒。用嚟快速憶起「呢個地盤之前發生過咩」。RLS 已收窄到你可見嘅項目。',
     input_schema: { type: 'object', properties: { query: { type: 'string', description: '關鍵字（比對標題/摘要/標籤）；留空攞晒' } }, additionalProperties: false },
@@ -222,6 +227,10 @@ export async function executeReadTool(supa: Supa, projectId: string, name: strin
         forecast,
         updated: fnd?.updateTime ?? null,
       }
+    }
+    case 'get_daily_brief': {
+      const { data, error } = await supa.rpc('get_daily_brief', { p_project_id: projectId })
+      return error ? { error: error.message } : (data ?? {})
     }
     case 'recall_memory': {
       const term = input?.query != null ? String(input.query).trim() : ''

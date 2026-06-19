@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Navigate } from 'react-router-dom'
 import {
   ChevronLeft, AlertCircle, CheckCircle2, ArrowUp, MessageCircle,
-  Send, RefreshCw, RotateCcw, MapPin, Zap,
+  Send, RefreshCw, RotateCcw, MapPin, Zap, ListChecks,
 } from 'lucide-react'
 import { Spinner } from '../components/Spinner'
 import { Sidebar } from '../components/Sidebar'
@@ -48,6 +48,9 @@ function IssueDetailInner({ projectId, issueId }: { projectId: string; issueId: 
 
   const [comments, setComments] = useState<IssueComment[]>([])
   const [users, setUsers] = useState<Record<string, UserProfile>>({})
+  // v100: optional linked 進度表 item. IssueDetail isn't inside ProgressProvider,
+  // so fetch the single item's code+title directly when the issue links one.
+  const [linkedItem, setLinkedItem] = useState<{ code: string; title: string } | null>(null)
   const [commentText, setCommentText] = useState('')
   const [dialog, setDialog] = useState<ActionDialog | null>(null)
   const [dialogText, setDialogText] = useState('')
@@ -97,6 +100,23 @@ function IssueDetailInner({ projectId, issueId }: { projectId: string; issueId: 
     })
     return () => { cancelled = true }
   }, [comments, reporterId, users])
+
+  // v100: resolve the linked progress item's code+title for the summary chip.
+  const linkedItemId = issue?.progress_item_id
+  useEffect(() => {
+    if (!linkedItemId) { setLinkedItem(null); return }
+    let cancelled = false
+    supabase
+      .from('progress_items')
+      .select('code, title')
+      .eq('id', linkedItemId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return
+        setLinkedItem(data ? { code: data.code as string, title: data.title as string } : null)
+      })
+    return () => { cancelled = true }
+  }, [linkedItemId])
 
   if (!issue || !project) {
     return (
@@ -228,6 +248,15 @@ function IssueDetailInner({ projectId, issueId }: { projectId: string; issueId: 
               <span className="inline-flex items-center gap-1 text-xs bg-site-100 text-site-600 px-2 py-1 rounded-full font-medium">
                 <MapPin size={11} /> {issue.location}
               </span>
+            )}
+            {linkedItem && (
+              <button
+                type="button"
+                onClick={() => navigate(`/project/${projectId}`)}
+                className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full font-medium min-h-0"
+              >
+                <ListChecks size={11} /> 相關工序：{linkedItem.code} {linkedItem.title}
+              </button>
             )}
             {isOpen && (
               <span className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full font-medium">
