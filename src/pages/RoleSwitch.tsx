@@ -29,6 +29,7 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
   { phone: '60001005', role: '判頭', name: '何判頭', hint: 'subcontractor' },
   { phone: '60001006', role: '判頭工人', name: '測試工人', hint: 'subcontractor_worker' },
   { phone: '60000004', role: '安全主任', name: '測試安全主任', hint: 'safety_officer' },
+  { phone: '60001008', role: '業主', name: '張業主', hint: 'owner' },
 ]
 
 export default function RoleSwitch() {
@@ -82,13 +83,6 @@ export default function RoleSwitch() {
               {busy === acc.phone ? <Spinner size={18} /> : <LogIn size={18} className="text-site-300 flex-shrink-0" />}
             </button>
           ))}
-          <div className="card w-full p-4 flex items-center gap-3 opacity-50 min-h-[44px]">
-            <div className="w-11 h-11 rounded-xl bg-site-100 text-site-400 flex items-center justify-center flex-shrink-0 font-bold">業</div>
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-site-600">業主</p>
-              <p className="text-xs text-site-400 mt-0.5">未設定 demo 帳號（可補）</p>
-            </div>
-          </div>
         </div>
       </div>
     </div>
