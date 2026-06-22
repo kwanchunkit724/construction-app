@@ -26,7 +26,11 @@ export function PtwSignaturePad({ onSign, onCancel, title = '請簽名' }: PtwSi
     setSubmitting(true)
     setError(null)
     try {
-      const dataUrl = padRef.current.getTrimmedCanvas().toDataURL('image/png')
+      // Use the raw canvas, NOT getTrimmedCanvas(): the latter pulls in the
+      // `trim-canvas` package whose default export breaks under the Vite/ESM
+      // build ("import_trim_canvas.default is not a function"), throwing on every
+      // sign. The full-canvas PNG embeds fine in the PDF / signoff record.
+      const dataUrl = padRef.current.getCanvas().toDataURL('image/png')
       // Strip "data:image/png;base64," prefix so backend gets pure base64
       const b64 = dataUrl.replace(/^data:image\/[a-z]+;base64,/, '')
       await onSign(b64)
