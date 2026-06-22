@@ -111,8 +111,6 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const showToolsTab = isModuleEnabled('weather')
     || isModuleEnabled('materials') || isModuleEnabled('contacts')
     || isModuleEnabled('timetable') || isModuleEnabled('dailies')
-    || isModuleEnabled('cleansing') || isModuleEnabled('risc')
-    || isModuleEnabled('controlled_docs') || isModuleEnabled('inspection')
   const showAssistantTab = aiEnabled && isModuleEnabled('assistant')
 
   const [tab, setTab] = useState<Tab>('progress')
@@ -962,66 +960,7 @@ function ToolsSwitcher({ projectId }: { projectId: string }) {
         <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
       </button>
       )}
-      {isModuleEnabled('cleansing') && (
-      <button
-        onClick={() => navigate(`/project/${projectId}/cleansing`)}
-        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
-      >
-        <div className="w-11 h-11 rounded-xl bg-cyan-50 text-cyan-700 flex items-center justify-center flex-shrink-0">
-          <Sparkles size={22} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-site-900">清潔檢查</p>
-          <p className="text-xs text-site-500 mt-0.5">每日 / 每週清潔巡查 · 簽核存證 (DWSS ④)</p>
-        </div>
-        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
-      </button>
-      )}
-      {isModuleEnabled('risc') && (
-      <button
-        onClick={() => navigate(`/project/${projectId}/risc`)}
-        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
-      >
-        <div className="w-11 h-11 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center flex-shrink-0">
-          <ClipboardCheck size={22} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-site-900">申請檢查 (RISC)</p>
-          <p className="text-xs text-site-500 mt-0.5">申請工序檢查 / 驗收 · 檢查員簽核通過</p>
-        </div>
-        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
-      </button>
-      )}
-      {isModuleEnabled('controlled_docs') && (
-      <button
-        onClick={() => navigate(`/project/${projectId}/controlled-docs`)}
-        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
-      >
-        <div className="w-11 h-11 rounded-xl bg-violet-50 text-violet-700 flex items-center justify-center flex-shrink-0">
-          <FileStack size={22} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-site-900">受控文件登記冊</p>
-          <p className="text-xs text-site-500 mt-0.5">受控文件版本 · 生效/取代/撤回 · 持有人</p>
-        </div>
-        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
-      </button>
-      )}
-      {isModuleEnabled('inspection') && (
-      <button
-        onClick={() => navigate(`/project/${projectId}/inspection`)}
-        className="card w-full p-4 flex items-center gap-3 hover:bg-site-50 transition-colors text-left min-h-[44px]"
-      >
-        <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center flex-shrink-0">
-          <Footprints size={22} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-site-900">巡查</p>
-          <p className="text-xs text-site-500 mt-0.5">定期逐層巡查 · 核查覆蓋 · 不合格自動開即時問題</p>
-        </div>
-        <ChevronLeft size={18} className="text-site-300 rotate-180 flex-shrink-0" />
-      </button>
-      )}
+      {/* 清潔檢查 / RISC / 受控文件 / 巡查 modules removed from the UI (owner request). */}
     </div>
   )
 }

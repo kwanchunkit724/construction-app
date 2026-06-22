@@ -53,16 +53,6 @@ const MaterialListPage = lazy(() => import('./pages/MaterialList'))
 const TimetablePage = lazy(() => import('./pages/TimetablePage'))
 const ContactListPage = lazy(() => import('./pages/ContactList'))
 const WeatherRecordPage = lazy(() => import('./pages/WeatherRecord'))
-// 清潔檢查 (Cleansing Inspection, DWSS 模組 ④, v81) — per-project module switch.
-const CleansingListPage = lazy(() => import('./pages/CleansingList'))
-// 申請檢查 / RISC (v89) — request-for-inspection workflow, per-project switch.
-const RiscListPage = lazy(() => import('./pages/RiscList'))
-const RiscDetailPage = lazy(() => import('./pages/RiscDetail'))
-// 受控文件登記冊 (v91) — controlled-document register, per-project switch.
-const ControlledDocsListPage = lazy(() => import('./pages/ControlledDocsList'))
-// 巡查 (v95) — recurring site-inspection rounds; fail marks spawn 即時問題 snags.
-const InspectionListPage = lazy(() => import('./pages/InspectionList'))
-const InspectionDetailPage = lazy(() => import('./pages/InspectionDetail'))
 
 // 地盤表格管理 (statutory site forms + mobile e-signing, v55) — lazy + entry-
 // gated. The migration ships forms_enabled=false; v55 ships no get_forms_enabled
@@ -184,16 +174,6 @@ export default function App() {
           <Route path="/project/:id/timetable" element={<ProtectedRoute><ModuleRoute module="timetable">{lazyRoute(<TimetablePage />)}</ModuleRoute></ProtectedRoute>} />
           <Route path="/project/:id/contacts" element={<ProtectedRoute><ModuleRoute module="contacts">{lazyRoute(<ContactListPage />)}</ModuleRoute></ProtectedRoute>} />
           <Route path="/project/:id/weather" element={<ProtectedRoute><ModuleRoute module="weather">{lazyRoute(<WeatherRecordPage />)}</ModuleRoute></ProtectedRoute>} />
-          {/* 清潔檢查 — DWSS 模組 ④. Dated cleansing checklist + verify. */}
-          <Route path="/project/:id/cleansing" element={<ProtectedRoute><ModuleRoute module="cleansing">{lazyRoute(<CleansingListPage />)}</ModuleRoute></ProtectedRoute>} />
-          {/* 申請檢查 (RISC) — request inspection → inspector pass/fail. */}
-          <Route path="/project/:id/risc" element={<ProtectedRoute><ModuleRoute module="risc">{lazyRoute(<RiscListPage />)}</ModuleRoute></ProtectedRoute>} />
-          <Route path="/project/:id/risc/:riscId" element={<ProtectedRoute><ModuleRoute module="risc">{lazyRoute(<RiscDetailPage />)}</ModuleRoute></ProtectedRoute>} />
-          {/* 受控文件登記冊 — controlled-document register. */}
-          <Route path="/project/:id/controlled-docs" element={<ProtectedRoute><ModuleRoute module="controlled_docs">{lazyRoute(<ControlledDocsListPage />)}</ModuleRoute></ProtectedRoute>} />
-          {/* 巡查 — recurring inspection rounds + per-floor marks. */}
-          <Route path="/project/:id/inspection" element={<ProtectedRoute><ModuleRoute module="inspection">{lazyRoute(<InspectionListPage />)}</ModuleRoute></ProtectedRoute>} />
-          <Route path="/project/:id/inspection/:inspectionId" element={<ProtectedRoute><ModuleRoute module="inspection">{lazyRoute(<InspectionDetailPage />)}</ModuleRoute></ProtectedRoute>} />
           {/* 地盤表格管理 — register + per-equipment forms / mobile e-signing. */}
           <Route path="/project/:id/equipment" element={<ProtectedRoute><ModuleRoute module="equipment">{lazyRoute(<EquipmentListPage />)}</ModuleRoute></ProtectedRoute>} />
           <Route path="/project/:id/equipment/:equipmentId" element={<ProtectedRoute><ModuleRoute module="equipment">{lazyRoute(<EquipmentDetailPage />)}</ModuleRoute></ProtectedRoute>} />

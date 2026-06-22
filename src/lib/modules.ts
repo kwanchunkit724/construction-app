@@ -22,10 +22,6 @@ export type ModuleKey =
   | 'timetable'
   | 'dailies'
   | 'equipment'
-  | 'cleansing'
-  | 'risc'
-  | 'controlled_docs'
-  | 'inspection'
   | 'assistant'
 
 export interface ModuleDef {
@@ -53,10 +49,6 @@ export const MODULES: ModuleDef[] = [
   { key: 'timetable', labelZh: '行事曆', icon: 'CalendarDays', route: 'timetable' },
   { key: 'dailies', labelZh: '每日日誌', icon: 'BookOpen', route: 'daily' },
   { key: 'equipment', labelZh: '機械 / 表格', icon: 'Wrench', route: 'equipment' },
-  { key: 'cleansing', labelZh: '清潔檢查', icon: 'Sparkles', route: 'cleansing' },
-  { key: 'risc', labelZh: '申請檢查', icon: 'ClipboardCheck', route: 'risc' },
-  { key: 'controlled_docs', labelZh: '受控文件', icon: 'FileStack', route: 'controlled-docs' },
-  { key: 'inspection', labelZh: '巡查', icon: 'Footprints', route: 'inspection' },
   { key: 'assistant', labelZh: '助理', icon: 'Bot', tabId: 'assistant' },
 ]
 
@@ -73,9 +65,5 @@ export const MODULE_LABELS_ZH: Record<ModuleKey, string> = {
   timetable: '行事曆',
   dailies: '每日日誌',
   equipment: '機械 / 表格',
-  cleansing: '清潔檢查',
-  risc: '申請檢查',
-  controlled_docs: '受控文件',
-  inspection: '巡查',
   assistant: '助理',
 }

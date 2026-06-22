@@ -537,7 +537,7 @@ function reportHtml(project: Project, model: ReportModel, opts: ExportProgressOp
           <td style="padding:5px 6px; text-align:right; color:#64748b;">${r.eff.planned === null ? '未排期' : `${r.eff.planned}%`}</td>
           <td style="padding:5px 6px; text-align:right; font-weight:700; color:${r.eff.gap === null ? '#94a3b8' : gapColour(r.eff.gap)};">${r.eff.gap === null ? '—' : `${r.eff.gap >= 0 ? '+' : ''}${r.eff.gap}%`}</td>
           ${hasDelta ? `<td style="padding:5px 6px; text-align:right; font-weight:700; color:${r.eff.delta === null ? '#cbd5e1' : r.eff.delta >= 0 ? '#15803d' : '#b91c1c'};">${r.eff.delta === null ? '—' : `${r.eff.delta >= 0 ? '+' : ''}${r.eff.delta}%`}</td>` : ''}
-          <td style="padding:5px 6px; text-align:center; white-space:nowrap; width:74px;"><span style="display:inline-block; background:${sp.bg}; color:${sp.fg}; padding:2px 8px; border-radius:7px; font-size:11px; line-height:1.5; white-space:nowrap; vertical-align:middle;">${escapeHtml(sp.mark + PROGRESS_STATUS_ZH[r.eff.status])}</span></td>
+          <td style="padding:5px 6px; text-align:center; vertical-align:middle; white-space:nowrap; width:74px;"><span style="display:inline-block; background:${sp.bg}; color:${sp.fg}; padding:3px 8px; border-radius:7px; font-size:11px; line-height:1; white-space:nowrap; text-align:center;">${escapeHtml(sp.mark + PROGRESS_STATUS_ZH[r.eff.status])}</span></td>
           <td style="padding:5px 6px; color:#475569; font-size:12px;">${escapeHtml(r.notes ?? '')}</td>
           <td style="padding:5px 6px; color:#64748b; font-size:12px;">${escapeHtml(r.end ?? '')}</td>
         </tr>`
@@ -1058,80 +1058,54 @@ export interface SignatureProofInput {
 }
 
 export async function exportSignatureProofPdf(input: SignatureProofInput): Promise<void> {
-  const jspdfMod = await import('jspdf')
-  const jsPDFCtor = (jspdfMod as any).default
-  const doc: any = new jsPDFCtor({ unit: 'pt', format: 'a4' })
-  await ensureChineseFont(doc)
+  // Rendered via html2canvas (system CJK fonts) — see htmlToPdfBlob — so every
+  // Chinese character renders, not just the embedded subset's glyphs.
+  const esc = escapeHtml
+  const row = (label: string, val: string) =>
+    `<div class="pgblk" style="display:flex; gap:8px; padding:3px 0; font-size:13px;"><span style="color:#64748b; min-width:120px; flex-shrink:0;">${esc(label)}</span><span style="color:#0f172a; font-weight:600; word-break:break-all;">${esc(val)}</span></div>`
+  const para = (t: string) =>
+    `<div class="pgblk" style="font-size:12px; color:#475569; margin:4px 0; line-height:1.5;">${esc(t)}</div>`
+  const head = (t: string) =>
+    `<div class="pgblk" style="font-size:15px; font-weight:700; color:#0f172a; margin:16px 0 6px; border-bottom:2px solid #f97316; padding-bottom:3px;">${esc(t)}</div>`
 
-  // Title
-  doc.setFontSize(18)
-  doc.text('簽名證明 (Signature Proof)', 40, 52)
-  doc.setFontSize(10)
-  doc.text('CK工程 — 電子簽名非否認證明（勞工處用途）', 40, 70)
+  let body = `
+    <div class="pgblk" style="font-size:22px; font-weight:800;">簽名證明 (Signature Proof)</div>
+    <div class="pgblk" style="font-size:12px; color:#64748b; margin-top:4px;">CK工程 — 電子簽名非否認證明（勞工處用途）</div>
+    ${head('簽署人')}
+    ${row('姓名', input.signerName ?? '（未知）')}
+    ${row('電話', input.signerPhone ?? '未提供')}
+    ${row('項目角色', input.signerRoleZh ?? '—')}`
 
-  let y = 104
-  const line = (label: string, val: string) => {
-    doc.setFontSize(10)
-    doc.text(`${label}：${val}`, 40, y, { maxWidth: 515 })
-    y += 18
-  }
-  const heading = (t: string) => {
-    y += 8
-    doc.setFontSize(12)
-    doc.text(t, 40, y)
-    y += 18
-    doc.setFontSize(10)
-  }
-
-  // WHO
-  heading('簽署人')
-  line('姓名', input.signerName ?? '（未知）')
-  line('電話', input.signerPhone ?? '未提供')
-  line('項目角色', input.signerRoleZh ?? '—')
-
-  // Credential (form signoffs carry a credential snapshot; ptw does not)
   if (input.credential) {
     const c = input.credential as Record<string, any>
     const certNo = c.cert_no ?? c.certNo ?? null
     const type = c.type ?? c.credential_type ?? null
     const validUntil = c.valid_until ?? c.validUntil ?? null
-    heading('合資格人士證明')
-    if (type) line('資格類別', String(type))
-    if (certNo) line('證書編號', String(certNo))
-    if (validUntil) line('有效至', new Date(String(validUntil)).toLocaleDateString('zh-HK'))
+    body += head('合資格人士證明')
+    if (type) body += row('資格類別', String(type))
+    if (certNo) body += row('證書編號', String(certNo))
+    if (validUntil) body += row('有效至', new Date(String(validUntil)).toLocaleDateString('zh-HK'))
   }
 
-  // WHAT
-  heading('簽署文件')
-  line('類型', input.docKindZh)
-  line('編號', input.docNumber ?? '—')
-  if (input.projectName) line('項目', input.projectName)
-  if (input.detailZh) line('內容', input.detailZh)
-  line('簽署時間', input.signedAt ? `${new Date(input.signedAt).toLocaleString('zh-HK')}（香港時間）` : '未知')
+  body += head('簽署文件')
+    + row('類型', input.docKindZh)
+    + row('編號', input.docNumber ?? '—')
+    + (input.projectName ? row('項目', input.projectName) : '')
+    + (input.detailZh ? row('內容', input.detailZh) : '')
+    + row('簽署時間', input.signedAt ? `${new Date(input.signedAt).toLocaleString('zh-HK')}（香港時間）` : '未知')
 
-  // Re-auth posture
-  heading('身份驗證')
-  line('簽署前重新驗證', input.reauthEnforced ? `已啟用（${input.reauthMethodZh}）` : `未強制（${input.reauthMethodZh}）`)
+  body += head('身份驗證')
+    + row('簽署前重新驗證', input.reauthEnforced ? `已啟用（${input.reauthMethodZh}）` : `未強制（${input.reauthMethodZh}）`)
 
-  // Tamper-evidence
-  heading('防篡改記錄')
-  line('帳本序號', input.ledgerSeq !== null ? String(input.ledgerSeq) : '未記錄')
-  if (input.ledgerHash) line('雜湊', input.ledgerHash)
-  line('雜湊鏈完整性', input.integrityIntact ? '完整（未被竄改）' : `已破損${input.integrityReason ? `：${input.integrityReason}` : ''}`)
+  body += head('防篡改記錄')
+    + row('帳本序號', input.ledgerSeq !== null ? String(input.ledgerSeq) : '未記錄')
+    + (input.ledgerHash ? row('雜湊', input.ledgerHash) : '')
+    + row('雜湊鏈完整性', input.integrityIntact ? '完整（未被竄改）' : `已破損${input.integrityReason ? `：${input.integrityReason}` : ''}`)
 
-  // Attestation
-  y += 12
-  if (y > 720) { doc.addPage(); doc.setFont('NotoHK'); y = 50 } // re-apply CJK font after addPage
-  doc.setFontSize(12)
-  doc.text('證明聲明', 40, y); y += 18
-  doc.setFontSize(10)
-  doc.text(input.attestationZh, 40, y, { maxWidth: 515 })
+  body += head('證明聲明') + para(input.attestationZh)
+    + `<div class="pgblk" style="font-size:10px; color:#94a3b8; margin-top:20px;">產生時間：${esc(new Date().toLocaleString('zh-HK'))} — 由 CK工程系統產生</div>`
 
-  // Footer
-  doc.setFontSize(8)
-  doc.text(`產生時間：${new Date().toLocaleString('zh-HK')} — 由 CK工程系統產生`, 40, 820)
-
-  const blob = doc.output('blob') as Blob
+  const blob = await htmlToPdfBlob(body)
   const filename = `簽名證明_${safeName(input.docNumber ?? input.kind)}_${dateStr()}.pdf`
   await shareOrDownloadBlob(blob, filename, `簽名證明 — ${input.docNumber ?? input.docKindZh}`)
 }
@@ -1150,6 +1124,61 @@ export interface ProofPackInput {
   chainRolesZh?: string[]    // approval-chain role labels, in order
 }
 
+// Render an HTML body string to a paginated A4 PDF blob via html2canvas, using
+// the browser's system CJK fonts (Microsoft JhengHei / PingFang HK / Noto CJK) —
+// the SAME mechanism as exportProgressToPDF. This is why it renders ALL Chinese
+// correctly: it does NOT depend on the embedded jsPDF subset font (which only
+// carries a limited glyph set and garbled any character outside it). Use a
+// `pgblk` class on top-level blocks so the pager never bisects a row.
+async function htmlToPdfBlob(bodyHtml: string): Promise<Blob> {
+  const html2canvas = (await import('html2canvas')).default
+  const W = 794 // A4 portrait @ ~96dpi
+  const container = document.createElement('div')
+  container.style.cssText = [
+    'position:fixed', 'top:0', 'left:-10000px', `width:${W}px`, 'padding:28px',
+    'background:#ffffff',
+    'font-family:Inter,"Microsoft JhengHei","PingFang HK","Heiti TC","Noto Sans CJK TC",sans-serif',
+    'color:#0f172a',
+  ].join('; ')
+  container.innerHTML = bodyHtml
+  document.body.appendChild(container)
+  try {
+    const cTop = container.getBoundingClientRect().top
+    const blockBottoms = Array.from(container.querySelectorAll('.pgblk'))
+      .map(b => (b as HTMLElement).getBoundingClientRect().bottom - cTop)
+    const canvas = await html2canvas(container, { scale: 2, backgroundColor: '#ffffff', logging: false })
+    const cssToCanvas = canvas.height / container.offsetHeight
+    const bounds = blockBottoms.map(b => b * cssToCanvas).sort((a, b) => a - b)
+    const doc: any = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
+    const pageWpt = doc.internal.pageSize.getWidth()
+    const pageHpt = doc.internal.pageSize.getHeight()
+    const pageHcanvas = (pageHpt * canvas.width) / pageWpt
+    let startPx = 0, first = true
+    while (startPx < canvas.height - 1) {
+      let endPx = startPx + pageHcanvas
+      if (endPx < canvas.height) {
+        const cand = bounds.filter(b => b > startPx + 12 && b <= endPx)
+        if (cand.length) endPx = cand[cand.length - 1]
+      } else {
+        endPx = canvas.height
+      }
+      const sliceH = Math.max(1, Math.round(endPx - startPx))
+      const slice = document.createElement('canvas')
+      slice.width = canvas.width
+      slice.height = sliceH
+      const ctx = slice.getContext('2d')!
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, slice.width, sliceH)
+      ctx.drawImage(canvas, 0, -startPx)
+      if (!first) doc.addPage()
+      doc.addImage(slice.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageWpt, (sliceH * pageWpt) / canvas.width)
+      startPx = endPx; first = false
+    }
+    return doc.output('blob') as Blob
+  } finally {
+    document.body.removeChild(container)
+  }
+}
+
 export async function exportComplianceProofPack(input: ProofPackInput): Promise<void> {
   // Global ledger integrity attestation (per-record audit lives in the same chain).
   let integrity: any = null
@@ -1158,72 +1187,46 @@ export async function exportComplianceProofPack(input: ProofPackInput): Promise<
     integrity = data
   } catch { /* best-effort */ }
 
-  const jspdfMod = await import('jspdf')
-  const jsPDFCtor = (jspdfMod as any).default
-  const doc: any = new jsPDFCtor({ unit: 'pt', format: 'a4' })
-  await ensureChineseFont(doc)
+  const esc = escapeHtml
+  const row = (label: string, val: string) =>
+    `<div class="pgblk" style="display:flex; gap:8px; padding:3px 0; font-size:13px;"><span style="color:#64748b; min-width:120px; flex-shrink:0;">${esc(label)}</span><span style="color:#0f172a; font-weight:600; word-break:break-all;">${esc(val)}</span></div>`
+  const para = (t: string) =>
+    `<div class="pgblk" style="font-size:12px; color:#475569; margin:4px 0; line-height:1.5;">${esc(t)}</div>`
+  const head = (t: string) =>
+    `<div class="pgblk" style="font-size:15px; font-weight:700; color:#0f172a; margin:16px 0 6px; border-bottom:2px solid #f97316; padding-bottom:3px;">${esc(t)}</div>`
 
-  doc.setFontSize(18)
-  doc.text('合規證明書 (Compliance Proof)', 40, 52)
-  doc.setFontSize(10)
-  doc.text('CK工程 — 數碼工地記錄合規證明（對標 DEVB DWSS Annex A）', 40, 70)
-
-  let y = 104
-  const line = (label: string, val: string) => {
-    doc.setFontSize(10)
-    doc.text(`${label}：${val}`, 40, y, { maxWidth: 515 })
-    y += 18
-  }
-  const heading = (t: string) => {
-    y += 8
-    if (y > 760) { doc.addPage(); doc.setFont('NotoHK'); y = 50 } // re-apply CJK font after addPage
-    doc.setFontSize(12)
-    doc.text(t, 40, y)
-    y += 18
-    doc.setFontSize(10)
-  }
-
-  heading('文件')
-  line('類型', input.docKindZh)
-  line('編號', input.docNumber)
-  if (input.dwssRefStr) line('DWSS 格式編號', input.dwssRefStr)
-  if (input.projectName) line('項目', input.projectName)
-  if (input.statusZh) line('狀態', input.statusZh)
-  if (input.detailZh) line('內容', input.detailZh)
+  let body = `
+    <div class="pgblk" style="font-size:22px; font-weight:800;">合規證明書 (Compliance Proof)</div>
+    <div class="pgblk" style="font-size:12px; color:#64748b; margin-top:4px;">CK工程 — 數碼工地記錄合規證明（對標 DEVB DWSS Annex A）</div>
+    ${head('文件')}
+    ${row('類型', input.docKindZh)}
+    ${row('編號', input.docNumber)}
+    ${input.dwssRefStr ? row('DWSS 格式編號', input.dwssRefStr) : ''}
+    ${input.projectName ? row('項目', input.projectName) : ''}
+    ${input.statusZh ? row('狀態', input.statusZh) : ''}
+    ${input.detailZh ? row('內容', input.detailZh) : ''}`
 
   if (input.chainRolesZh && input.chainRolesZh.length) {
-    heading('審批流程')
-    line('審批鏈', `${input.chainRolesZh.length} 步`)
-    input.chainRolesZh.forEach((r, i) => line(`第 ${i + 1} 步`, r))
+    body += head('審批流程') + row('審批鏈', `${input.chainRolesZh.length} 步`)
+      + input.chainRolesZh.map((r, i) => row(`第 ${i + 1} 步`, r)).join('')
   }
 
-  heading('防篡改記錄')
-  doc.text(
-    '本記錄載於 CK工程防篡改審計帳本（append-only、sha256 雜湊鏈）。任何對歷史記錄嘅竄改都會打斷雜湊鏈，可被偵測。',
-    40, y, { maxWidth: 515 }
-  )
-  y += 30
+  body += head('防篡改記錄')
+    + para('本記錄載於 CK工程防篡改審計帳本（append-only、sha256 雜湊鏈）。任何對歷史記錄嘅竄改都會打斷雜湊鏈，可被偵測。')
   if (integrity) {
-    line('帳本完整性', integrity.intact ? '完整（未被竄改）' : `已破損${integrity.reason ? `：${integrity.reason}` : ''}`)
-    if (integrity.head_seq != null) line('帳本序號 (head)', String(integrity.head_seq))
-    if (integrity.head_hash) line('鏈頭雜湊', String(integrity.head_hash))
-    if (integrity.verified_at) line('驗證時間', `${integrity.verified_at}（UTC）`)
+    body += row('帳本完整性', integrity.intact ? '完整（未被竄改）' : `已破損${integrity.reason ? `：${integrity.reason}` : ''}`)
+    if (integrity.head_seq != null) body += row('帳本序號 (head)', String(integrity.head_seq))
+    if (integrity.head_hash) body += row('鏈頭雜湊', String(integrity.head_hash))
+    if (integrity.verified_at) body += row('驗證時間', `${integrity.verified_at}（UTC）`)
   } else {
-    line('帳本完整性', '未能即時取得（請於系統「資料完整性」頁覆核）')
+    body += row('帳本完整性', '未能即時取得（請於系統「資料完整性」頁覆核）')
   }
 
-  heading('證明聲明')
-  doc.text(
-    '本證明由 CK工程系統自動產生，列明上述記錄之審批流程及其喺防篡改審計帳本中嘅完整性狀態。' +
-    '第三方可透過系統 verify_integrity / export_ledger_proof 函數離線覆核雜湊鏈。' +
-    '本聲明為自我評估；CK工程並非政府 DWSS，亦未經第三方認證。',
-    40, y, { maxWidth: 515 }
-  )
+  body += head('證明聲明')
+    + para('本證明由 CK工程系統自動產生，列明上述記錄之審批流程及其喺防篡改審計帳本中嘅完整性狀態。第三方可透過系統 verify_integrity / export_ledger_proof 函數離線覆核雜湊鏈。本聲明為自我評估；CK工程並非政府 DWSS，亦未經第三方認證。')
+    + `<div class="pgblk" style="font-size:10px; color:#94a3b8; margin-top:20px;">產生時間：${esc(new Date().toLocaleString('zh-HK'))} — 由 CK工程系統產生</div>`
 
-  doc.setFontSize(8)
-  doc.text(`產生時間：${new Date().toLocaleString('zh-HK')} — 由 CK工程系統產生`, 40, 820)
-
-  const blob = doc.output('blob') as Blob
+  const blob = await htmlToPdfBlob(body)
   const filename = `合規證明_${safeName(input.docNumber)}_${dateStr()}.pdf`
   await shareOrDownloadBlob(blob, filename, `合規證明 — ${input.docNumber}`)
 }
