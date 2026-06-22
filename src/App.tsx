@@ -90,6 +90,8 @@ const TakeawayPage = lazy(() => import('./pages/Takeaway'))
 const DemoPage = lazy(() => import('./pages/Demo'))
 // 開發 / Demo 一鍵切換角色 (item #13). No auth — it IS the login switcher.
 const RoleSwitchPage = lazy(() => import('./pages/RoleSwitch'))
+// 權限測試切換 ([TEST] rig, see .planning/TEST-PROGRAM.md). No auth — login switcher.
+const TestRoleSwitchPage = lazy(() => import('./pages/TestRoleSwitch'))
 
 function lazyRoute(node: React.ReactNode) {
   return <Suspense fallback={<FullPageSpinner label="載入中..." />}>{node}</Suspense>
@@ -186,6 +188,7 @@ export default function App() {
               <Route path="/sell" element={lazyRoute(<SellPage />)} />
               <Route path="/demo" element={lazyRoute(<DemoPage />)} />
               <Route path="/demo-roles" element={lazyRoute(<RoleSwitchPage />)} />
+              <Route path="/test-roles" element={lazyRoute(<TestRoleSwitchPage />)} />
               <Route path="/takeaway" element={lazyRoute(<TakeawayPage />)} />
             </>
           )}
