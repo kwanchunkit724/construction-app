@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Printer } from 'lucide-react'
 import { Spinner } from '../Spinner'
+import { equipmentPublicUrl } from '../../lib/publicVerify'
 
 // Lazy-load qrcode.react so the ~6 KB stays out of entry chunk.
 // Mirrors src/components/ptw/PtwQrCard.tsx — same QR rendering, tuned for
@@ -35,7 +36,7 @@ export function EquipmentQrCard({ token, error, refNo, nameZh, onPrint }: Props)
           <Suspense fallback={<Spinner size={32} />}>
             <div className="bg-white p-3 rounded-xl border border-site-200">
               <QRCodeSVG
-                value={`${window.location.origin}/#/equipment-verify/${token}`}
+                value={equipmentPublicUrl(token)}
                 size={208}
                 level="M"
                 includeMargin
@@ -45,7 +46,7 @@ export function EquipmentQrCard({ token, error, refNo, nameZh, onPrint }: Props)
           <p className="font-mono text-xs text-site-500">{refNo}</p>
           <p className="text-sm font-semibold text-site-900 text-center">{nameZh}</p>
           <p className="text-xs text-site-500 text-center max-w-xs">
-            貼於機械上，任何已登入成員掃描即可核實表格狀態。每次掃描會寫入 equipment_scans 審計紀錄。
+            貼於機械上，任何人用手機掃描即可核實法定表格狀態（無需登入）。每次掃描會寫入 equipment_scans 審計紀錄。
           </p>
         </div>
       ) : (

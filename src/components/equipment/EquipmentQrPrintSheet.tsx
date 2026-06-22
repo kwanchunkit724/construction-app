@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Printer, X } from 'lucide-react'
 import { Spinner } from '../Spinner'
+import { equipmentPublicUrl } from '../../lib/publicVerify'
 
 // Printable A6-ish grid of equipment QR cards. Reuses the same qrcode.react
 // QRCodeSVG as EquipmentQrCard / PtwQrCard. Rendered as a full-screen overlay
@@ -85,7 +86,7 @@ export function EquipmentQrPrintSheet({ cards, title, onClose }: Props) {
               <Suspense fallback={<Spinner size={24} />}>
                 <div className="bg-white p-2 rounded-lg border border-site-200">
                   <QRCodeSVG
-                    value={`${window.location.origin}/#/equipment-verify/${c.token}`}
+                    value={equipmentPublicUrl(c.token)}
                     size={160}
                     level="M"
                     includeMargin

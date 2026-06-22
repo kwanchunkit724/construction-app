@@ -92,6 +92,9 @@ const DemoPage = lazy(() => import('./pages/Demo'))
 const RoleSwitchPage = lazy(() => import('./pages/RoleSwitch'))
 // 權限測試切換 ([TEST] rig, see .planning/TEST-PROGRAM.md). No auth — login switcher.
 const TestRoleSwitchPage = lazy(() => import('./pages/TestRoleSwitch'))
+// PUBLIC QR verification (no login) — reached by scanning a PTW / equipment QR.
+const PtwPublicVerifyPage = lazy(() => import('./pages/PtwPublicVerify'))
+const EquipmentPublicVerifyPage = lazy(() => import('./pages/EquipmentPublicVerify'))
 
 function lazyRoute(node: React.ReactNode) {
   return <Suspense fallback={<FullPageSpinner label="載入中..." />}>{node}</Suspense>
@@ -189,6 +192,8 @@ export default function App() {
               <Route path="/demo" element={lazyRoute(<DemoPage />)} />
               <Route path="/demo-roles" element={lazyRoute(<RoleSwitchPage />)} />
               <Route path="/test-roles" element={lazyRoute(<TestRoleSwitchPage />)} />
+              <Route path="/p/:token" element={lazyRoute(<PtwPublicVerifyPage />)} />
+              <Route path="/pe/:token" element={lazyRoute(<EquipmentPublicVerifyPage />)} />
               <Route path="/takeaway" element={lazyRoute(<TakeawayPage />)} />
             </>
           )}
