@@ -1,0 +1,322 @@
+[
+  {
+    "feature": "物料",
+    "seq": 1,
+    "actor": "62010003",
+    "action": "落料單 (一座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 2,
+    "actor": "62010001",
+    "action": "落料單 (一座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 3,
+    "actor": "62010002",
+    "action": "落料單 (一座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 4,
+    "actor": "62010003",
+    "action": "落料單 (一座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 5,
+    "actor": "62010001",
+    "action": "落料單 (一座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 6,
+    "actor": "62020003",
+    "action": "落料單 (二座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 7,
+    "actor": "62020001",
+    "action": "落料單 (二座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 8,
+    "actor": "62020002",
+    "action": "落料單 (二座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 9,
+    "actor": "62020003",
+    "action": "落料單 (二座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 10,
+    "actor": "62020001",
+    "action": "落料單 (二座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 11,
+    "actor": "62030003",
+    "action": "落料單 (三座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 12,
+    "actor": "62030001",
+    "action": "落料單 (三座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 13,
+    "actor": "62030002",
+    "action": "落料單 (三座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 14,
+    "actor": "62030003",
+    "action": "落料單 (三座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 15,
+    "actor": "62030001",
+    "action": "落料單 (三座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 16,
+    "actor": "62040003",
+    "action": "落料單 (外圍)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 17,
+    "actor": "62040001",
+    "action": "落料單 (外圍)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 18,
+    "actor": "62040002",
+    "action": "落料單 (外圍)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 19,
+    "actor": "62040003",
+    "action": "落料單 (外圍)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 20,
+    "actor": "62040001",
+    "action": "落料單 (外圍)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 21,
+    "actor": "62010003",
+    "action": "收貨記數",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 22,
+    "actor": "62010002",
+    "action": "收貨記數",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 23,
+    "actor": "62010001",
+    "action": "收貨記數",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 24,
+    "actor": "62020001",
+    "action": "收貨記數",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 25,
+    "actor": "62020003",
+    "action": "收貨記數",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 26,
+    "actor": "62030003",
+    "action": "收貨記數",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 27,
+    "actor": "62030002",
+    "action": "收貨記數",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 28,
+    "actor": "62030001",
+    "action": "收貨記數",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 29,
+    "actor": "62040001",
+    "action": "收貨記數",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 30,
+    "actor": "62040003",
+    "action": "收貨記數",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 31,
+    "actor": "62010004",
+    "action": "工人落料單",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"materials\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "物料",
+    "seq": 32,
+    "actor": "62020003",
+    "action": "判頭改別人料單 (R1)",
+    "expected": "deny",
+    "actual": "deny (http 200) 0 row",
+    "pass": true,
+    "note": ""
+  }
+]

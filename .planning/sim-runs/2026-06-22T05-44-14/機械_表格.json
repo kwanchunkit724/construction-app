@@ -1,0 +1,302 @@
+[
+  {
+    "feature": "機械/表格",
+    "seq": 1,
+    "actor": "62010001",
+    "action": "總承加機械 #1 (excavation)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 2,
+    "actor": "62010001",
+    "action": "總承加機械 #2 (scaffold)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 3,
+    "actor": "62010001",
+    "action": "總承加機械 #3 (lifting_appliance)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 4,
+    "actor": "62010001",
+    "action": "總承加機械 #4 (excavation)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 5,
+    "actor": "62010001",
+    "action": "總承加機械 #5 (scaffold)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 6,
+    "actor": "62010001",
+    "action": "總承加機械 #6 (lifting_appliance)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 7,
+    "actor": "62010003",
+    "action": "判頭加機械",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"equipment_register\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 8,
+    "actor": "62000004",
+    "action": "安全主任加機械 (v77)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 9,
+    "actor": "62000004",
+    "action": "安全主任 mint QR",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 10,
+    "actor": "62010003",
+    "action": "判頭 mint QR",
+    "expected": "deny",
+    "actual": "deny (http 400) 沒有權限產生 QR",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 11,
+    "actor": "62000001",
+    "action": "PM 核實證書",
+    "expected": "allow",
+    "actual": "allow (http 204)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 12,
+    "actor": "62010003",
+    "action": "判頭核實證書",
+    "expected": "deny",
+    "actual": "deny (http 400) 只有管理員 / PM / 安全主任可核實證書",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 13,
+    "actor": "62010001",
+    "action": "開表格項 (excavation)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 14,
+    "actor": "62010003",
+    "action": "合資格判頭簽表格 (competent_person)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": "持 competent_person 牌"
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 15,
+    "actor": "62010004",
+    "action": "工人(無牌)簽表格",
+    "expected": "deny",
+    "actual": "deny (http 400) 你未有有效的合資格人士證明（需要 competent_person）",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 16,
+    "actor": "62010001",
+    "action": "開表格項 (scaffold)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 17,
+    "actor": "62010003",
+    "action": "合資格判頭簽表格 (competent_person)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": "持 competent_person 牌"
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 18,
+    "actor": "62010004",
+    "action": "工人(無牌)簽表格",
+    "expected": "deny",
+    "actual": "deny (http 400) 你未有有效的合資格人士證明（需要 competent_person）",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 19,
+    "actor": "62010001",
+    "action": "開表格項 (lifting_appliance)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 20,
+    "actor": "62010003",
+    "action": "合資格判頭簽表格 (competent_person)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": "持 competent_person 牌"
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 21,
+    "actor": "62010004",
+    "action": "工人(無牌)簽表格",
+    "expected": "deny",
+    "actual": "deny (http 400) 你未有有效的合資格人士證明（需要 competent_person）",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 22,
+    "actor": "62010001",
+    "action": "開表格項 (excavation)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 23,
+    "actor": "62010003",
+    "action": "合資格判頭簽表格 (competent_person)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": "持 competent_person 牌"
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 24,
+    "actor": "62010004",
+    "action": "工人(無牌)簽表格",
+    "expected": "deny",
+    "actual": "deny (http 400) 你未有有效的合資格人士證明（需要 competent_person）",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 25,
+    "actor": "62010001",
+    "action": "開表格項 (scaffold)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 26,
+    "actor": "62010003",
+    "action": "合資格判頭簽表格 (competent_person)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": "持 competent_person 牌"
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 27,
+    "actor": "62010004",
+    "action": "工人(無牌)簽表格",
+    "expected": "deny",
+    "actual": "deny (http 400) 你未有有效的合資格人士證明（需要 competent_person）",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 28,
+    "actor": "62010001",
+    "action": "開表格項 (lifting_appliance)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 29,
+    "actor": "62010003",
+    "action": "合資格判頭簽表格 (competent_person)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": "持 competent_person 牌"
+  },
+  {
+    "feature": "機械/表格",
+    "seq": 30,
+    "actor": "62010004",
+    "action": "工人(無牌)簽表格",
+    "expected": "deny",
+    "actual": "deny (http 400) 你未有有效的合資格人士證明（需要 competent_person）",
+    "pass": true,
+    "note": ""
+  }
+]

@@ -1,0 +1,312 @@
+[
+  {
+    "feature": "工作許可證",
+    "seq": 1,
+    "actor": "62010003",
+    "action": "開單 PTW-mqosi57x-1",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 2,
+    "actor": "62010003",
+    "action": "加內容版本 PTW-mqosi57x-1",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 3,
+    "actor": "62010003",
+    "action": "提交 PTW-mqosi57x-1",
+    "expected": "allow",
+    "actual": "allow (http 204)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 4,
+    "actor": "62000004",
+    "action": "批核 PTW-mqosi57x-1 (安全主任)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 5,
+    "actor": "62010001",
+    "action": "批核 PTW-mqosi57x-1 (總承)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 6,
+    "actor": "62020001",
+    "action": "開單 PTW-mqosi57x-2",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 7,
+    "actor": "62020001",
+    "action": "加內容版本 PTW-mqosi57x-2",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 8,
+    "actor": "62020001",
+    "action": "提交 PTW-mqosi57x-2",
+    "expected": "allow",
+    "actual": "allow (http 204)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 9,
+    "actor": "62000004",
+    "action": "批核 PTW-mqosi57x-2 (安全主任)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 10,
+    "actor": "62010001",
+    "action": "批核 PTW-mqosi57x-2 (總承)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 11,
+    "actor": "62010002",
+    "action": "開單 PTW-mqosi57x-3",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 12,
+    "actor": "62010002",
+    "action": "加內容版本 PTW-mqosi57x-3",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 13,
+    "actor": "62010002",
+    "action": "提交 PTW-mqosi57x-3",
+    "expected": "allow",
+    "actual": "allow (http 204)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 14,
+    "actor": "62000004",
+    "action": "批核 PTW-mqosi57x-3 (安全主任)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 15,
+    "actor": "62010001",
+    "action": "批核 PTW-mqosi57x-3 (總承)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 16,
+    "actor": "62030003",
+    "action": "開單 PTW-mqosi57x-4",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 17,
+    "actor": "62030003",
+    "action": "加內容版本 PTW-mqosi57x-4",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 18,
+    "actor": "62030003",
+    "action": "提交 PTW-mqosi57x-4",
+    "expected": "allow",
+    "actual": "allow (http 204)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 19,
+    "actor": "62000004",
+    "action": "批核 PTW-mqosi57x-4 (安全主任)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 20,
+    "actor": "62010001",
+    "action": "批核 PTW-mqosi57x-4 (總承)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 21,
+    "actor": "62020003",
+    "action": "開單 PTW-mqosi57x-5",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 22,
+    "actor": "62020003",
+    "action": "加內容版本 PTW-mqosi57x-5",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 23,
+    "actor": "62020003",
+    "action": "提交 PTW-mqosi57x-5",
+    "expected": "allow",
+    "actual": "allow (http 204)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 24,
+    "actor": "62000004",
+    "action": "批核 PTW-mqosi57x-5 (安全主任)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 25,
+    "actor": "62010001",
+    "action": "批核 PTW-mqosi57x-5 (總承)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 26,
+    "actor": "62040001",
+    "action": "開單 PTW-mqosi57x-6",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 27,
+    "actor": "62040001",
+    "action": "加內容版本 PTW-mqosi57x-6",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 28,
+    "actor": "62040001",
+    "action": "提交 PTW-mqosi57x-6",
+    "expected": "allow",
+    "actual": "allow (http 204)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 29,
+    "actor": "62000004",
+    "action": "批核 PTW-mqosi57x-6 (安全主任)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 30,
+    "actor": "62010001",
+    "action": "批核 PTW-mqosi57x-6 (總承)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工作許可證",
+    "seq": 31,
+    "actor": "62000004",
+    "action": "越權開單",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"permits_to_work\"",
+    "pass": true,
+    "note": ""
+  }
+]
