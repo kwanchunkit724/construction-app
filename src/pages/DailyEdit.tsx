@@ -57,13 +57,17 @@ function DailyEditInner({ projectId }: { projectId: string }) {
   // yesterday's on 複製琴日). Only the still-captured fields (linked progress
   // items + freeform/notes) are seeded; weather/manpower/plant are ignored.
   function seedFrom(d: {
-    progress_item_ids: string[]
-    freeform_items: string[]
-    notes: string
+    progress_item_ids: string[] | null
+    freeform_items: string[] | null
+    notes: string | null
   }) {
-    setSelectedItemIds(new Set(d.progress_item_ids))
-    setFreeform(d.freeform_items.length > 0 ? d.freeform_items : [''])
-    setNotes(d.notes)
+    // Null-guard every field: a daily can be saved with no notes/freeform (the
+    // columns are nullable), and an unguarded notes.trim() / freeform.length
+    // downstream white-screens the whole edit page.
+    setSelectedItemIds(new Set(d.progress_item_ids ?? []))
+    const ff = d.freeform_items ?? []
+    setFreeform(ff.length > 0 ? ff : [''])
+    setNotes(d.notes ?? '')
   }
 
   useEffect(() => {
