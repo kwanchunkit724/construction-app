@@ -282,9 +282,9 @@ function DailyBody({
   const plant = daily.plant ?? []
   const hasManpower = manpower.length > 0
   const hasPlant = plant.length > 0
-  const hasProgress = daily.progress_item_ids.length > 0
-  const hasFreeform = daily.freeform_items.length > 0
-  const hasNotes = daily.notes.trim().length > 0
+  const hasProgress = (daily.progress_item_ids ?? []).length > 0
+  const hasFreeform = (daily.freeform_items ?? []).length > 0
+  const hasNotes = (daily.notes ?? '').trim().length > 0
   if (!hasManpower && !hasPlant && !hasProgress && !hasFreeform && !hasNotes) {
     return <p className="text-sm text-site-500">未有內容</p>
   }
