@@ -836,95 +836,60 @@ export async function exportVOToPDF(
   approvalTimeline: Array<{ actor_name: string; action_zh: string; at: string; reason: string | null }>,
   parentSiNumber?: string,
 ): Promise<void> {
-  // Dynamic imports keep jspdf in the lazy reports-pdf chunk.
-  const jspdfMod = await import('jspdf')
-  const autoTableMod = await import('jspdf-autotable')
-  const jsPDFCtor = (jspdfMod as any).default
-  const autoTableFn = (autoTableMod as any).default
+  // Rendered via html2canvas (system CJK fonts) — see htmlToPdfBlob — so every
+  // Chinese character renders, not just the embedded jsPDF subset's glyphs.
   const { supabase } = await import('./supabase')
+  const esc = escapeHtml
+  const row = (label: string, val: string) =>
+    `<div class="pgblk" style="display:flex; gap:8px; padding:3px 0; font-size:13px;"><span style="color:#64748b; min-width:120px; flex-shrink:0;">${esc(label)}</span><span style="color:#0f172a; font-weight:600; word-break:break-all;">${esc(val)}</span></div>`
+  const head = (t: string) =>
+    `<div class="pgblk" style="font-size:15px; font-weight:700; color:#0f172a; margin:16px 0 6px; border-bottom:2px solid #f97316; padding-bottom:3px;">${esc(t)}</div>`
 
-  const doc: any = new jsPDFCtor({ unit: 'pt', format: 'a4' })
-  await ensureChineseFont(doc)
-
-  // Header
-  doc.setFontSize(16)
-  doc.text(`變更指令 ${vo.number}`, 40, 50)
-  doc.setFontSize(10)
-  doc.text(`項目：${project.name}`, 40, 72)
-  doc.text(`狀態：${vo.status}`, 40, 86)
-  doc.text(`提交：${vo.submitted_at ?? '—'}    鎖定：${vo.locked_at ?? '—'}`, 40, 100)
-
-  // SI reference
-  doc.setFontSize(12)
-  doc.text(`參考工地指令：${parentSiNumber ?? '—'}`, 40, 130)
-  doc.setFontSize(10)
-  doc.text(version.payload.description || '', 40, 150, { maxWidth: 515 })
-
-  // Line items
-  const items = version.payload.line_items
-  autoTableFn(doc, {
-    startY: 220,
-    head: [['#','類別','描述','數量','單位','單價','小計']],
-    body: items.map((li, i) => [
-      (i + 1).toString(),
-      LINE_ITEM_CATEGORY_ZH[li.category],
-      li.description,
-      li.quantity.toString(),
-      li.unit,
-      formatHKD(li.unit_price_cents),
-      formatHKD(li.subtotal_cents),
-    ]),
-    foot: [[
-      { content: '經系統核算總額', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
-      { content: formatHKD(vo.total_amount_cents), styles: { fontStyle: 'bold' } },
-    ]],
-    styles: { font: 'NotoHK', fontSize: 9, cellPadding: 4 },
-    headStyles: { fillColor: [29, 78, 216] },
-  })
-
-  // Approval timeline
-  doc.addPage()
-  doc.setFont('NotoHK') // re-apply CJK font: addPage() resets the active font to helvetica
-  doc.setFontSize(12)
-  doc.text('簽核紀錄', 40, 50)
-  autoTableFn(doc, {
-    startY: 70,
-    head: [['時間','動作','處理者','原因']],
-    body: approvalTimeline.map(a => [a.at, a.action_zh, a.actor_name, a.reason ?? '']),
-    styles: { font: 'NotoHK', fontSize: 9, cellPadding: 4 },
-  })
-
-  // Drawing thumbnails — 6 per page, ≤200 KB each
-  for (let i = 0; i < drawings.length; i += 6) {
-    doc.addPage()
-    doc.setFont('NotoHK') // re-apply CJK font: addPage() resets the active font to helvetica
-    doc.text('附圖', 40, 50)
-    const batch = drawings.slice(i, i + 6)
-    for (let j = 0; j < batch.length; j++) {
-      const dv = batch[j]
-      const { data: signed } = await supabase.storage.from('project-drawings').createSignedUrl(dv.file_path, 300)
-      if (!signed?.signedUrl) continue
-      try {
-        const blob = await (await fetch(signed.signedUrl)).blob()
-        const resized = await resizeImageMaxKB(blob, 200)
-        const dataUrl = await blobToDataUrl(resized)
-        const col = j % 2
-        const row = Math.floor(j / 2)
-        doc.addImage(dataUrl, 'JPEG', 40 + col * 280, 70 + row * 240, 260, 220, undefined, 'FAST')
-      } catch {
-        // Missing thumbnail is non-fatal — skip.
-      }
-    }
+  // Drawing thumbnails: fetch + resize + embed as data-URL <img> (html2canvas
+  // rasterises them). Missing thumbnails are skipped (non-fatal).
+  let drawingsHtml = ''
+  for (const dv of drawings) {
+    const { data: signed } = await supabase.storage.from('project-drawings').createSignedUrl(dv.file_path, 300)
+    if (!signed?.signedUrl) continue
+    try {
+      const blob = await (await fetch(signed.signedUrl)).blob()
+      const resized = await resizeImageMaxKB(blob, 200)
+      const dataUrl = await blobToDataUrl(resized)
+      drawingsHtml += `<div class="pgblk" style="display:inline-block; width:48%; margin:1%; vertical-align:top;"><img src="${dataUrl}" style="width:100%; border:1px solid #e2e8f0;"/></div>`
+    } catch { /* skip */ }
   }
 
-  // Footer — re-apply CJK font: prior autoTable / addPage paths may have left
-  // the active font as helvetica.
-  doc.setFont('NotoHK')
-  doc.setFontSize(8)
-  doc.text(`產生時間：${new Date().toLocaleString('zh-HK')} — 由 CK工程系統產生`, 40, 820)
+  const items = version.payload.line_items
+  const itemRows = items.map((li, i) => [
+    (i + 1).toString(),
+    LINE_ITEM_CATEGORY_ZH[li.category],
+    li.description,
+    li.quantity.toString(),
+    li.unit,
+    formatHKD(li.unit_price_cents),
+    formatHKD(li.subtotal_cents),
+  ])
+  const itemFoot = `<tr class="pgblk"><td colspan="6" style="border:1px solid #cbd5e1; padding:5px 7px; font-size:11px; font-weight:700; text-align:right; background:#f1f5f9;">${esc('經系統核算總額')}</td><td style="border:1px solid #cbd5e1; padding:5px 7px; font-size:11px; font-weight:700; background:#f1f5f9;">${esc(formatHKD(vo.total_amount_cents))}</td></tr>`
 
-  const blob = doc.output('blob') as Blob
-  await downloadBlob(blob, `${safeName(project.name)}_${vo.number}_${dateStr()}.pdf`)
+  let body = `
+    <div class="pgblk" style="font-size:22px; font-weight:800;">變更指令 ${esc(vo.number)}</div>
+    <div class="pgblk" style="font-size:12px; color:#64748b; margin-top:4px;">CK工程 — 變更指令 (Variation Order)</div>
+    ${head('資料')}
+    ${row('項目', project.name)}
+    ${row('狀態', vo.status)}
+    ${row('提交', vo.submitted_at ?? '—')}
+    ${row('鎖定', vo.locked_at ?? '—')}
+    ${row('參考工地指令', parentSiNumber ?? '—')}`
+  if (version.payload.description) body += row('說明', version.payload.description)
+  body += head('項目明細')
+    + htmlTable(['#', '類別', '描述', '數量', '單位', '單價', '小計'], itemRows, { footHtml: itemFoot })
+  body += head('簽核紀錄')
+    + htmlTable(['時間', '動作', '處理者', '原因'], approvalTimeline.map(a => [a.at, a.action_zh, a.actor_name, a.reason ?? '']))
+  if (drawingsHtml) body += head('附圖') + `<div>${drawingsHtml}</div>`
+  body += `<div class="pgblk" style="font-size:10px; color:#94a3b8; margin-top:20px;">產生時間：${esc(new Date().toLocaleString('zh-HK'))} — 由 CK工程系統產生</div>`
+
+  const blob = await htmlToPdfBlob(body)
+  await shareOrDownloadBlob(blob, `${safeName(project.name)}_${vo.number}_${dateStr()}.pdf`, `變更指令 ${vo.number} — ${project.name}`)
 }
 
 // ── 地盤表格 approved-form PDF replica (v55) ───────────────────
@@ -965,61 +930,46 @@ export interface FormPdfInput {
 }
 
 export async function generateFormSignoffPdf(input: FormPdfInput): Promise<Blob> {
-  const jspdfMod = await import('jspdf')
-  const jsPDFCtor = (jspdfMod as any).default
-  const doc: any = new jsPDFCtor({ unit: 'pt', format: 'a4' })
-  await ensureChineseFont(doc)
+  // Rendered via html2canvas (system CJK fonts) — see htmlToPdfBlob — so every
+  // Chinese character renders, not just the embedded jsPDF subset's glyphs.
+  const esc = escapeHtml
+  const row = (label: string, val: string) =>
+    `<div class="pgblk" style="display:flex; gap:8px; padding:3px 0; font-size:13px;"><span style="color:#64748b; min-width:120px; flex-shrink:0;">${esc(label)}</span><span style="color:#0f172a; font-weight:600; word-break:break-all;">${esc(val)}</span></div>`
+  const head = (t: string) =>
+    `<div class="pgblk" style="font-size:15px; font-weight:700; color:#0f172a; margin:16px 0 6px; border-bottom:2px solid #f97316; padding-bottom:3px;">${esc(t)}</div>`
 
-  // Header
-  doc.setFontSize(16)
-  doc.text(input.templateName, 40, 50)
-  doc.setFontSize(10)
-  let y = 74
-  const line = (label: string, val: string) => { doc.text(`${label}：${val}`, 40, y); y += 16 }
-  line('表格編號', input.templateCode)
-  if (input.statutoryRef) line('法定依據', input.statutoryRef)
-  line('項目', input.projectName)
-  line('機械 / 結構', `${input.equipmentRef} ${input.equipmentName}`)
-  if (input.location) line('位置', input.location)
-  line('檢查結果', input.resultZh)
+  let body = `
+    <div class="pgblk" style="font-size:22px; font-weight:800;">${esc(input.templateName)}</div>
+    <div class="pgblk" style="font-size:12px; color:#64748b; margin-top:4px;">CK工程 — 法定表格簽核記錄</div>
+    ${head('表格資料')}
+    ${row('表格編號', input.templateCode)}`
+  if (input.statutoryRef) body += row('法定依據', input.statutoryRef)
+  body += row('項目', input.projectName)
+    + row('機械 / 結構', `${input.equipmentRef} ${input.equipmentName}`)
+  if (input.location) body += row('位置', input.location)
+  body += row('檢查結果', input.resultZh)
 
-  // Checklist
-  y += 8
-  doc.setFontSize(12)
-  doc.text('檢查項目', 40, y); y += 18
-  doc.setFontSize(10)
-  for (const row of input.checklist) {
-    const mark = row.value === true ? '[合格]' : row.value === false ? '[不合格]' : '[—]'
-    doc.text(`${mark}  ${row.label_zh}`, 48, y, { maxWidth: 500 })
-    y += 16
-    if (row.remark) { doc.text(`        備註：${row.remark}`, 48, y, { maxWidth: 500 }); y += 16 }
-    if (y > 720) { doc.addPage(); doc.setFont('NotoHK'); y = 50 } // re-apply CJK font after addPage
+  body += head('檢查項目')
+  for (const r of input.checklist) {
+    const mark = r.value === true ? '[合格]' : r.value === false ? '[不合格]' : '[—]'
+    const color = r.value === true ? '#16a34a' : r.value === false ? '#dc2626' : '#64748b'
+    body += `<div class="pgblk" style="font-size:13px; padding:2px 0;"><span style="color:${color}; font-weight:700;">${esc(mark)}</span> ${esc(r.label_zh)}${r.remark ? `<div style="color:#64748b; font-size:11px; padding-left:16px;">備註：${esc(r.remark)}</div>` : ''}</div>`
   }
 
-  // Signature block
-  y += 12
-  if (y > 680) { doc.addPage(); y = 50 }
-  doc.setFont('NotoHK') // re-apply CJK font: an addPage above resets the active font to helvetica
-  doc.setFontSize(12)
-  doc.text('簽署', 40, y); y += 8
-  try {
-    doc.addImage(`data:image/png;base64,${input.signatureB64}`, 'PNG', 40, y, 180, 70)
-  } catch {
-    // A malformed signature shouldn't kill the PDF — leave the box empty.
+  body += head('簽署')
+  body += `<div class="pgblk" style="display:flex; gap:20px; align-items:flex-start; margin-top:4px;">`
+  if (input.signatureB64) {
+    body += `<img src="data:image/png;base64,${input.signatureB64}" style="width:180px; height:70px; object-fit:contain; border:1px solid #e2e8f0;"/>`
   }
-  doc.setFontSize(10)
-  doc.text(`合資格人士：${input.signerName}`, 240, y + 24)
-  if (input.certNo) doc.text(`證書編號：${input.certNo}`, 240, y + 40)
-  doc.text(`簽署時間：${new Date(input.signedAt).toLocaleString('zh-HK')}`, 240, y + 56)
-  if (input.validUntil) {
-    doc.text(`有效至：${new Date(input.validUntil).toLocaleString('zh-HK')}`, 240, y + 72)
-  }
+  body += `<div style="font-size:13px; line-height:1.7;">`
+    + `<div>合資格人士：<b>${esc(input.signerName)}</b></div>`
+    + (input.certNo ? `<div>證書編號：${esc(input.certNo)}</div>` : '')
+    + `<div>簽署時間：${esc(new Date(input.signedAt).toLocaleString('zh-HK'))}</div>`
+    + (input.validUntil ? `<div>有效至：${esc(new Date(input.validUntil).toLocaleString('zh-HK'))}</div>` : '')
+    + `</div></div>`
+  body += `<div class="pgblk" style="font-size:10px; color:#94a3b8; margin-top:20px;">產生時間：${esc(new Date().toLocaleString('zh-HK'))} — 由 CK工程系統產生</div>`
 
-  // Footer
-  doc.setFontSize(8)
-  doc.text(`產生時間：${new Date().toLocaleString('zh-HK')} — 由 CK工程系統產生`, 40, 820)
-
-  return doc.output('blob') as Blob
+  return await htmlToPdfBlob(body)
 }
 
 // Convenience wrapper: generate + share/download (print-and-post flow).
@@ -1179,6 +1129,23 @@ async function htmlToPdfBlob(bodyHtml: string): Promise<Blob> {
   }
 }
 
+// Build a pager-friendly HTML table for htmlToPdfBlob. Each <tr> carries the
+// `pgblk` class so the slicer never bisects a row. Cells are HTML-escaped.
+function htmlTable(
+  headers: string[],
+  rows: Array<Array<string | number | null | undefined>>,
+  opts?: { headFill?: string; footHtml?: string },
+): string {
+  const esc = escapeHtml
+  const th = headers
+    .map(h => `<th style="border:1px solid #cbd5e1; padding:5px 7px; font-size:11px; text-align:left; color:#ffffff; background:${opts?.headFill ?? '#1d4ed8'};">${esc(h)}</th>`)
+    .join('')
+  const trs = rows
+    .map(r => `<tr class="pgblk">${r.map(c => `<td style="border:1px solid #e2e8f0; padding:5px 7px; font-size:11px; color:#0f172a; vertical-align:top; word-break:break-word;">${esc(c == null ? '' : String(c))}</td>`).join('')}</tr>`)
+    .join('')
+  return `<table style="border-collapse:collapse; width:100%; margin:6px 0; table-layout:fixed;"><thead><tr>${th}</tr></thead><tbody>${trs}${opts?.footHtml ?? ''}</tbody></table>`
+}
+
 export async function exportComplianceProofPack(input: ProofPackInput): Promise<void> {
   // Global ledger integrity attestation (per-record audit lives in the same chain).
   let integrity: any = null
@@ -1311,13 +1278,8 @@ export async function exportWeatherEotToPDF(
   events: WeatherEvent[],
   claims: WeatherClaim[],
 ): Promise<void> {
-  const jspdfMod = await import('jspdf')
-  const autoTableMod = await import('jspdf-autotable')
-  const jsPDFCtor = (jspdfMod as any).default
-  const autoTableFn = (autoTableMod as any).default
-  const doc: any = new jsPDFCtor({ unit: 'pt', format: 'a4' })
-  await ensureChineseFont(doc)
-
+  // Rendered via html2canvas (system CJK fonts) — see htmlToPdfBlob.
+  const esc = escapeHtml
   const eventsByDate = new Map<string, WeatherEvent[]>()
   for (const e of events) {
     const a = eventsByDate.get(e.hkt_date) ?? []
@@ -1327,46 +1289,31 @@ export async function exportWeatherEotToPDF(
   const totalDays = claims.reduce((s, c) => s + (Number(c.claim_days) || 0), 0)
   const sorted = claims.slice().sort((a, b) => a.hkt_date.localeCompare(b.hkt_date))
 
-  // Header
-  doc.setFontSize(16)
-  doc.text('惡劣天氣 / 工期延誤 (EOT) 申索報告', 40, 50)
-  doc.setFontSize(10)
-  doc.text(`項目：${project.name}`, 40, 72)
-  doc.text(`已記錄申請 EOT 總日數：${totalDays} 日 · 共 ${claims.length} 日`, 40, 88)
-  doc.text('標準：T8 或以上 / 黑雨 / 紅雨 / 24 小時雨量 > 20mm（私人 SFBC / 房署客觀準則）。', 40, 104, { maxWidth: 515 })
-  doc.text('政府 GCC 為酌情，需填關鍵路徑等資料供工程師審批。資料來源：香港天文台。', 40, 118, { maxWidth: 515 })
-
-  autoTableFn(doc, {
-    startY: 138,
-    head: [['日期', '天氣事件', '觸發', '關鍵路徑', '可施工', '善後', 'EOT', '備註']],
-    body: sorted.map(c => {
-      const evs = eventsByDate.get(c.hkt_date) ?? []
-      return [
-        c.hkt_date,
-        weatherEventsLabel(evs),
-        c.trigger,
-        yesNo(c.on_critical_path),
-        yesNo(c.ready_to_work),
-        c.tidy_days ?? '',
-        c.claim_days ?? '',
-        c.note ?? '',
-      ]
-    }),
-    foot: [[
-      { content: '申請 EOT 總日數', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
-      { content: `${totalDays}`, styles: { fontStyle: 'bold' } },
-      '',
-    ]],
-    styles: { font: 'NotoHK', fontSize: 9, cellPadding: 4 },
-    headStyles: { fillColor: [29, 78, 216] },
+  const rows = sorted.map(c => {
+    const evs = eventsByDate.get(c.hkt_date) ?? []
+    return [
+      c.hkt_date,
+      weatherEventsLabel(evs),
+      c.trigger,
+      yesNo(c.on_critical_path),
+      yesNo(c.ready_to_work),
+      c.tidy_days ?? '',
+      c.claim_days ?? '',
+      c.note ?? '',
+    ]
   })
+  const foot = `<tr class="pgblk"><td colspan="6" style="border:1px solid #cbd5e1; padding:5px 7px; font-size:11px; font-weight:700; text-align:right; background:#f1f5f9;">${esc('申請 EOT 總日數')}</td><td style="border:1px solid #cbd5e1; padding:5px 7px; font-size:11px; font-weight:700; background:#f1f5f9;">${esc(String(totalDays))}</td><td style="border:1px solid #cbd5e1; background:#f1f5f9;"></td></tr>`
 
-  // Re-apply CJK font: autoTable can leave the active font changed.
-  doc.setFont('NotoHK')
-  doc.setFontSize(8)
-  doc.text(`產生時間：${new Date().toLocaleString('zh-HK')} — 由 CK工程系統產生`, 40, 820)
+  const body = `
+    <div class="pgblk" style="font-size:20px; font-weight:800;">惡劣天氣 / 工期延誤 (EOT) 申索報告</div>
+    <div class="pgblk" style="font-size:12px; color:#64748b; margin-top:4px;">CK工程 — 天氣 EOT 申索</div>
+    <div class="pgblk" style="font-size:13px; margin-top:8px;">項目：<b>${esc(project.name)}</b></div>
+    <div class="pgblk" style="font-size:13px; padding:2px 0;">已記錄申請 EOT 總日數：<b>${esc(String(totalDays))}</b> 日 · 共 ${esc(String(claims.length))} 日</div>
+    <div class="pgblk" style="font-size:11px; color:#475569; margin-top:6px; line-height:1.5;">標準：T8 或以上 / 黑雨 / 紅雨 / 24 小時雨量 &gt; 20mm（私人 SFBC / 房署客觀準則）。政府 GCC 為酌情，需填關鍵路徑等資料供工程師審批。資料來源：香港天文台。</div>
+    ${htmlTable(['日期', '天氣事件', '觸發', '關鍵路徑', '可施工', '善後', 'EOT', '備註'], rows, { footHtml: foot })}
+    <div class="pgblk" style="font-size:10px; color:#94a3b8; margin-top:20px;">產生時間：${esc(new Date().toLocaleString('zh-HK'))} — 由 CK工程系統產生</div>`
 
-  const blob = doc.output('blob') as Blob
+  const blob = await htmlToPdfBlob(body)
   await shareOrDownloadBlob(blob, `${safeName(project.name)}_天氣EOT_${dateStr()}.pdf`, `${project.name} — 天氣 EOT 申索（${totalDays} 日）`)
 }
 
