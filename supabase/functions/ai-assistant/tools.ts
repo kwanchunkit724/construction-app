@@ -24,6 +24,22 @@ function pick<T extends Record<string, unknown>>(o: T, keys: string[]) {
   return r
 }
 
+// True total via a head-only exact count (RLS-bounded, same as the read). Lets a
+// "how many X" answer come from total_count instead of the model counting the
+// (≤CAP) items — which under-reports once a list exceeds the row cap.
+async function tableCount(supa: Supa, table: string, projectId: string, eq?: Record<string, unknown>): Promise<number | null> {
+  let q = supa.from(table).select('id', { count: 'exact', head: true }).eq('project_id', projectId)
+  for (const [k, v] of Object.entries(eq ?? {})) q = q.eq(k, v as any)
+  const { count } = await q
+  return count ?? null
+}
+// Wrap a capped row list with the TRUE total. The model is told (system prompt
+// rule 9) to answer counts from total_count, never by counting items.
+function capped(items: unknown[], total: number | null) {
+  const t = total == null ? items.length : total
+  return { total_count: t, showing: items.length, truncated: t > items.length, items }
+}
+
 // v59 gates 11 feature tables on project_module_enabled(project_id,'<key>'). When
 // a module is OFF the underlying read returns [] (RLS) — indistinguishable from
 // "nothing on site". moduleEnabled() asks the existing RPC so a gated read tool
@@ -86,6 +102,11 @@ export const READ_TOOLS: ToolDef[] = [
     input_schema: { type: 'object', properties: { days: { type: 'integer' } }, additionalProperties: false },
   },
   {
+    name: 'list_ptw',
+    description: '讀取工作許可證（PTW / 工作許可）。可選 status 篩選（如 active=生效中、expired=已過期、in_review=審批中、closed_out=已關閉）。回傳 total_count（總數）+ 列表。問「幾多張 PTW／幾多張生效中／邊張到期」用呢個（唔好用 get_daily_brief 當總數）。',
+    input_schema: { type: 'object', properties: { status: { type: 'string', description: "PTW 狀態：active/expired/in_review/draft/closed_out 等" } }, additionalProperties: false },
+  },
+  {
     name: 'get_weather_outlook',
     description: '讀取香港天文台未來 9 日天氣預測 + 現時警告 + 大致天氣情況/熱帶氣旋消息。用嚟提前提醒地盤預防（大雨→清渠/物料加蓋/停批盪；大風或颱風→綁棚架網/收起易吹落街物件/固定塔吊；酷熱→防中暑調工時）。',
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
@@ -117,11 +138,12 @@ export async function executeReadTool(supa: Supa, projectId: string, name: strin
       if (error) return { error: error.message }
       let rows = (data ?? []) as Record<string, unknown>[]
       if (input?.status) rows = rows.filter((r) => r.status === input.status)
-      return rows.slice(0, CAP).map((r) => pick(r, [
+      const items = rows.slice(0, CAP).map((r) => pick(r, [
         'id', 'parent_id', 'code', 'title', 'status', 'tracking_mode', 'planned_start', 'planned_end',
         'planned_progress', 'actual_progress', 'floor_labels', 'floors_completed', 'qty_total', 'qty_done', 'qty_unit',
         'blocked_reason', 'assigned_to', 'delegated_to', 'zone_id',
       ]))
+      return capped(items, rows.length)
     }
     case 'get_timetable_window': {
       if (!(await moduleEnabled(supa, projectId, 'timetable'))) return moduleDisabled('timetable')
@@ -142,14 +164,18 @@ export async function executeReadTool(supa: Supa, projectId: string, name: strin
       let rows = (data ?? []) as Record<string, any>[]
       rows = rows.map((r) => ({ ...r, late: r.status === 'requested' && r.planned_arrival_at && r.planned_arrival_at < nowIso }))
       if (input?.only_late) rows = rows.filter((r) => r.late)
-      return rows
+      const total = await tableCount(supa, 'materials', projectId)
+      const reqC = await tableCount(supa, 'materials', projectId, { status: 'requested' })
+      const partC = await tableCount(supa, 'materials', projectId, { status: 'partial' })
+      return { total_count: total, not_arrived_count: (reqC ?? 0) + (partC ?? 0), showing: rows.length, truncated: (total ?? 0) > rows.length, items: rows }
     }
     case 'list_open_issues': {
       if (!(await moduleEnabled(supa, projectId, 'issues'))) return moduleDisabled('issues')
+      const total = await tableCount(supa, 'issues', projectId, { status: 'open' })
       const { data, error } = await supa.from('issues')
         .select('id, title, description, status, current_handler_role, reporter_role, created_at')
         .eq('project_id', projectId).eq('status', 'open').order('created_at', { ascending: false }).limit(CAP)
-      return error ? { error: error.message } : data
+      return error ? { error: error.message } : capped(data ?? [], total)
     }
     case 'search_documents': {
       if (!(await moduleEnabled(supa, projectId, 'documents'))) return moduleDisabled('documents')
@@ -172,10 +198,12 @@ export async function executeReadTool(supa: Supa, projectId: string, name: strin
           .select('id, version_no, status, revision_label').in('id', verIds)
         for (const v of vd ?? []) vers[v.id] = v
       }
-      return (docs ?? []).map((d: any) => ({
+      const total = await tableCount(supa, 'documents', projectId, input?.document_type ? { document_type: input.document_type } : undefined)
+      const mapped = (docs ?? []).map((d: any) => ({
         ...pick(d, ['id', 'title', 'doc_number', 'document_type', 'current_version_id', 'review_due_date']),
         current_version: d.current_version_id ? vers[d.current_version_id] ?? null : null,
       }))
+      return capped(mapped, total)
     }
     case 'get_document_link': {
       if (!(await moduleEnabled(supa, projectId, 'documents'))) return moduleDisabled('documents')
@@ -190,22 +218,36 @@ export async function executeReadTool(supa: Supa, projectId: string, name: strin
     }
     case 'list_pending_reviews': {
       const { data, error } = await supa.rpc('list_my_pending_reviews')
-      return error ? { error: error.message } : (data ?? [])
+      if (error) return { error: error.message }
+      const all = (data ?? []) as unknown[]
+      return capped(all.slice(0, CAP), all.length)
     }
     case 'list_contacts': {
       if (!(await moduleEnabled(supa, projectId, 'contacts'))) return moduleDisabled('contacts')
+      const total = await tableCount(supa, 'contacts', projectId)
       const { data, error } = await supa.from('contacts')
         .select('id, name, trade, phone, notes').eq('project_id', projectId).order('trade').limit(CAP)
-      return error ? { error: error.message } : data
+      return error ? { error: error.message } : capped(data ?? [], total)
     }
     case 'get_dailies': {
       if (!(await moduleEnabled(supa, projectId, 'dailies'))) return moduleDisabled('dailies')
       const days = Math.max(1, Math.min(30, Number(input?.days ?? 7)))
       const since = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10)
+      const { count: total } = await supa.from('dailies').select('id', { count: 'exact', head: true })
+        .eq('project_id', projectId).gte('date', since)
       const { data, error } = await supa.from('dailies')
         .select('id, date, weather, notes, freeform_items, progress_item_ids, user_id')
         .eq('project_id', projectId).gte('date', since).order('date', { ascending: false }).limit(CAP)
-      return error ? { error: error.message } : data
+      return error ? { error: error.message } : capped(data ?? [], total ?? null)
+    }
+    case 'list_ptw': {
+      const total = await tableCount(supa, 'permits_to_work', projectId, input?.status ? { status: input.status } : undefined)
+      let q = supa.from('permits_to_work')
+        .select('id, number, ptw_type, status, activated_at, expires_at')
+        .eq('project_id', projectId).order('expires_at', { ascending: true, nullsFirst: false }).limit(CAP)
+      if (input?.status) q = q.eq('status', input.status)
+      const { data, error } = await q
+      return error ? { error: error.message } : capped(data ?? [], total)
     }
     case 'get_weather_outlook': {
       const base = 'https://data.weather.gov.hk/weatherAPI/opendata/weather.php'

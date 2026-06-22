@@ -28,3 +28,20 @@
 - **B.** 加 **list/count_ptw** 工具(PTW 而家冇),唔好靠 get_daily_brief 充當總數。
 - **C.** CAP 回傳時明確標註「只顯示頭 60 條,可能仲有」,等 AI 唔會當係全部。
 - (低風險、唔郁 schema;但要 redeploy ai-assistant edge function。)
+
+## ✅ 已修 + 已部署 + 已驗證 (2026-06-22)
+改 `supabase/functions/ai-assistant/tools.ts` + `index.ts`,CLI deploy 咗 ai-assistant:
+- 每個 list 工具加真‧`total_count`(head exact count,RLS-bounded)+ `showing`/`truncated`;物料加 `not_arrived_count`。
+- 新增 **`list_ptw`** 工具(PTW 總數/狀態)。
+- system prompt 加規則 9:答「幾多」一定用 total_count,唔好自己數 items(最多 60)。
+
+**重問同樣 8 條(同一份 [TEST] data)→ 報數全部啱返:**
+| 問題 | 真實 | 修前 | 修後 |
+|---|---|---|---|
+| 未解決問題 | 75 | 62 | **75 ✅** |
+| 物料未到 | 55 | 29 | **55 ✅** |
+| PTW 生效 | 36 | 10 | **36 ✅**(用 list_ptw)|
+| 聯絡人 | 95 | 34 | **95 ✅** |
+| 今日日誌 | 10 | 10 | 10 ✅ |
+| 待批核 | 0 | 0 | 0 ✅ |
+AI 仲會主動講「列表截斷,只顯示頭 60,實際總數 95」。出入清零。

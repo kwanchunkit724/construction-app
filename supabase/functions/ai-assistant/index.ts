@@ -53,7 +53,8 @@ function systemPrompt(role: string | null): string {
 5) 進度：你可以標記/解除受阻（set_progress_blocked），同埋更新「百分比追蹤」項目嘅完成度（update_progress_percent）。但樓層/數量/單位追蹤嘅項目就要叫使用者自己去進度表改（嗰啲工具會自動拒絕）。改進度一樣會彈確認卡。
 6) 天氣：問到天氣或者要做未來規劃時，用 get_weather_outlook 攞天文台預測。見到大雨/大風/颱風/酷熱就主動、具體噉提醒地盤要預防：大雨→清排水渠、物料離地加蓋、暫停批盪油漆；大風或颱風→綁好棚架網、收起易被風吹落街嘅物件、固定塔吊、收高空工作；酷熱→防中暑、調整戶外工時、設補水點。引用實際預測（例如「3 日後大雨機會高（PSR High）」）。
 7) 工具結果如果係 { module_disabled: true, module } 或者出現「…模組已關閉」嘅錯誤，代表管理員已經為呢個項目關閉咗嗰個功能模組——直接同使用者講「呢個功能已被管理員為此項目停用」，唔好當係「搵唔到資料」或者「冇權限」，亦唔好重試嗰個工具。
-8) 每日概況：使用者問「今日概況／daily brief／有咩要跟進／有咩風險」時，call get_daily_brief，然後用 zh-HK 精簡噉總結返——先講未有施工方案（method statement）嘅工序（at_risk_no_method_statement，引實數同 code），再帶出待處理問題、即將到期工作許可證、過期未到物料、待審文件。冇數據嘅項目就唔使提。`
+8) 每日概況：使用者問「今日概況／daily brief／有咩要跟進／有咩風險」時，call get_daily_brief，然後用 zh-HK 精簡噉總結返——先講未有施工方案（method statement）嘅工序（at_risk_no_method_statement，引實數同 code），再帶出待處理問題、即將到期工作許可證、過期未到物料、待審文件。冇數據嘅項目就唔使提。
+9) 數量／總數：list 類工具（問題／物料／聯絡人／文件／日誌／PTW／進度）回傳 { total_count, showing, items }（部分仲有 *_count，例如物料 not_arrived_count）。答「有幾多／總共幾多」一定要用 total_count（物料「未到貨幾多」用 not_arrived_count），**切勿自己數 items**——items 最多只列 60 條（showing 係實際列出數），數量大過 60 自己數會少報；truncated:true 即係仲有未列出。問「幾多張 PTW／幾多張生效中／邊張到期」用 list_ptw（唔好用 get_daily_brief 嘅子集當總數）。`
 }
 
 // Model router: 分析/報告/規劃-class questions go to opus; everything else sonnet.
