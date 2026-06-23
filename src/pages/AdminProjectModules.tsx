@@ -62,8 +62,19 @@ function AdminProjectModulesInner({ projectId }: { projectId: string }) {
       p_module_key: key,
       p_enabled: next,
     })
-    if (error) {
-      setToast({ kind: 'err', msg: `儲存失敗：${error.message}` })
+    // 助理 has a SECOND backend gate (projects.ai_enabled, checked by the Edge
+    // Function in ai_enabled_for_project). Keep it in lockstep with the module
+    // switch so this one toggle fully controls AI for the project — tab + backend.
+    let aiErr = null
+    if (!error && key === 'assistant') {
+      const r = await supabase.rpc('set_project_ai_enabled', {
+        p_project_id: projectId,
+        p_enabled: next,
+      })
+      aiErr = r.error
+    }
+    if (error || aiErr) {
+      setToast({ kind: 'err', msg: `儲存失敗：${(error || aiErr)!.message}` })
     } else {
       setToast({ kind: 'ok', msg: `已${next ? '啟用' : '關閉'}「${MODULE_LABELS_ZH[key]}」` })
       await loadModules()
