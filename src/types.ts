@@ -515,7 +515,9 @@ export function computeRollup(leaves: ProgressItem[], today: Date = new Date(), 
 // ── Phase 4: Issue Tracking ─────────────────────────────────
 export type IssueStatus = 'open' | 'resolved'
 export type IssueHandlerRole = 'pm' | 'main_contractor' | 'subcontractor' | 'admin'
-export type IssueAction = 'reported' | 'commented' | 'escalated' | 'resolved' | 'reopened'
+// v106: 上呈/同層轉交/彈番落去 are one operation (reassign to a chosen person);
+// the action is derived from the target tier vs the current tier (deriveHandoffAction).
+export type IssueAction = 'reported' | 'commented' | 'escalated' | 'resolved' | 'reopened' | 'reassigned' | 'bounced'
 // v93: 即時問題 (snag) category chips — fast one-tap title fill.
 export type SnagType = 'leak' | 'electrical' | 'drainage' | 'finish' | 'plaster' | 'other'
 
@@ -528,6 +530,9 @@ export interface Issue {
   description: string
   photos: string[]
   current_handler_role: IssueHandlerRole
+  // v106: the SPECIFIC person now responsible. NULL = legacy tier-only row
+  // (anyone in current_handler_role acts, as before).
+  current_handler_id: string | null
   status: IssueStatus
   // ── P3 / S16 (v47): per-project running number (trigger-assigned, clients
   // never send it) + free-text location. Null on pre-v47 rows until backfill.
@@ -570,6 +575,9 @@ export interface IssueComment {
   body: string
   from_role: string | null
   to_role: string | null
+  // v106: person-level handoff audit (named from→to).
+  from_user: string | null
+  to_user: string | null
   created_at: string
 }
 
@@ -591,6 +599,8 @@ export const ISSUE_ACTION_ZH: Record<IssueAction, string> = {
   escalated: '上呈',
   resolved: '標記為已解決',
   reopened: '重新開啟',
+  reassigned: '同層轉交',
+  bounced: '彈番落去',
 }
 
 // Initial handler when an issue is reported (escalation routing).
@@ -622,6 +632,19 @@ export function getNextHandler(current: IssueHandlerRole): IssueHandlerRole | nu
     case 'admin': return null
     default: return null
   }
+}
+
+// v106 person-handoff model. The three routing tiers, low→high. (admin isn't a
+// routing tier — issues never get pointed AT a person as 'admin'.)
+export const ISSUE_TIERS: IssueHandlerRole[] = ['subcontractor', 'main_contractor', 'pm']
+export const HANDLER_TIER_RANK: Record<IssueHandlerRole, number> = {
+  subcontractor: 1, main_contractor: 2, pm: 3, admin: 4,
+}
+// 上呈/同層轉交/彈番落去 is one operation — reassign to a chosen person. The action
+// (and the button you pressed) is just the target tier vs the current tier.
+export function deriveHandoffAction(from: IssueHandlerRole, to: IssueHandlerRole): IssueAction {
+  const d = HANDLER_TIER_RANK[to] - HANDLER_TIER_RANK[from]
+  return d > 0 ? 'escalated' : d < 0 ? 'bounced' : 'reassigned'
 }
 
 // ── Phase 1 (milestone): Drawings on Progress Items ─────────

@@ -4,7 +4,7 @@ import { useAuth } from './AuthContext'
 import { useProjects } from './ProjectsContext'
 import { cacheGet, cacheSet, getOnline, subscribeOnline } from '../lib/offline'
 import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
-import { getInitialHandler, getNextHandler } from '../types'
+import { getInitialHandler, getNextHandler, deriveHandoffAction } from '../types'
 import { compressImage } from '../lib/image-compress'
 import type { Issue, IssueComment, IssueHandlerRole, GlobalRole, SnagType } from '../types'
 
@@ -30,6 +30,10 @@ interface IssuesContextType {
   fetchComments: (issueId: string) => Promise<IssueComment[]>
   addComment: (issueId: string, body: string) => Promise<{ error: string | null }>
   escalateIssue: (issueId: string, comment: string) => Promise<{ error: string | null }>
+  // v106: unified person-handoff (上呈 / 同層轉交 / 彈番落去). action is derived
+  // from toRole vs the issue's current tier. reason is required.
+  reassignIssue: (issueId: string, toUserId: string, toRole: IssueHandlerRole, reason: string) => Promise<{ error: string | null }>
+  fetchHandlers: () => Promise<{ user_id: string; name: string; role: string }[]>
   resolveIssue: (issueId: string, comment: string) => Promise<{ error: string | null }>
   reopenIssue: (issueId: string, comment: string) => Promise<{ error: string | null }>
 }
@@ -256,6 +260,48 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
     return { error: null }
   }
 
+  // v106: point the issue at a SPECIFIC person (上呈 up / 同層轉交 / 彈番落去 down).
+  // One data op — set role+person — with a required reason; the action label is
+  // derived from the target tier vs the current tier.
+  async function reassignIssue(issueId: string, toUserId: string, toRole: IssueHandlerRole, reason: string) {
+    if (!profile) return { error: '未登入' }
+    if (!reason.trim()) return { error: '請填寫原因' }
+    const issue = issues.find(i => i.id === issueId)
+    if (!issue) return { error: '找不到問題' }
+    const fromRole = issue.current_handler_role
+    const fromUser = issue.current_handler_id
+    const action = deriveHandoffAction(fromRole, toRole)
+
+    const { error } = await supabase.from('issues').update({
+      current_handler_role: toRole,
+      current_handler_id: toUserId,
+      updated_at: new Date().toISOString(),
+    }).eq('id', issueId)
+    if (error) return { error: error.message }
+
+    const { error: cErr } = await supabase.from('issue_comments').insert({
+      issue_id: issueId,
+      author_id: profile.id,
+      action,
+      body: reason.trim(),
+      from_role: fromRole,
+      to_role: toRole,
+      from_user: fromUser,
+      to_user: toUserId,
+    })
+    await refetch()
+    if (cErr) return { error: `已轉交，但記錄失敗：${cErr.message}` }
+    return { error: null }
+  }
+
+  // Candidate handlers for the person-picker: approved members + assigned PMs in
+  // this project (server-gated by get_project_handlers / can_view_project).
+  async function fetchHandlers(): Promise<{ user_id: string; name: string; role: string }[]> {
+    const { data, error } = await supabase.rpc('get_project_handlers', { p_project_id: projectId })
+    if (error) { console.error('handlers fetch error:', error); return [] }
+    return (data as { user_id: string; name: string; role: string }[]) ?? []
+  }
+
   async function resolveIssue(issueId: string, comment: string) {
     if (!profile) return { error: '未登入' }
     const { error } = await supabase.from('issues').update({
@@ -302,7 +348,7 @@ export function IssuesProvider({ projectId, children }: { projectId: string; chi
     <IssuesContext.Provider value={{
       loading, issues, fetchError, myRoleInProject, refetch,
       createIssue, createQuickIssue, graduateToFormal, uploadPhoto, fetchComments, addComment,
-      escalateIssue, resolveIssue, reopenIssue,
+      escalateIssue, reassignIssue, fetchHandlers, resolveIssue, reopenIssue,
     }}>
       {children}
     </IssuesContext.Provider>
@@ -345,11 +391,15 @@ export function canActOnIssue(
   myRole: GlobalRole | null,
   handler: IssueHandlerRole,
   isReporter = false,
+  isAssignee = false,
 ): boolean {
   if (!myRole) return false
   if (myRole === 'admin') return true
   // On-site supervisors: project-wide act-rights on every issue (membership-scoped).
   if (myRole === 'safety_officer' || myRole === 'general_foreman') return true
+  // v106: the specifically-named person on the hook can always act (mirrors the
+  // RLS `current_handler_id = auth.uid()` clause added in v106).
+  if (isAssignee) return true
   if (handler === 'pm' && myRole === 'pm') return true
   if (handler === 'main_contractor' && myRole === 'main_contractor') return true
   if (handler === 'subcontractor' && myRole === 'subcontractor') return true
