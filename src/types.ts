@@ -193,6 +193,14 @@ export interface ProgressItem {
   // stream = 土建(civil) vs 屋宇裝備 BS(E&M). NULL on existing rows → '未分類'.
   category_domain: CategoryDomain | null
   category_stream: CategoryStream | null
+  // ── v107: per-item 驗收 (E1-E3) ──
+  // acceptance_required=false on every existing row → no gate, behaviour
+  // unchanged. When true, 完成驗收先算完成: a 100% leaf that still awaits
+  // acceptance reports 進行中 (deriveLeafStatus / computeRollup gate).
+  // accepted_by is server-pinned to the acting user (guard_progress_acceptance).
+  acceptance_required: boolean
+  accepted_by: string | null
+  accepted_at: string | null
   assigned_to: string[]
   delegated_to: string[]
   last_updated_by: string | null
@@ -343,6 +351,22 @@ export function deriveStatus(actual: number, planned: number): ProgressStatus {
   if (actual === 0) return 'not-started'
   if (actual < planned - 5) return 'delayed'
   return 'in-progress'
+}
+
+// ── v107: acceptance gate (E3 — 完成驗收先算完成) ────────────
+type AcceptanceFields = Pick<ProgressItem, 'acceptance_required' | 'accepted_at'>
+export function pendingAcceptance(item: AcceptanceFields): boolean {
+  return !!item.acceptance_required && !item.accepted_at
+}
+// A status that computed 'completed' stays 進行中 while acceptance is pending —
+// the % is untouched (the work IS done); only "completed" is withheld until
+// someone ticks 完成驗收. Everything that shows/derives a LEAF status must go
+// through this (card / export / KPI counts / stored status on update).
+export function acceptanceGate(status: ProgressStatus, item: AcceptanceFields): ProgressStatus {
+  return status === 'completed' && pendingAcceptance(item) ? 'in-progress' : status
+}
+export function deriveLeafStatus(item: ProgressItem, planned: number): ProgressStatus {
+  return acceptanceGate(deriveStatus(item.actual_progress, planned), item)
 }
 
 // ── Roll-up helpers ─────────────────────────────────────────
@@ -500,9 +524,15 @@ export function computeRollup(leaves: ProgressItem[], today: Date = new Date(), 
   // any contributing leaf is blocked and the branch isn't fully complete, prefer
   // 'blocked' so the parent's chip honestly reflects the held-up child. % math
   // is unchanged — only the badge changes.
+  // v107 (E3): a branch whose leaves are all at 100% but where ANY leaf still
+  // awaits 驗收 is not 'completed' — the parent chip reports 進行中 until every
+  // acceptance-required leaf is accepted. % math unchanged (same as blocked).
+  const baseStatus = deriveStatus(actual, planned)
   const status: ProgressStatus = actual < 100 && leaves.some(isBlockedLeaf)
     ? 'blocked'
-    : deriveStatus(actual, planned)
+    : baseStatus === 'completed' && leaves.some(pendingAcceptance)
+      ? 'in-progress'
+      : baseStatus
   return {
     actual, planned, status,
     leafCount: leaves.length, scheduledCount: sched.length,

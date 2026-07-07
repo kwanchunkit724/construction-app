@@ -14,7 +14,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem'
 import {
   PROGRESS_STATUS_ZH, ISSUE_STATUS_ZH, ISSUE_HANDLER_ZH, ROLE_ZH,
   ISSUE_ACTION_ZH, formatIssueNo,
-  computeRollup, getDescendantLeaves, plannedProgressOf, deriveStatus,
+  computeRollup, getDescendantLeaves, plannedProgressOf, deriveStatus, deriveLeafStatus,
   isScheduled, LINE_ITEM_CATEGORY_ZH,
   WEATHER_KIND_ZH, EQUIPMENT_KIND_ZH, EQUIPMENT_STATUS_ZH,
   FORM_RESULT_ZH, FORM_STATUS_ZH, deriveFormStatus,
@@ -171,6 +171,8 @@ interface ItemRow {
   zoneKey: string; zoneName: string
   code: string; title: string; level: number; depth: number
   tracking: string; eff: Eff; start: string; end: string; notes: string; updated: string
+  // v107: '' (not required) / 待驗收 / ✓已驗收 — leaf only
+  acceptance: string
 }
 interface ZoneAgg { actual: number; planned: number; gap: number; status: ProgressStatus; count: number; behind: number; delta: number | null }
 interface Verdict { tone: 'ok' | 'warn' | 'bad'; line: string }
@@ -233,10 +235,10 @@ export function buildReportModel(project: Project, items: ProgressItem[], opts: 
       // stays consistent with the card (which derives status from actual vs 0, NOT
       // from the stored planned_progress column).
       if (!isScheduled(it)) {
-        return { actual, planned: null, status: deriveStatus(actual, 0), gap: null, delta }
+        return { actual, planned: null, status: deriveLeafStatus(it, 0), gap: null, delta }
       }
       const planned = plannedProgressOf(it)
-      return { actual, planned, status: deriveStatus(actual, planned), gap: actual - planned, delta }
+      return { actual, planned, status: deriveLeafStatus(it, planned), gap: actual - planned, delta }
     }
     const r = computeRollup(getDescendantLeaves(items, it.id))
     return { actual: r.actual, planned: r.planned, status: r.status, gap: r.actual - r.planned, delta: aggDelta(getDescendantLeaves(items, it.id), r.actual) }
@@ -307,6 +309,7 @@ export function buildReportModel(project: Project, items: ProgressItem[], opts: 
           eff: e,
           start: it.planned_start ?? '', end: it.planned_end ?? '',
           notes: isLeaf(it) ? it.notes : '', updated: new Date(it.last_updated_at).toLocaleString('zh-HK'),
+          acceptance: isLeaf(it) && it.acceptance_required ? (it.accepted_at ? '✓已驗收' : '待驗收') : '',
         })
         dfs(it.id, d + 1)
       }
@@ -325,7 +328,7 @@ export function buildReportModel(project: Project, items: ProgressItem[], opts: 
   const counts = { 'not-started': 0, 'in-progress': 0, 'completed': 0, 'delayed': 0, 'blocked': 0 } as Record<ProgressStatus, number>
   // Derive status live (matches rows/zones/verdict) — the stored l.status column
   // freezes at save-time and goes stale as the schedule advances.
-  for (const l of scopeLeaves) counts[deriveStatus(l.actual_progress, plannedProgressOf(l))]++
+  for (const l of scopeLeaves) counts[deriveLeafStatus(l, plannedProgressOf(l))]++
   const behind = scopeLeaves.filter(l => (l.actual_progress - plannedProgressOf(l)) < -10).length
 
   // every zone's rollup bar for the one-pager (incl. all-not-started zones)
@@ -388,13 +391,14 @@ export async function exportProgressToExcel(project: Project, items: ProgressIte
   // header
   const header = ['分區', '編號', '名稱', '層級', '追蹤模式', '計劃%', '實際%']
   if (opts.showGap) header.push('差距')
-  header.push('狀態', '計劃開始', '計劃完成', '備注')
+  header.push('狀態', '驗收', '計劃開始', '計劃完成', '備注')
   const headerRowIdx = aoa.length
   pushRow(header, null)
 
   const colIndex = { plan: 5, act: 6, gap: opts.showGap ? 7 : -1 }
   const statusCol = opts.showGap ? 8 : 7
-  const startCol = statusCol + 1, endCol = statusCol + 2, notesCol = statusCol + 3
+  const acceptCol = statusCol + 1
+  const startCol = statusCol + 2, endCol = statusCol + 3, notesCol = statusCol + 4
 
   for (const z of model.zones) {
     if (opts.groupByZone) {
@@ -424,6 +428,7 @@ export async function exportProgressToExcel(project: Project, items: ProgressIte
       cells[colIndex.act] = pct(it.eff.actual)
       if (opts.showGap) cells[colIndex.gap] = it.eff.gap === null ? '—' : it.eff.gap
       cells[statusCol] = STATUS_PILL[it.eff.status].mark + PROGRESS_STATUS_ZH[it.eff.status]
+      cells[acceptCol] = it.acceptance
       cells[startCol] = it.start
       cells[endCol] = it.end
       cells[notesCol] = it.notes
@@ -544,6 +549,7 @@ function reportHtml(project: Project, model: ReportModel, opts: ExportProgressOp
           <td style="padding:5px 6px; text-align:right; font-weight:700; color:${r.eff.gap === null ? '#94a3b8' : gapColour(r.eff.gap)};">${r.eff.gap === null ? '—' : `${r.eff.gap >= 0 ? '+' : ''}${r.eff.gap}%`}</td>
           ${hasDelta ? `<td style="padding:5px 6px; text-align:right; font-weight:700; color:${r.eff.delta === null ? '#cbd5e1' : r.eff.delta >= 0 ? '#15803d' : '#b91c1c'};">${r.eff.delta === null ? '—' : `${r.eff.delta >= 0 ? '+' : ''}${r.eff.delta}%`}</td>` : ''}
           <td style="padding:5px 6px; text-align:center; vertical-align:middle; white-space:nowrap; width:74px;"><span style="display:inline-block; background:${sp.bg}; color:${sp.fg}; padding:3px 8px; border-radius:7px; font-size:11px; line-height:1; white-space:nowrap; text-align:center;">${escapeHtml(sp.mark + PROGRESS_STATUS_ZH[r.eff.status])}</span></td>
+          <td style="padding:5px 6px; text-align:center; white-space:nowrap; font-size:11px; color:${r.acceptance === '待驗收' ? '#c2410c' : r.acceptance ? '#15803d' : '#cbd5e1'};">${escapeHtml(r.acceptance || '—')}</td>
           <td style="padding:5px 6px; color:#475569; font-size:12px;">${escapeHtml(r.notes ?? '')}</td>
           <td style="padding:5px 6px; color:#64748b; font-size:12px;">${escapeHtml(r.end ?? '')}</td>
         </tr>`
@@ -552,7 +558,7 @@ function reportHtml(project: Project, model: ReportModel, opts: ExportProgressOp
         <div class="pgblk" style="margin-top:22px; font-size:15px; font-weight:700; color:#0f172a;">${escapeHtml(z.name)} — 詳細 <span style="font-weight:500; font-size:13px; color:#64748b;">整體 ${z.agg.actual}%（計劃 ${z.agg.planned}%）· ${z.agg.count} 項</span></div>
         <table style="width:100%; border-collapse:collapse; font-size:12px; margin-top:6px;">
           <thead><tr class="pgblk" style="background:#f97316; color:#fff; text-align:left;">
-            <th style="padding:6px;">編號</th><th style="padding:6px;">名稱</th><th style="padding:6px; text-align:right;">實際</th><th style="padding:6px; text-align:right;">計劃</th><th style="padding:6px; text-align:right;">差距</th>${hasDelta ? '<th style="padding:6px; text-align:right;">本期</th>' : ''}<th style="padding:6px; text-align:center; white-space:nowrap; width:74px;">狀態</th><th style="padding:6px;">說明</th><th style="padding:6px; white-space:nowrap;">計劃完成</th>
+            <th style="padding:6px;">編號</th><th style="padding:6px;">名稱</th><th style="padding:6px; text-align:right;">實際</th><th style="padding:6px; text-align:right;">計劃</th><th style="padding:6px; text-align:right;">差距</th>${hasDelta ? '<th style="padding:6px; text-align:right;">本期</th>' : ''}<th style="padding:6px; text-align:center; white-space:nowrap; width:74px;">狀態</th><th style="padding:6px; text-align:center; white-space:nowrap;">驗收</th><th style="padding:6px;">說明</th><th style="padding:6px; white-space:nowrap;">計劃完成</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>`

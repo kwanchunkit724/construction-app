@@ -4,7 +4,7 @@ import { Modal } from './Modal'
 import { Spinner } from './Spinner'
 import { ProgressBar } from './ProgressBar'
 import { useProgress } from '../contexts/ProgressContext'
-import { deriveStatus, floorsToProgress, plannedProgressOf, qtyToProgress, unitStatusToProgress, unitStatusCounts, UNIT_STATE_ORDER, UNIT_STATE_ZH } from '../types'
+import { deriveStatus, acceptanceGate, floorsToProgress, plannedProgressOf, qtyToProgress, unitStatusToProgress, unitStatusCounts, UNIT_STATE_ORDER, UNIT_STATE_ZH } from '../types'
 import type { ProgressItem, UnitState } from '../types'
 
 // 受阻 reasons (渠務 staples). Free-form '其他' lets the foreman type a custom note.
@@ -94,7 +94,7 @@ export function UpdateProgressModal({
         ? unitStatusToProgress(labelStatus, item.floor_labels)
         : actual
   const planned = plannedProgressOf(item)
-  const status = deriveStatus(computedActual, planned)
+  const status = acceptanceGate(deriveStatus(computedActual, planned), item)
 
   function toggleFloor(label: string) {
     setFloorsCompleted(prev =>

@@ -71,6 +71,8 @@ export function CreateItemModal({
   // v57: 2-axis category for a root 大項.
   const [catDomain, setCatDomain] = useState<CategoryDomain | null>(null)
   const [catStream, setCatStream] = useState<CategoryStream | null>(null)
+  // v107: 需驗收 — item only counts as 完成 after someone ticks 完成驗收 (E3).
+  const [acceptanceRequired, setAcceptanceRequired] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   // Multi-zone selection (root-level adds only)
@@ -144,6 +146,7 @@ export function CreateItemModal({
       setSelectedParentIds(parent ? [parent.id] : [])
       setCodeMap({})
       setCodeError('')
+      setAcceptanceRequired(false)
     }
   }, [open, zone.id, parent, defaultMode])
 
@@ -346,6 +349,7 @@ export function CreateItemModal({
         // v57: 2-axis category — only on a root 大項.
         category_domain: isRootAdd ? catDomain : null,
         category_stream: isRootAdd ? catStream : null,
+        acceptance_required: acceptanceRequired,
       }))
     )
 
@@ -518,6 +522,19 @@ export function CreateItemModal({
             <input type="date" value={plannedEnd} onChange={e => setPlannedEnd(e.target.value)} className="input" />
           </div>
         </div>
+
+        <label className="flex items-center gap-2.5 rounded-xl bg-site-50 border border-site-100 p-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={acceptanceRequired}
+            onChange={e => setAcceptanceRequired(e.target.checked)}
+            className="accent-safety-600 h-4 w-4"
+          />
+          <span className="flex-1">
+            <span className="text-sm font-semibold text-site-800">此項目需要驗收</span>
+            <span className="block text-xs text-site-400 mt-0.5">完成驗收先算「已完成」— 做到 100% 後要有人撳「完成驗收」</span>
+          </span>
+        </label>
 
         <div className="rounded-xl bg-site-50 border border-site-100 p-3">
           <div className="flex items-center justify-between">

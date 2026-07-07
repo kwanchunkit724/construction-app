@@ -4,7 +4,7 @@ import { useAuth } from './AuthContext'
 import { useProjects } from './ProjectsContext'
 import { cacheGet, cacheSet, getOnline, subscribeOnline } from '../lib/offline'
 import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
-import { deriveStatus, floorsToProgress, plannedProgressOf, qtyToProgress, unitStatusToProgress } from '../types'
+import { deriveStatus, acceptanceGate, floorsToProgress, plannedProgressOf, qtyToProgress, unitStatusToProgress } from '../types'
 import type { ProgressItem, ProgressStatus, TrackingMode, ProgressHistoryEntry, UnitState, CategoryDomain, CategoryStream } from '../types'
 
 interface ProgressContextType {
@@ -44,8 +44,12 @@ interface ProgressContextType {
   // progress_history.label_status.
   updateUnitStatus: (id: string, labelStatus: Record<string, UnitState>, notes: string) => Promise<{ error: string | null }>
   setAssignment: (id: string, assigned: string[], delegated: string[]) => Promise<{ error: string | null }>
+  // v107 (E1/E2): tick / untick 完成驗收. Same permission surface as progress
+  // updates (anyone who can update the item); the acceptor identity is
+  // server-pinned by guard_progress_acceptance.
+  setAcceptance: (id: string, accepted: boolean) => Promise<{ error: string | null }>
   fetchHistory: (id: string) => Promise<ProgressHistoryEntry[]>
-  updateItemMeta: (id: string, patch: { title?: string; planned_start?: string | null; planned_end?: string | null; category_domain?: CategoryDomain | null; category_stream?: CategoryStream | null }) => Promise<{ error: string | null }>
+  updateItemMeta: (id: string, patch: { title?: string; planned_start?: string | null; planned_end?: string | null; category_domain?: CategoryDomain | null; category_stream?: CategoryStream | null; acceptance_required?: boolean }) => Promise<{ error: string | null }>
   deleteItem: (id: string) => Promise<{ error: string | null }>
 }
 
@@ -71,6 +75,9 @@ interface AddItemInput {
   // v57: 2-axis category (root 大項 only). Ignored for children (parent_id set).
   category_domain?: CategoryDomain | null
   category_stream?: CategoryStream | null
+  // v107: 需驗收 flag — when true, the item only counts as 完成 after someone
+  // ticks 完成驗收 (E3).
+  acceptance_required?: boolean
 }
 
 const ProgressContext = createContext<ProgressContextType | null>(null)
@@ -204,6 +211,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
       // v57: category tags only on the 大項 (root); children inherit via their root.
       category_domain: input.parent_id ? null : (input.category_domain ?? null),
       category_stream: input.parent_id ? null : (input.category_stream ?? null),
+      acceptance_required: input.acceptance_required ?? false,
       assigned_to: [],
       delegated_to: [],
       last_updated_by: profile.id,
@@ -247,7 +255,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
   // item's history, children, drawings or assignments (vs delete + recreate).
   async function updateItemMeta(
     id: string,
-    patch: { title?: string; planned_start?: string | null; planned_end?: string | null; category_domain?: CategoryDomain | null; category_stream?: CategoryStream | null },
+    patch: { title?: string; planned_start?: string | null; planned_end?: string | null; category_domain?: CategoryDomain | null; category_stream?: CategoryStream | null; acceptance_required?: boolean },
   ) {
     if (!profile) return { error: '未登入' }
     const before = items.find(i => i.id === id)
@@ -260,6 +268,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     if (patch.planned_end !== undefined) upd.planned_end = patch.planned_end
     if (patch.category_domain !== undefined) upd.category_domain = patch.category_domain
     if (patch.category_stream !== undefined) upd.category_stream = patch.category_stream
+    if (patch.acceptance_required !== undefined) upd.acceptance_required = patch.acceptance_required
     const { error } = await supabase.from('progress_items').update(upd).eq('id', id)
     if (error) return { error: error.message }
     // Journal the metadata edit as an immutable history row (v38) — only the
@@ -271,6 +280,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
       if (patch.title !== undefined && patch.title !== before.title) diff.title = [before.title, patch.title]
       if (patch.planned_start !== undefined && (patch.planned_start ?? null) !== (before.planned_start ?? null)) diff.planned_start = [before.planned_start, patch.planned_start ?? null]
       if (patch.planned_end !== undefined && (patch.planned_end ?? null) !== (before.planned_end ?? null)) diff.planned_end = [before.planned_end, patch.planned_end ?? null]
+      if (patch.acceptance_required !== undefined && patch.acceptance_required !== before.acceptance_required) diff.acceptance_required = [String(before.acceptance_required), String(patch.acceptance_required)]
       if (Object.keys(diff).length > 0) {
         const { error: hErr } = await supabase.from('progress_history').insert({
           item_id: id,
@@ -292,7 +302,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     if (!profile) return { error: '未登入' }
     const item = items.find(i => i.id === id)
     if (!item) return { error: '找不到此項目' }
-    const status = deriveStatus(actual, plannedProgressOf(item))
+    const status = acceptanceGate(deriveStatus(actual, plannedProgressOf(item)), item)
     const { error } = await supabase.from('progress_items').update({
       actual_progress: actual,
       status,
@@ -311,7 +321,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     const item = items.find(i => i.id === id)
     if (!item) return { error: '找不到此項目' }
     const actual = floorsToProgress(floorsCompleted, item.floor_labels)
-    const status = deriveStatus(actual, plannedProgressOf(item))
+    const status = acceptanceGate(deriveStatus(actual, plannedProgressOf(item)), item)
     const { error } = await supabase.from('progress_items').update({
       actual_progress: actual,
       floors_completed: floorsCompleted,
@@ -337,7 +347,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     if (!item) return { error: '找不到此項目' }
     const safeDone = Math.max(0, Number.isFinite(qtyDone) ? qtyDone : 0)
     const actual = qtyToProgress(safeDone, item.qty_total)
-    const status = deriveStatus(actual, plannedProgressOf(item))
+    const status = acceptanceGate(deriveStatus(actual, plannedProgressOf(item)), item)
     const { error } = await supabase.from('progress_items').update({
       qty_done: safeDone,
       actual_progress: actual,
@@ -373,7 +383,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     }
     const signedOff = labels.filter(l => cleaned[l] === 'signed_off')
     const actual = unitStatusToProgress(cleaned, labels)
-    const status = deriveStatus(actual, plannedProgressOf(item))
+    const status = acceptanceGate(deriveStatus(actual, plannedProgressOf(item)), item)
     const { error } = await supabase.from('progress_items').update({
       label_status: cleaned,
       floors_completed: signedOff,
@@ -410,6 +420,29 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
       [],
       trimmed ? `受阻：${trimmed}` : '解除受阻',
     )
+    await refetch()
+    return { error: null }
+  }
+
+  // v107 (E1/E2): tick / untick 完成驗收. accepted_by is sent for optimistic UI
+  // but the server pins it to auth.uid() (guard_progress_acceptance) — cannot be
+  // forged. When accepting a 100% leaf the stored status flips to completed
+  // (acceptanceGate passes); unticking flips it back. Journals to history.
+  async function setAcceptance(id: string, accepted: boolean) {
+    if (!profile) return { error: '未登入' }
+    const item = items.find(i => i.id === id)
+    if (!item) return { error: '找不到此項目' }
+    const after = { acceptance_required: item.acceptance_required, accepted_at: accepted ? new Date().toISOString() : null }
+    const status = acceptanceGate(deriveStatus(item.actual_progress, plannedProgressOf(item)), after)
+    const { error } = await supabase.from('progress_items').update({
+      accepted_by: accepted ? profile.id : null,
+      accepted_at: after.accepted_at,
+      status,
+      last_updated_by: profile.id,
+      last_updated_at: new Date().toISOString(),
+    }).eq('id', id)
+    if (error) return { error: error.message }
+    await recordHistory(id, item.actual_progress, [], accepted ? '✅ 完成驗收' : '取消驗收')
     await refetch()
     return { error: null }
   }
@@ -453,7 +486,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
       canManageStructure, canEdit, canUpdateItem,
       refetch,
       addItem, updateProgress, updateFloors, updateQuantity, updateUnitStatus, setBlocked,
-      setAssignment, fetchHistory, updateItemMeta, deleteItem,
+      setAssignment, setAcceptance, fetchHistory, updateItemMeta, deleteItem,
     }}>
       {children}
     </ProgressContext.Provider>

@@ -23,6 +23,7 @@ export function EditItemModal({
   const [error, setError] = useState('')
   const [catDomain, setCatDomain] = useState<CategoryDomain | null>(null)
   const [catStream, setCatStream] = useState<CategoryStream | null>(null)
+  const [acceptanceRequired, setAcceptanceRequired] = useState(false)
 
   useEffect(() => {
     if (open && item) {
@@ -31,6 +32,7 @@ export function EditItemModal({
       setPlannedEnd(item.planned_end ?? '')
       setCatDomain(item.category_domain ?? null)
       setCatStream(item.category_stream ?? null)
+      setAcceptanceRequired(!!item.acceptance_required)
       setError('')
     }
   }, [open, item])
@@ -49,6 +51,7 @@ export function EditItemModal({
       title: title.trim(),
       planned_start: plannedStart || null,
       planned_end: plannedEnd || null,
+      acceptance_required: acceptanceRequired,
       // category only on a root 大項
       ...(item.parent_id === null ? { category_domain: catDomain, category_stream: catStream } : {}),
     })
@@ -104,6 +107,18 @@ export function EditItemModal({
             </div>
           </div>
         )}
+        <label className="flex items-center gap-2.5 rounded-xl bg-site-50 border border-site-100 p-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={acceptanceRequired}
+            onChange={e => setAcceptanceRequired(e.target.checked)}
+            className="accent-safety-600 h-4 w-4"
+          />
+          <span className="flex-1">
+            <span className="text-sm font-semibold text-site-800">此項目需要驗收</span>
+            <span className="block text-xs text-site-400 mt-0.5">完成驗收先算「已完成」</span>
+          </span>
+        </label>
         <div className="rounded-xl bg-site-50 border border-site-100 p-3 flex items-center justify-between">
           <span className="label mb-0">計劃進度（自動）</span>
           <span className="text-base font-bold text-safety-600">

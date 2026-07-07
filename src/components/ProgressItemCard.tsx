@@ -11,7 +11,7 @@ import { DocumentsContext } from '../contexts/DocumentsContext'
 import { DrawingsSection } from './drawings/DrawingsSection'
 import { DocumentsSection } from './documents/DocumentsSection'
 import { MaterialItemsPanel } from './material/MaterialItemsPanel'
-import { PROGRESS_STATUS_ZH, computeRollup, getDescendantLeaves, plannedProgressOf, deriveStatus, isScheduled, unitStatusCounts } from '../types'
+import { PROGRESS_STATUS_ZH, computeRollup, getDescendantLeaves, plannedProgressOf, deriveLeafStatus, pendingAcceptance, isScheduled, unitStatusCounts } from '../types'
 import { displayStatusOf } from '../lib/progressTemplates'
 import type { ProgressItem, ProgressStatus, UserProfile } from '../types'
 import { supabase } from '../lib/supabase'
@@ -151,7 +151,7 @@ export function ProgressItemCard({
   // A leaf with blocked_reason set DISPLAYS as 受阻 regardless of its % (P2);
   // displayStatusOf is presentation-only and leaves completed items as 已完成.
   const displayStatus: ProgressStatus = isLeaf
-    ? displayStatusOf(item, deriveStatus(item.actual_progress, displayPlanned))
+    ? displayStatusOf(item, deriveLeafStatus(item, displayPlanned))
     : rollup!.status
   const scheduled = isLeaf ? isScheduled(item) : descLeaves.some(isScheduled)
 
@@ -169,7 +169,12 @@ export function ProgressItemCard({
   const blockedReason = (item.blocked_reason ?? '').trim()
   const assignedTo = arr(item.assigned_to)
   const delegatedTo = arr(item.delegated_to)
-  const assigneeIds = [...assignedTo, ...delegatedTo]
+  // v107: 驗收 states — awaiting = work at 100% but nobody ticked 完成驗收 yet.
+  const accepted = !!item.accepted_at
+  const awaitingAcceptance = isLeaf && pendingAcceptance(item) && item.actual_progress >= 100
+  const [acceptBusy, setAcceptBusy] = useState(false)
+  const { setAcceptance } = useProgress()
+  const assigneeIds = [...assignedTo, ...delegatedTo, ...(item.accepted_by ? [item.accepted_by] : [])]
   const profiles = useProfiles(assigneeIds)
 
   // tapping the row body: parents toggle children, leaves toggle their detail.
@@ -239,6 +244,16 @@ export function ProgressItemCard({
                   className="inline-flex items-center gap-0.5 text-[9px] bg-amber-100 text-amber-700 px-1 rounded flex-shrink-0 max-w-[88px]"
                 >
                   <Ban size={8} className="flex-shrink-0" /><span className="truncate">{blockedReason}</span>
+                </span>
+              )}
+              {awaitingAcceptance && (
+                <span className="inline-flex items-center gap-0.5 text-[9px] bg-orange-100 text-orange-700 px-1 rounded flex-shrink-0 font-semibold">
+                  待驗收
+                </span>
+              )}
+              {isLeaf && item.acceptance_required && accepted && (
+                <span className="inline-flex items-center gap-0.5 text-[9px] bg-green-100 text-green-700 px-1 rounded flex-shrink-0">
+                  <Check size={8} />已驗收
                 </span>
               )}
             </div>
@@ -338,6 +353,36 @@ export function ProgressItemCard({
                     <UserPlus size={9} />{profiles[id]?.name ?? '...'}
                   </span>
                 ))}
+              </div>
+            )}
+            {item.acceptance_required && (
+              <div className="flex items-center justify-between gap-2 bg-site-50 border border-site-100 rounded-lg px-2.5 py-2">
+                {accepted ? (
+                  <>
+                    <span className="text-xs text-green-700 font-semibold flex items-center gap-1">
+                      <CheckCircle2 size={13} /> 已驗收 · {item.accepted_by ? (profiles[item.accepted_by]?.name ?? '...') : ''}
+                      {item.accepted_at && <span className="text-site-400 font-normal">{new Date(item.accepted_at).toLocaleDateString('zh-HK')}</span>}
+                    </span>
+                    {canEdit && (
+                      <button
+                        disabled={acceptBusy}
+                        onClick={async () => { setAcceptBusy(true); await setAcceptance(item.id, false); setAcceptBusy(false) }}
+                        className="text-[11px] text-site-400 hover:text-red-600 min-h-0"
+                      >取消驗收</button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs text-site-600">此項目需要驗收{item.actual_progress >= 100 ? ' — 工作已完成，等待驗收' : ''}</span>
+                    {canUpdateThis && (
+                      <button
+                        disabled={acceptBusy}
+                        onClick={async () => { setAcceptBusy(true); await setAcceptance(item.id, true); setAcceptBusy(false) }}
+                        className="flex-shrink-0 text-xs font-semibold bg-green-600 hover:bg-green-700 text-white rounded-lg px-3 py-1.5 min-h-0 disabled:opacity-50"
+                      >完成驗收</button>
+                    )}
+                  </>
+                )}
               </div>
             )}
             {drawingsOpen && (

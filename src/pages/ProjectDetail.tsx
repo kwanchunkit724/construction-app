@@ -39,7 +39,7 @@ import { useProjects } from '../contexts/ProjectsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useStepUp } from '../contexts/StepUpContext'
 import { ModulesProvider, useModules } from '../contexts/ModulesContext'
-import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH, deriveStatus, plannedProgressOf, CATEGORY_DOMAIN_ZH, CATEGORY_STREAM_ZH, unitStatusCounts } from '../types'
+import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH, deriveStatus, deriveLeafStatus, plannedProgressOf, CATEGORY_DOMAIN_ZH, CATEGORY_STREAM_ZH, unitStatusCounts } from '../types'
 import type { ProgressItem, ProgressStatus, Zone, CategoryDomain, CategoryStream, UnitState } from '../types'
 import { templateFor } from '../lib/progressTemplates'
 
@@ -210,7 +210,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   // Derive status live (schedule-vs-today) to match the cards + zone rollups
   // below — the stored i.status column freezes at save time and goes stale, so
   // tiles would otherwise contradict the cards right under them.
-  const effStatus = (i: ProgressItem) => deriveStatus(i.actual_progress, plannedProgressOf(i))
+  const effStatus = (i: ProgressItem) => deriveLeafStatus(i, plannedProgressOf(i))
   const completed = leaves.filter(i => effStatus(i) === 'completed').length
   const inProgress = leaves.filter(i => effStatus(i) === 'in-progress').length
   const delayed = leaves.filter(i => effStatus(i) === 'delayed').length
