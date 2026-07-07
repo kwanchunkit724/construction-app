@@ -15,7 +15,6 @@ import { PROGRESS_STATUS_ZH, computeRollup, getDescendantLeaves, plannedProgress
 import { displayStatusOf } from '../lib/progressTemplates'
 import type { ProgressItem, ProgressStatus, UserProfile } from '../types'
 import { supabase } from '../lib/supabase'
-import { useProjects } from '../contexts/ProjectsContext'
 
 // useDrawingsOptional — null when no DrawingsProvider mounted (e.g. dashboard preview).
 function useDrawingsOptional() {
@@ -104,18 +103,22 @@ export function ProgressItemCard({
   onDelete: (item: ProgressItem) => void
 }) {
   const { items, canEdit, canUpdateItem } = useProgress()
-  const { projects } = useProjects()
   const canUpdateThis = canUpdateItem(item)
   const [menuOpen, setMenuOpen] = useState(false)
   const [confirmDel, setConfirmDel] = useState(false)
   const [drawingsOpen, setDrawingsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  const zoneLabel = useMemo(() => {
-    if (!item.zone_id) return null
-    const project = projects.find(p => p.id === item.project_id)
-    return project?.zones.find(z => z.id === item.zone_id)?.name ?? null
-  }, [projects, item.project_id, item.zone_id])
+  // Full ancestor path (大項 › 中項 › …) — shown only in the expanded detail as
+  // disambiguation for same-named leaves. The row itself no longer shows the
+  // code prefix / zone badge (they ate the title width on phones); code and
+  // path stay reachable here and in exports.
+  const ancestorPath = useMemo(() => {
+    const names: string[] = []
+    let p = items.find(i => i.id === item.parent_id)
+    while (p) { names.unshift(p.title); p = items.find(i => i.id === p!.parent_id) }
+    return names.join(' › ')
+  }, [items, item.parent_id])
 
   const children = items.filter(i => i.parent_id === item.id)
   const isLeaf = children.length === 0
@@ -206,8 +209,6 @@ export function ProgressItemCard({
           {/* title + meta + progress (tap to expand) */}
           <button onClick={toggleRow} className="flex-1 min-w-0 text-left">
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="font-mono text-[10px] text-site-400 flex-shrink-0">{item.code}</span>
-              {zoneLabel && <span className="text-[9px] font-semibold bg-site-100 text-site-600 px-1 rounded flex-shrink-0">{zoneLabel}</span>}
               <span className={`font-semibold text-site-900 truncate ${item.level === 1 ? 'text-sm' : 'text-[13px]'}`}>{item.title}</span>
               {isFloors && isLeaf && (
                 <span className="inline-flex items-center gap-0.5 text-[9px] bg-purple-100 text-purple-700 px-1 rounded flex-shrink-0">
@@ -318,6 +319,12 @@ export function ProgressItemCard({
         {/* expanded detail (leaf only): notes, assignees, drawings, materials */}
         {isOpen && isLeaf && (
           <div className="px-3 pb-2.5 pt-1 border-t border-site-100 space-y-2">
+            {(ancestorPath || item.code) && (
+              <p className="text-[10px] text-site-400">
+                {ancestorPath && <span>{ancestorPath}</span>}
+                {item.code && <span className="font-mono ml-1.5">#{item.code}</span>}
+              </p>
+            )}
             {item.notes && <p className="text-[11px] text-site-500 whitespace-pre-wrap">{item.notes}</p>}
             {(assignedTo.length > 0 || delegatedTo.length > 0) && (
               <div className="flex flex-wrap gap-1">

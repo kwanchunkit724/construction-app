@@ -116,7 +116,10 @@ export async function shareOrDownloadBlob(blob: Blob, filename: string, title: s
 // green are reserved for STATUS (in construction reports red = "出事"),
 // per the multi-persona review (.planning/export-report/IMPROVEMENT-SPEC.md).
 
-export type ReportDepth = 1 | 2 | 3
+// 99 = 全部層級 — trees go deeper than 細項 (level 4+ sub-tasks); capping the
+// picker at 3 silently dropped them from every report (the 判頭's dispute
+// evidence). 99 is "no cap", not a real level.
+export type ReportDepth = 1 | 2 | 3 | 99
 // audience drives the PDF render path: 'owner' → one glance-level page only;
 // 'internal' → that same one-pager + a detailed appendix table.
 export type ReportAudience = 'owner' | 'internal'
@@ -150,7 +153,9 @@ export function exportPreset(p: 'internal' | 'owner' | 'exception', project: Pro
   if (p === 'exception') {
     return { zoneIds, includeUnzoned: true, depth: 2, statuses: ['delayed', 'blocked'], onlyBehind: true, groupByZone, showSummary: true, showGap: true, reportPeriod: '', audience: 'internal' }
   }
-  return { zoneIds, includeUnzoned: true, depth: 3, statuses: [...NO_NOTSTARTED], onlyBehind: false, groupByZone, showSummary: true, showGap: true, reportPeriod: '', audience: 'internal' }
+  // internal defaults to FULL depth — sub-細項 leaves are where the real ticks
+  // live; cutting at 3 made the report lie about what was actually done.
+  return { zoneIds, includeUnzoned: true, depth: 99, statuses: [...NO_NOTSTARTED], onlyBehind: false, groupByZone, showSummary: true, showGap: true, reportPeriod: '', audience: 'internal' }
 }
 
 const UNZONED = '__unzoned__'
@@ -442,7 +447,8 @@ export async function exportProgressToExcel(project: Project, items: ProgressIte
     if (cell && typeof cell.v === 'number') cell.z = '0"%"'
   }
   ws['!cols'] = header.map((h, i) => ({ wch: i === 2 ? 40 : (h.length > 4 ? 12 : 9) }))
-  ws['!rows'] = aoa.map((_, i) => i === headerRowIdx ? {} : (outline[i] != null ? { level: outline[i] as number } : {}))
+  // xlsx outline levels cap at 7 — clamp so a deep tree doesn't emit an invalid sheet.
+  ws['!rows'] = aoa.map((_, i) => i === headerRowIdx ? {} : (outline[i] != null ? { level: Math.min(outline[i] as number, 7) } : {}))
   ws['!freeze'] = { xSplit: 0, ySplit: headerRowIdx + 1 }
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, '進度報告')

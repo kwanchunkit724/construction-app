@@ -157,8 +157,8 @@ export function ExportProgressModal({ project, items, onClose }: {
               {/* depth */}
               <div>
                 <Label>層級深度（內部版詳細表）</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {([[1, '只大項'], [2, '到中項'], [3, '到細項']] as [ReportDepth, string][]).map(([d, t]) => (
+                <div className="grid grid-cols-4 gap-2">
+                  {([[1, '只大項'], [2, '到中項'], [3, '到細項'], [99, '全部層級']] as [ReportDepth, string][]).map(([d, t]) => (
                     <Seg key={d} active={opts.depth === d} onClick={() => set({ depth: d })}>{t}</Seg>
                   ))}
                 </div>
