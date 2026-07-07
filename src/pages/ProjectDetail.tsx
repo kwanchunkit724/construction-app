@@ -8,6 +8,7 @@ import {
   Wrench, BookOpen, Package, CalendarDays,
   Contact as ContactIcon, FolderOpen, CalendarClock,
   Sparkles, ClipboardX, ClipboardCheck, UsersRound, FileStack, Zap, Footprints,
+  PackagePlus,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { UserProfile, IssueComment } from '../types'
@@ -25,6 +26,7 @@ import { IssueCard } from '../components/IssueCard'
 import { CreateIssueModal } from '../components/CreateIssueModal'
 import { CreateQuickSnagSheet } from '../components/CreateQuickSnagSheet'
 import { ExportProgressModal } from '../components/ExportProgressModal'
+import { TemplateManagerModal } from '../components/TemplateManagerModal'
 import { useAiAssistantEnabled } from '../components/assistant/useAiAssistantEnabled'
 import { HelpButton } from '../components/tutorial/HelpButton'
 import { WeatherBanner } from '../components/WeatherBanner'
@@ -127,6 +129,8 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const [createIssueOpen, setCreateIssueOpen] = useState(false)
   const [createSnagOpen, setCreateSnagOpen] = useState(false)
   const [showExport, setShowExport] = useState(false)
+  // v108: 工序範本 manager (create / apply project-scope templates)
+  const [showTemplates, setShowTemplates] = useState(false)
 
   // If the module behind the active tab gets turned off (admin toggle arrives
   // over realtime), the tab button + its content both disappear — bounce back
@@ -429,6 +433,16 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
                 <Stat label="未開始" count={notStarted} color="text-site-700 bg-site-50 border-site-200" />
               </div>
             )}
+            {canEdit && (
+              <div className="flex justify-end mb-3">
+                <button
+                  onClick={() => setShowTemplates(true)}
+                  className="text-xs font-semibold text-site-600 hover:text-site-900 bg-white border border-site-200 hover:bg-site-50 rounded-xl px-3 py-2 inline-flex items-center gap-1.5 min-h-0"
+                >
+                  <PackagePlus size={14} /> 工序範本
+                </button>
+              </div>
+            )}
 
             {loading ? (
               <div className="py-10 flex justify-center"><Spinner size={28} /></div>
@@ -546,6 +560,11 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
       {showExport && (
         <ExportProgressModal project={project} items={items} onClose={() => setShowExport(false)} />
       )}
+      <TemplateManagerModal
+        open={showTemplates}
+        onClose={() => setShowTemplates(false)}
+        zones={project.zones}
+      />
     </div>
   )
 }

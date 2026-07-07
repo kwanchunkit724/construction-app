@@ -542,6 +542,28 @@ export function computeRollup(leaves: ProgressItem[], today: Date = new Date(), 
   }
 }
 
+// ── v108: 每地盤工序範本 (E4 project-scope, E5 copy-in) ─────────
+// A template is a pre-filled hand of item seeds. Applying it stamps ordinary
+// progress_items through the normal addItem path (same RLS / numbering /
+// audit); editing the template later never touches what was already inserted.
+export interface TemplateItem {
+  title: string
+  tracking_mode?: TrackingMode
+  floor_labels?: string[]
+  qty_total?: number | null
+  qty_unit?: string | null
+  acceptance_required?: boolean
+}
+export interface ProgressTemplate {
+  id: string
+  project_id: string
+  name: string
+  items: TemplateItem[]
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
 // ── Phase 4: Issue Tracking ─────────────────────────────────
 export type IssueStatus = 'open' | 'resolved'
 export type IssueHandlerRole = 'pm' | 'main_contractor' | 'subcontractor' | 'admin'

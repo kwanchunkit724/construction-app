@@ -5,7 +5,7 @@ import { useProjects } from './ProjectsContext'
 import { cacheGet, cacheSet, getOnline, subscribeOnline } from '../lib/offline'
 import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import { deriveStatus, acceptanceGate, floorsToProgress, plannedProgressOf, qtyToProgress, unitStatusToProgress } from '../types'
-import type { ProgressItem, ProgressStatus, TrackingMode, ProgressHistoryEntry, UnitState, CategoryDomain, CategoryStream } from '../types'
+import type { ProgressItem, ProgressStatus, TrackingMode, ProgressHistoryEntry, UnitState, CategoryDomain, CategoryStream, ProgressTemplate, TemplateItem } from '../types'
 
 interface ProgressContextType {
   loading: boolean
@@ -49,6 +49,11 @@ interface ProgressContextType {
   // server-pinned by guard_progress_acceptance.
   setAcceptance: (id: string, accepted: boolean) => Promise<{ error: string | null }>
   fetchHistory: (id: string) => Promise<ProgressHistoryEntry[]>
+  // v108: 每地盤工序範本 (copy-in). Manage rights = structure editors.
+  fetchTemplates: () => Promise<ProgressTemplate[]>
+  saveTemplate: (name: string, items: TemplateItem[]) => Promise<{ error: string | null }>
+  deleteTemplate: (id: string) => Promise<{ error: string | null }>
+  applyTemplate: (template: ProgressTemplate, parentId: string | null, zoneId: string) => Promise<{ error: string | null; inserted: number }>
   updateItemMeta: (id: string, patch: { title?: string; planned_start?: string | null; planned_end?: string | null; category_domain?: CategoryDomain | null; category_stream?: CategoryStream | null; acceptance_required?: boolean }) => Promise<{ error: string | null }>
   deleteItem: (id: string) => Promise<{ error: string | null }>
 }
@@ -480,6 +485,63 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     return { error: null }
   }
 
+  // ── v108: 每地盤工序範本 ────────────────────────────────────
+  async function fetchTemplates(): Promise<ProgressTemplate[]> {
+    const { data, error } = await supabase
+      .from('progress_templates')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: true })
+    if (error) { console.error('templates fetch error:', error); return [] }
+    return (data ?? []) as ProgressTemplate[]
+  }
+
+  async function saveTemplate(name: string, tItems: TemplateItem[]) {
+    if (!profile) return { error: '未登入' }
+    const { error } = await supabase.from('progress_templates').insert({
+      project_id: projectId,
+      name: name.trim(),
+      items: tItems,
+      created_by: profile.id,
+    })
+    return { error: error ? error.message : null }
+  }
+
+  async function deleteTemplate(id: string) {
+    const { error } = await supabase.from('progress_templates').delete().eq('id', id)
+    return { error: error ? error.message : null }
+  }
+
+  // Copy-in (E5): stamp the template's seeds as ordinary progress_items under
+  // the chosen parent/zone, one by one through the normal addItem path — the
+  // sequential await matters because next_progress_code must see each insert
+  // before numbering the next. Later edits to the template never touch these.
+  async function applyTemplate(template: ProgressTemplate, parentId: string | null, zoneId: string) {
+    let inserted = 0
+    for (const ti of template.items) {
+      const { data: code, error: codeErr } = await supabase.rpc('next_progress_code', {
+        p_project_id: projectId,
+        p_zone_id: zoneId,
+        p_parent_id: parentId,
+      })
+      if (codeErr) return { error: `編號失敗：${codeErr.message}（已加入 ${inserted} 項）`, inserted }
+      const r = await addItem({
+        parent_id: parentId,
+        code: (code as string) ?? '',
+        title: ti.title,
+        zone_id: zoneId,
+        tracking_mode: ti.tracking_mode ?? 'percentage',
+        floor_labels: ti.floor_labels ?? [],
+        qty_total: ti.qty_total ?? null,
+        qty_unit: ti.qty_unit ?? null,
+        acceptance_required: ti.acceptance_required ?? false,
+      })
+      if (r.error) return { error: `${r.error}（已加入 ${inserted} 項）`, inserted }
+      inserted++
+    }
+    return { error: null, inserted }
+  }
+
   return (
     <ProgressContext.Provider value={{
       loading, items, fetchError,
@@ -487,6 +549,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
       refetch,
       addItem, updateProgress, updateFloors, updateQuantity, updateUnitStatus, setBlocked,
       setAssignment, setAcceptance, fetchHistory, updateItemMeta, deleteItem,
+      fetchTemplates, saveTemplate, deleteTemplate, applyTemplate,
     }}>
       {children}
     </ProgressContext.Provider>
