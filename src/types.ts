@@ -193,6 +193,12 @@ export interface ProgressItem {
   // stream = 土建(civil) vs 屋宇裝備 BS(E&M). NULL on existing rows → '未分類'.
   category_domain: CategoryDomain | null
   category_stream: CategoryStream | null
+  // ── v109: 樓層/翼結構 (E6 free tree, E7 opt-in) ──
+  // node_kind is a DISPLAY label only (icon / wizard / range targeting) — the
+  // tree semantics stay parent_id. NULL on every pre-v109 row = 舊模式,
+  // renders exactly as before. sort_order fixes floor ordering (B2<B1<G/F<1/F…).
+  node_kind: NodeKind | null
+  sort_order: number | null
   // ── v107: per-item 驗收 (E1-E3) ──
   // acceptance_required=false on every existing row → no gate, behaviour
   // unchanged. When true, 完成驗收先算完成: a 100% leaf that still awaits
@@ -540,6 +546,28 @@ export function computeRollup(leaves: ProgressItem[], today: Date = new Date(), 
     qtyTotal: qw ? qw.sumTotal : null,
     qtyUnit: qw ? qw.unit : null,
   }
+}
+
+// ── v109: 樓層/翼結構 ────────────────────────────────────────
+export type NodeKind = 'building' | 'zone' | 'floor' | 'task'
+
+// 總樓層設定 inputs (the wizard's shape): 地庫 N 層、非正常樓層 (自由名, e.g.
+// G/F / UG/F / 平台)、標準樓層 N 層、天面 N 層. Generates the ordered floor
+// label list — B2,B1 … G/F … 1/F..N/F … R/F,R2/F.
+export interface FloorPreset {
+  basements: number
+  irregular: string[]
+  standardCount: number
+  roofCount: number
+}
+export function generateFloorLabels(p: FloorPreset): { label: string; sort: number }[] {
+  const out: { label: string; sort: number }[] = []
+  let sort = 0
+  for (let i = p.basements; i >= 1; i--) out.push({ label: `B${i}`, sort: sort++ })
+  for (const irr of p.irregular) out.push({ label: irr, sort: sort++ })
+  for (let i = 1; i <= p.standardCount; i++) out.push({ label: `${i}/F`, sort: sort++ })
+  for (let i = 1; i <= p.roofCount; i++) out.push({ label: i === 1 ? 'R/F' : `R${i}/F`, sort: sort++ })
+  return out
 }
 
 // ── v108: 每地盤工序範本 (E4 project-scope, E5 copy-in) ─────────

@@ -27,6 +27,7 @@ import { CreateIssueModal } from '../components/CreateIssueModal'
 import { CreateQuickSnagSheet } from '../components/CreateQuickSnagSheet'
 import { ExportProgressModal } from '../components/ExportProgressModal'
 import { TemplateManagerModal } from '../components/TemplateManagerModal'
+import { FloorStructureWizard } from '../components/FloorStructureWizard'
 import { useAiAssistantEnabled } from '../components/assistant/useAiAssistantEnabled'
 import { HelpButton } from '../components/tutorial/HelpButton'
 import { WeatherBanner } from '../components/WeatherBanner'
@@ -131,6 +132,8 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const [showExport, setShowExport] = useState(false)
   // v108: 工序範本 manager (create / apply project-scope templates)
   const [showTemplates, setShowTemplates] = useState(false)
+  // v109: 總樓層設定 wizard (opt-in floor structure)
+  const [showFloorWizard, setShowFloorWizard] = useState(false)
 
   // If the module behind the active tab gets turned off (admin toggle arrives
   // over realtime), the tab button + its content both disappear — bounce back
@@ -434,7 +437,13 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
               </div>
             )}
             {canEdit && (
-              <div className="flex justify-end mb-3">
+              <div className="flex justify-end gap-2 mb-3">
+                <button
+                  onClick={() => setShowFloorWizard(true)}
+                  className="text-xs font-semibold text-site-600 hover:text-site-900 bg-white border border-site-200 hover:bg-site-50 rounded-xl px-3 py-2 inline-flex items-center gap-1.5 min-h-0"
+                >
+                  <Building2 size={14} /> 總樓層設定
+                </button>
                 <button
                   onClick={() => setShowTemplates(true)}
                   className="text-xs font-semibold text-site-600 hover:text-site-900 bg-white border border-site-200 hover:bg-site-50 rounded-xl px-3 py-2 inline-flex items-center gap-1.5 min-h-0"
@@ -564,6 +573,12 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
         open={showTemplates}
         onClose={() => setShowTemplates(false)}
         zones={project.zones}
+      />
+      <FloorStructureWizard
+        open={showFloorWizard}
+        onClose={() => setShowFloorWizard(false)}
+        zones={project.zones}
+        projectId={projectId}
       />
     </div>
   )

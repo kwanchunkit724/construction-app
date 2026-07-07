@@ -214,6 +214,11 @@ export function ProgressItemCard({
           {/* title + meta + progress (tap to expand) */}
           <button onClick={toggleRow} className="flex-1 min-w-0 text-left">
             <div className="flex items-center gap-1.5 min-w-0">
+              {item.node_kind === 'floor' && (
+                <span className="inline-flex items-center gap-0.5 text-[9px] bg-indigo-100 text-indigo-700 px-1 rounded flex-shrink-0 font-semibold">
+                  <Layers size={8} />樓層
+                </span>
+              )}
               <span className={`font-semibold text-site-900 truncate ${item.level === 1 ? 'text-sm' : 'text-[13px]'}`}>{item.title}</span>
               {isFloors && isLeaf && (
                 <span className="inline-flex items-center gap-0.5 text-[9px] bg-purple-100 text-purple-700 px-1 rounded flex-shrink-0">

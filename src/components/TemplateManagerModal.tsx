@@ -37,6 +37,11 @@ export function TemplateManagerModal({ open, onClose, zones }: {
   // apply form
   const [zoneId, setZoneId] = useState('')
   const [parentId, setParentId] = useState('')
+  // E8 assign-by-range: stamp the template onto EVERY floor in a range
+  // (B翼 8-15 樓一嘢過), instead of one parent at a time.
+  const [applyMode, setApplyMode] = useState<'single' | 'range'>('single')
+  const [floorFrom, setFloorFrom] = useState('')
+  const [floorTo, setFloorTo] = useState('')
 
   async function reload() {
     setLoading(true)
@@ -60,6 +65,22 @@ export function TemplateManagerModal({ open, onClose, zones }: {
       .filter(i => i.zone_id === zoneId && i.level <= 2)
       .sort((a, b) => a.code.localeCompare(b.code))
   }, [items, zoneId])
+
+  // v109 floor nodes in the chosen zone, ordered bottom→top by sort_order.
+  const floorNodes = useMemo(() => {
+    if (!zoneId) return []
+    return items
+      .filter(i => i.zone_id === zoneId && i.parent_id === null && i.node_kind === 'floor')
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  }, [items, zoneId])
+  const rangeFloors = useMemo(() => {
+    if (applyMode !== 'range' || !floorFrom || !floorTo) return []
+    const iFrom = floorNodes.findIndex(f => f.id === floorFrom)
+    const iTo = floorNodes.findIndex(f => f.id === floorTo)
+    if (iFrom === -1 || iTo === -1) return []
+    const [lo, hi] = iFrom <= iTo ? [iFrom, iTo] : [iTo, iFrom]
+    return floorNodes.slice(lo, hi + 1)
+  }, [applyMode, floorFrom, floorTo, floorNodes])
 
   async function onCreate() {
     setError('')
@@ -90,6 +111,20 @@ export function TemplateManagerModal({ open, onClose, zones }: {
     if (view.kind !== 'apply') return
     setError('')
     if (!zoneId) return setError('請揀分區')
+    if (applyMode === 'range') {
+      if (rangeFloors.length === 0) return setError('請揀樓層範圍')
+      setBusy(true)
+      let total = 0
+      for (const fl of rangeFloors) {
+        const { error, inserted } = await applyTemplate(view.template, fl.id, zoneId)
+        total += inserted
+        if (error) { setBusy(false); return setError(`${fl.title}：${error}（合共已加入 ${total} 項）`) }
+      }
+      setBusy(false)
+      setOkMsg(`已加入 ${total} 項工序（${rangeFloors.length} 層）`)
+      setView({ kind: 'list' })
+      return
+    }
     if (!parentId) return setError('請揀要加入去邊個項目下面')
     setBusy(true)
     const { error, inserted } = await applyTemplate(view.template, parentId, zoneId)
@@ -115,7 +150,11 @@ export function TemplateManagerModal({ open, onClose, zones }: {
           </button>
         ) : view.kind === 'apply' ? (
           <button onClick={onApply} disabled={busy} className="btn-primary w-full">
-            {busy ? <Spinner size={18} className="text-white" /> : `加入 ${view.template.items.length} 項工序`}
+            {busy
+              ? <Spinner size={18} className="text-white" />
+              : applyMode === 'range'
+                ? `加入 ${view.template.items.length} 項 × ${rangeFloors.length} 層`
+                : `加入 ${view.template.items.length} 項工序`}
           </button>
         ) : (
           <button
@@ -159,7 +198,7 @@ export function TemplateManagerModal({ open, onClose, zones }: {
                     </p>
                   </div>
                   <button
-                    onClick={() => { setError(''); setOkMsg(''); setZoneId(zones[0]?.id ?? ''); setParentId(''); setView({ kind: 'apply', template: t }) }}
+                    onClick={() => { setError(''); setOkMsg(''); setZoneId(zones[0]?.id ?? ''); setParentId(''); setApplyMode('single'); setFloorFrom(''); setFloorTo(''); setView({ kind: 'apply', template: t }) }}
                     className="flex-shrink-0 text-xs font-semibold bg-safety-500 hover:bg-safety-600 text-white rounded-lg px-3 py-2 min-h-0"
                   >套用</button>
                   <button
@@ -208,25 +247,56 @@ export function TemplateManagerModal({ open, onClose, zones }: {
           </div>
           <div>
             <label className="label">分區 *</label>
-            <select className="input" value={zoneId} onChange={e => { setZoneId(e.target.value); setParentId('') }}>
+            <select className="input" value={zoneId} onChange={e => { setZoneId(e.target.value); setParentId(''); setFloorFrom(''); setFloorTo('') }}>
               <option value="">— 揀分區 —</option>
               {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
             </select>
           </div>
-          <div>
-            <label className="label">加入去邊個項目下面 *</label>
-            <select className="input" value={parentId} onChange={e => setParentId(e.target.value)}>
-              <option value="">— 揀大項／中項 —</option>
-              {parentOptions.map(p => (
-                <option key={p.id} value={p.id}>
-                  {'　'.repeat(p.level - 1)}{p.title}
-                </option>
-              ))}
-            </select>
-            {zoneId && parentOptions.length === 0 && (
-              <p className="text-xs text-amber-600 mt-1">呢個分區未有大項 — 請先加入大項</p>
-            )}
-          </div>
+          {floorNodes.length > 0 && (
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setApplyMode('single')}
+                className={`py-2 rounded-xl text-sm border font-semibold min-h-0 ${applyMode === 'single' ? 'border-safety-500 bg-safety-50 text-safety-700' : 'border-site-200 text-site-500'}`}
+              >單一項目</button>
+              <button type="button" onClick={() => setApplyMode('range')}
+                className={`py-2 rounded-xl text-sm border font-semibold min-h-0 ${applyMode === 'range' ? 'border-safety-500 bg-safety-50 text-safety-700' : 'border-site-200 text-site-500'}`}
+              >樓層範圍</button>
+            </div>
+          )}
+          {applyMode === 'range' && floorNodes.length > 0 ? (
+            <div>
+              <label className="label">樓層範圍 *（每層各加一套工序）</label>
+              <div className="grid grid-cols-2 gap-2">
+                <select className="input" value={floorFrom} onChange={e => setFloorFrom(e.target.value)}>
+                  <option value="">— 由 —</option>
+                  {floorNodes.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
+                </select>
+                <select className="input" value={floorTo} onChange={e => setFloorTo(e.target.value)}>
+                  <option value="">— 至 —</option>
+                  {floorNodes.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
+                </select>
+              </div>
+              {rangeFloors.length > 0 && (
+                <p className="text-[11px] text-site-400 mt-1">
+                  {rangeFloors.length} 層 × {view.template.items.length} 項 = 共 {rangeFloors.length * view.template.items.length} 項工序
+                </p>
+              )}
+            </div>
+          ) : (
+            <div>
+              <label className="label">加入去邊個項目下面 *</label>
+              <select className="input" value={parentId} onChange={e => setParentId(e.target.value)}>
+                <option value="">— 揀大項／中項／樓層 —</option>
+                {parentOptions.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {'　'.repeat(p.level - 1)}{p.title}
+                  </option>
+                ))}
+              </select>
+              {zoneId && parentOptions.length === 0 && (
+                <p className="text-xs text-amber-600 mt-1">呢個分區未有大項 — 請先加入大項（或用「總樓層設定」生成樓層）</p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

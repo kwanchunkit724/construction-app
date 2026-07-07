@@ -5,7 +5,7 @@ import { useProjects } from './ProjectsContext'
 import { cacheGet, cacheSet, getOnline, subscribeOnline } from '../lib/offline'
 import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import { deriveStatus, acceptanceGate, floorsToProgress, plannedProgressOf, qtyToProgress, unitStatusToProgress } from '../types'
-import type { ProgressItem, ProgressStatus, TrackingMode, ProgressHistoryEntry, UnitState, CategoryDomain, CategoryStream, ProgressTemplate, TemplateItem } from '../types'
+import type { ProgressItem, ProgressStatus, TrackingMode, ProgressHistoryEntry, UnitState, CategoryDomain, CategoryStream, ProgressTemplate, TemplateItem, NodeKind } from '../types'
 
 interface ProgressContextType {
   loading: boolean
@@ -83,6 +83,9 @@ interface AddItemInput {
   // v107: 需驗收 flag — when true, the item only counts as 完成 after someone
   // ticks 完成驗收 (E3).
   acceptance_required?: boolean
+  // v109: display-only structure label (floor / zone …) + floor ordering.
+  node_kind?: NodeKind | null
+  sort_order?: number | null
 }
 
 const ProgressContext = createContext<ProgressContextType | null>(null)
@@ -217,6 +220,8 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
       category_domain: input.parent_id ? null : (input.category_domain ?? null),
       category_stream: input.parent_id ? null : (input.category_stream ?? null),
       acceptance_required: input.acceptance_required ?? false,
+      node_kind: input.node_kind ?? null,
+      sort_order: input.sort_order ?? null,
       assigned_to: [],
       delegated_to: [],
       last_updated_by: profile.id,
