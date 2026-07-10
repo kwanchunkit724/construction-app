@@ -4,6 +4,7 @@ import { Spinner } from './Spinner'
 import { useProgress } from '../contexts/ProgressContext'
 import { plannedProgressOf, CATEGORY_DOMAIN_ZH, CATEGORY_STREAM_ZH } from '../types'
 import type { ProgressItem, CategoryDomain, CategoryStream } from '../types'
+import { useTrades } from '../lib/trades'
 
 // Edit an existing item's title + planned dates WITHOUT delete+recreate (which
 // would lose its history, children, drawings and assignments). Planned dates
@@ -24,6 +25,8 @@ export function EditItemModal({
   const [catDomain, setCatDomain] = useState<CategoryDomain | null>(null)
   const [catStream, setCatStream] = useState<CategoryStream | null>(null)
   const [acceptanceRequired, setAcceptanceRequired] = useState(false)
+  const trades = useTrades()
+  const [trade, setTrade] = useState('')
 
   useEffect(() => {
     if (open && item) {
@@ -33,6 +36,7 @@ export function EditItemModal({
       setCatDomain(item.category_domain ?? null)
       setCatStream(item.category_stream ?? null)
       setAcceptanceRequired(!!item.acceptance_required)
+      setTrade(item.trade ?? '')
       setError('')
     }
   }, [open, item])
@@ -52,6 +56,7 @@ export function EditItemModal({
       planned_start: plannedStart || null,
       planned_end: plannedEnd || null,
       acceptance_required: acceptanceRequired,
+      trade: trade || null,
       // category only on a root 大項
       ...(item.parent_id === null ? { category_domain: catDomain, category_stream: catStream } : {}),
     })
@@ -107,6 +112,13 @@ export function EditItemModal({
             </div>
           </div>
         )}
+        <div>
+          <label className="label">工種</label>
+          <select className="input" value={trade} onChange={e => setTrade(e.target.value)}>
+            <option value="">未分類</option>
+            {trades.map(t => <option key={t.code} value={t.code}>{t.group_zh} · {t.name_zh}</option>)}
+          </select>
+        </div>
         <label className="flex items-center gap-2.5 rounded-xl bg-site-50 border border-site-100 p-3 cursor-pointer">
           <input
             type="checkbox"

@@ -193,6 +193,10 @@ export interface ProgressItem {
   // stream = 土建(civil) vs 屋宇裝備 BS(E&M). NULL on existing rows → '未分類'.
   category_domain: CategoryDomain | null
   category_stream: CategoryStream | null
+  // ── v110 (T1): 工種標籤 — display/grouping/export dimension only; the tree
+  // stays parent_id. NULL = 未分類 (every pre-v110 row). Codes live in the
+  // `trades` dictionary table (src/lib/trades.ts).
+  trade: string | null
   // ── v109: 樓層/翼結構 (E6 free tree, E7 opt-in) ──
   // node_kind is a DISPLAY label only (icon / wizard / range targeting) — the
   // tree semantics stay parent_id. NULL on every pre-v109 row = 舊模式,
@@ -581,6 +585,8 @@ export interface TemplateItem {
   qty_total?: number | null
   qty_unit?: string | null
   acceptance_required?: boolean
+  // v110: 工種 — carried into every item the template stamps.
+  trade?: string | null
 }
 export interface ProgressTemplate {
   id: string

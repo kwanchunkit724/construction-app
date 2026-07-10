@@ -13,6 +13,7 @@ import { DocumentsSection } from './documents/DocumentsSection'
 import { MaterialItemsPanel } from './material/MaterialItemsPanel'
 import { PROGRESS_STATUS_ZH, computeRollup, getDescendantLeaves, plannedProgressOf, deriveLeafStatus, pendingAcceptance, isScheduled, unitStatusCounts } from '../types'
 import { displayStatusOf } from '../lib/progressTemplates'
+import { useTrades, tradeName } from '../lib/trades'
 import type { ProgressItem, ProgressStatus, UserProfile } from '../types'
 import { supabase } from '../lib/supabase'
 
@@ -176,6 +177,8 @@ export function ProgressItemCard({
   const { setAcceptance } = useProgress()
   const assigneeIds = [...assignedTo, ...delegatedTo, ...(item.accepted_by ? [item.accepted_by] : [])]
   const profiles = useProfiles(assigneeIds)
+  const trades = useTrades()
+  const tradeLabel = isLeaf ? tradeName(trades, item.trade) : null
 
   // tapping the row body: parents toggle children, leaves toggle their detail.
   const toggleRow = () => onToggle(item.id)
@@ -249,6 +252,11 @@ export function ProgressItemCard({
                   className="inline-flex items-center gap-0.5 text-[9px] bg-amber-100 text-amber-700 px-1 rounded flex-shrink-0 max-w-[88px]"
                 >
                   <Ban size={8} className="flex-shrink-0" /><span className="truncate">{blockedReason}</span>
+                </span>
+              )}
+              {tradeLabel && (
+                <span className="inline-flex items-center text-[9px] bg-sky-100 text-sky-700 px-1 rounded flex-shrink-0">
+                  {tradeLabel}
                 </span>
               )}
               {awaitingAcceptance && (

@@ -3,6 +3,7 @@ import { Plus, Trash2, PackagePlus, ChevronLeft } from 'lucide-react'
 import { Modal } from './Modal'
 import { Spinner } from './Spinner'
 import { useProgress } from '../contexts/ProgressContext'
+import { useTrades } from '../lib/trades'
 import type { ProgressTemplate, Zone } from '../types'
 
 // v108: 每地盤工序範本 (E4 project scope, E5 copy-in) — pre-set bundles like
@@ -30,9 +31,11 @@ export function TemplateManagerModal({ open, onClose, zones }: {
   const [okMsg, setOkMsg] = useState('')
 
   // create form
+  const trades = useTrades()
   const [name, setName] = useState('')
   const [lines, setLines] = useState('')
   const [allAcceptance, setAllAcceptance] = useState(false)
+  const [tplTrade, setTplTrade] = useState('')
 
   // apply form
   const [zoneId, setZoneId] = useState('')
@@ -91,10 +94,11 @@ export function TemplateManagerModal({ open, onClose, zones }: {
       title: t,
       tracking_mode: 'percentage',
       acceptance_required: allAcceptance,
+      trade: tplTrade || null,
     })))
     setBusy(false)
     if (error) return setError(error)
-    setName(''); setLines(''); setAllAcceptance(false)
+    setName(''); setLines(''); setAllAcceptance(false); setTplTrade('')
     setView({ kind: 'list' })
     void reload()
   }
@@ -232,6 +236,13 @@ export function TemplateManagerModal({ open, onClose, zones }: {
             {parsedLines.length > 0 && (
               <p className="text-[11px] text-site-400 mt-1">將建立 {parsedLines.length} 項工序</p>
             )}
+          </div>
+          <div>
+            <label className="label">工種（套用時自動標喺每項工序）</label>
+            <select className="input" value={tplTrade} onChange={e => setTplTrade(e.target.value)}>
+              <option value="">未分類</option>
+              {trades.map(t => <option key={t.code} value={t.code}>{t.group_zh} · {t.name_zh}</option>)}
+            </select>
           </div>
           <label className="flex items-center gap-2.5 rounded-xl bg-site-50 border border-site-100 p-3 cursor-pointer">
             <input type="checkbox" checked={allAcceptance} onChange={e => setAllAcceptance(e.target.checked)} className="accent-safety-600 h-4 w-4" />

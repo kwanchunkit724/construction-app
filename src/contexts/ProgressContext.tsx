@@ -54,7 +54,7 @@ interface ProgressContextType {
   saveTemplate: (name: string, items: TemplateItem[]) => Promise<{ error: string | null }>
   deleteTemplate: (id: string) => Promise<{ error: string | null }>
   applyTemplate: (template: ProgressTemplate, parentId: string | null, zoneId: string) => Promise<{ error: string | null; inserted: number }>
-  updateItemMeta: (id: string, patch: { title?: string; planned_start?: string | null; planned_end?: string | null; category_domain?: CategoryDomain | null; category_stream?: CategoryStream | null; acceptance_required?: boolean }) => Promise<{ error: string | null }>
+  updateItemMeta: (id: string, patch: { title?: string; planned_start?: string | null; planned_end?: string | null; category_domain?: CategoryDomain | null; category_stream?: CategoryStream | null; acceptance_required?: boolean; trade?: string | null }) => Promise<{ error: string | null }>
   deleteItem: (id: string) => Promise<{ error: string | null }>
 }
 
@@ -86,6 +86,8 @@ interface AddItemInput {
   // v109: display-only structure label (floor / zone …) + floor ordering.
   node_kind?: NodeKind | null
   sort_order?: number | null
+  // v110 (T1): 工種 tag (trades dictionary code). Display/grouping/export only.
+  trade?: string | null
 }
 
 const ProgressContext = createContext<ProgressContextType | null>(null)
@@ -222,6 +224,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
       acceptance_required: input.acceptance_required ?? false,
       node_kind: input.node_kind ?? null,
       sort_order: input.sort_order ?? null,
+      trade: input.trade ?? null,
       assigned_to: [],
       delegated_to: [],
       last_updated_by: profile.id,
@@ -265,7 +268,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
   // item's history, children, drawings or assignments (vs delete + recreate).
   async function updateItemMeta(
     id: string,
-    patch: { title?: string; planned_start?: string | null; planned_end?: string | null; category_domain?: CategoryDomain | null; category_stream?: CategoryStream | null; acceptance_required?: boolean },
+    patch: { title?: string; planned_start?: string | null; planned_end?: string | null; category_domain?: CategoryDomain | null; category_stream?: CategoryStream | null; acceptance_required?: boolean; trade?: string | null },
   ) {
     if (!profile) return { error: '未登入' }
     const before = items.find(i => i.id === id)
@@ -279,6 +282,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     if (patch.category_domain !== undefined) upd.category_domain = patch.category_domain
     if (patch.category_stream !== undefined) upd.category_stream = patch.category_stream
     if (patch.acceptance_required !== undefined) upd.acceptance_required = patch.acceptance_required
+    if (patch.trade !== undefined) upd.trade = patch.trade
     const { error } = await supabase.from('progress_items').update(upd).eq('id', id)
     if (error) return { error: error.message }
     // Journal the metadata edit as an immutable history row (v38) — only the
@@ -540,6 +544,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
         qty_total: ti.qty_total ?? null,
         qty_unit: ti.qty_unit ?? null,
         acceptance_required: ti.acceptance_required ?? false,
+        trade: ti.trade ?? null,
       })
       if (r.error) return { error: `${r.error}（已加入 ${inserted} 項）`, inserted }
       inserted++

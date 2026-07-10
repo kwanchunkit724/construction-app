@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase'
 import type { ProgressItem, TrackingMode, Zone, UnitState, CategoryDomain, CategoryStream } from '../types'
 import { plannedProgressOf, CATEGORY_DOMAIN_ZH, CATEGORY_STREAM_ZH } from '../types'
 import { templateFor } from '../lib/progressTemplates'
+import { useTrades } from '../lib/trades'
 
 // Per-mode picker presentation. Keyed by TrackingMode so the picker can be
 // rendered purely from a template's allowedModes list. percentage = today's
@@ -73,6 +74,9 @@ export function CreateItemModal({
   const [catStream, setCatStream] = useState<CategoryStream | null>(null)
   // v107: 需驗收 — item only counts as 完成 after someone ticks 完成驗收 (E3).
   const [acceptanceRequired, setAcceptanceRequired] = useState(false)
+  // v110: 工種 tag (trades dictionary)
+  const trades = useTrades()
+  const [trade, setTrade] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   // Multi-zone selection (root-level adds only)
@@ -147,6 +151,9 @@ export function CreateItemModal({
       setCodeMap({})
       setCodeError('')
       setAcceptanceRequired(false)
+      // inherit the parent's 工種 by default — a 細項 under a tagged 中項 is
+      // almost always the same trade.
+      setTrade(parent?.trade ?? '')
     }
   }, [open, zone.id, parent, defaultMode])
 
@@ -350,6 +357,7 @@ export function CreateItemModal({
         category_domain: isRootAdd ? catDomain : null,
         category_stream: isRootAdd ? catStream : null,
         acceptance_required: acceptanceRequired,
+        trade: trade || null,
       }))
     )
 
@@ -521,6 +529,14 @@ export function CreateItemModal({
             <label className="label">計劃完成</label>
             <input type="date" value={plannedEnd} onChange={e => setPlannedEnd(e.target.value)} className="input" />
           </div>
+        </div>
+
+        <div>
+          <label className="label">工種（用於按工種睇／export）</label>
+          <select className="input" value={trade} onChange={e => setTrade(e.target.value)}>
+            <option value="">未分類</option>
+            {trades.map(t => <option key={t.code} value={t.code}>{t.group_zh} · {t.name_zh}</option>)}
+          </select>
         </div>
 
         <label className="flex items-center gap-2.5 rounded-xl bg-site-50 border border-site-100 p-3 cursor-pointer">
