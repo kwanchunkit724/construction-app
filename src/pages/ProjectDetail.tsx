@@ -28,6 +28,7 @@ import { CreateQuickSnagSheet } from '../components/CreateQuickSnagSheet'
 import { ExportProgressModal } from '../components/ExportProgressModal'
 import { TemplateManagerModal } from '../components/TemplateManagerModal'
 import { FloorStructureWizard } from '../components/FloorStructureWizard'
+import { BatchAssignModal } from '../components/BatchAssignModal'
 import { useAiAssistantEnabled } from '../components/assistant/useAiAssistantEnabled'
 import { HelpButton } from '../components/tutorial/HelpButton'
 import { WeatherBanner } from '../components/WeatherBanner'
@@ -134,6 +135,8 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const [showTemplates, setShowTemplates] = useState(false)
   // v109: 總樓層設定 wizard (opt-in floor structure)
   const [showFloorWizard, setShowFloorWizard] = useState(false)
+  // T2: 判紙批量指派
+  const [showBatchAssign, setShowBatchAssign] = useState(false)
 
   // If the module behind the active tab gets turned off (admin toggle arrives
   // over realtime), the tab button + its content both disappear — bounce back
@@ -450,6 +453,12 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
                 >
                   <PackagePlus size={14} /> 工序範本
                 </button>
+                <button
+                  onClick={() => setShowBatchAssign(true)}
+                  className="text-xs font-semibold text-site-600 hover:text-site-900 bg-white border border-site-200 hover:bg-site-50 rounded-xl px-3 py-2 inline-flex items-center gap-1.5 min-h-0"
+                >
+                  <UsersRound size={14} /> 批量指派
+                </button>
               </div>
             )}
 
@@ -577,6 +586,12 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
       <FloorStructureWizard
         open={showFloorWizard}
         onClose={() => setShowFloorWizard(false)}
+        zones={project.zones}
+        projectId={projectId}
+      />
+      <BatchAssignModal
+        open={showBatchAssign}
+        onClose={() => setShowBatchAssign(false)}
         zones={project.zones}
         projectId={projectId}
       />
