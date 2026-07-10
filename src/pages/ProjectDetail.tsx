@@ -29,6 +29,7 @@ import { ExportProgressModal } from '../components/ExportProgressModal'
 import { TemplateManagerModal } from '../components/TemplateManagerModal'
 import { FloorStructureWizard } from '../components/FloorStructureWizard'
 import { BatchAssignModal } from '../components/BatchAssignModal'
+import { GroupedProgressView, type GroupMode } from '../components/GroupedProgressView'
 import { useAiAssistantEnabled } from '../components/assistant/useAiAssistantEnabled'
 import { HelpButton } from '../components/tutorial/HelpButton'
 import { WeatherBanner } from '../components/WeatherBanner'
@@ -137,6 +138,8 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   const [showFloorWizard, setShowFloorWizard] = useState(false)
   // T2: 判紙批量指派
   const [showBatchAssign, setShowBatchAssign] = useState(false)
+  // T3: 進度視圖 — 位置(樹) / 工種 / 判頭 / 我的 (同一份 leaf 數據 group-by)
+  const [viewMode, setViewMode] = useState<'location' | GroupMode>('location')
 
   // If the module behind the active tab gets turned off (admin toggle arrives
   // over realtime), the tab button + its content both disappear — bounce back
@@ -462,8 +465,37 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
               </div>
             )}
 
+            <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+              {([['location', '位置'], ['trade', '工種'], ['assignee', '判頭'], ['mine', '我的']] as ['location' | GroupMode, string][]).map(([k, l]) => (
+                <button
+                  key={k}
+                  onClick={() => setViewMode(k)}
+                  className={`text-xs px-3 py-1.5 rounded-full font-semibold min-h-0 ${viewMode === k ? 'bg-site-800 text-white' : 'bg-site-100 text-site-600 hover:bg-site-200'}`}
+                >{l}</button>
+              ))}
+            </div>
+
             {loading ? (
               <div className="py-10 flex justify-center"><Spinner size={28} /></div>
+            ) : viewMode !== 'location' ? (
+              <GroupedProgressView
+                mode={viewMode}
+                items={visibleItems}
+                zones={project.zones}
+                handlers={{
+                  expanded: expandedSet,
+                  onToggle: toggle,
+                  onUpdate: setUpdating,
+                  onAddChild: parent => setCreateCtx({ parent, zone: zoneOf(parent, project.zones[0] ?? { id: '', name: '' }) }),
+                  onAssign: setAssigning,
+                  onHistory: setHistoryItem,
+                  onEdit: setEditing,
+                  onDelete: async item => {
+                    if (!(await requireStepUp('progress_delete'))) return
+                    await deleteItem(item.id)
+                  },
+                }}
+              />
             ) : project.zones.length === 0 && !hideZoneChrome ? (
               // Dead-end only for zone-based types with no zones yet. autoZone
               // types (小型工程) always have their implicit zone, and we never
