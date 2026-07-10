@@ -14,7 +14,7 @@ import { MaterialItemsPanel } from './material/MaterialItemsPanel'
 import { PROGRESS_STATUS_ZH, computeRollup, getDescendantLeaves, plannedProgressOf, deriveLeafStatus, pendingAcceptance, isScheduled, unitStatusCounts } from '../types'
 import { displayStatusOf } from '../lib/progressTemplates'
 import { useTrades, tradeName } from '../lib/trades'
-import type { ProgressItem, ProgressStatus, UserProfile } from '../types'
+import type { ProgressItem, ProgressStatus, UserProfile, Zone } from '../types'
 import { supabase } from '../lib/supabase'
 
 // useDrawingsOptional — null when no DrawingsProvider mounted (e.g. dashboard preview).
@@ -92,6 +92,7 @@ function useProfiles(ids: string[]): Record<string, UserProfile> {
 
 export function ProgressItemCard({
   item, expanded, onToggle, onUpdate, onAddChild, onAssign, onHistory, onEdit, onDelete,
+  zones, showLocation = false,
 }: {
   item: ProgressItem
   expanded: Set<string>
@@ -102,6 +103,13 @@ export function ProgressItemCard({
   onHistory: (item: ProgressItem) => void
   onEdit: (item: ProgressItem) => void
   onDelete: (item: ProgressItem) => void
+  // zones: lets the card prefix its path with the 分區 name (一座 › 1/F › …).
+  // The floor is the tree ROOT, so the tower is NOT an ancestor — without the
+  // zone prefix, grouped views show 72 identical "地台防水" rows.
+  zones?: Zone[]
+  // showLocation: render a per-row location line (grouped 工種/判頭 views,
+  // where the zone header that normally gives context doesn't exist).
+  showLocation?: boolean
 }) {
   const { items, canEdit, canUpdateItem } = useProgress()
   const canUpdateThis = canUpdateItem(item)
@@ -114,12 +122,14 @@ export function ProgressItemCard({
   // disambiguation for same-named leaves. The row itself no longer shows the
   // code prefix / zone badge (they ate the title width on phones); code and
   // path stay reachable here and in exports.
+  const zoneName = zones?.find(z => z.id === item.zone_id)?.name
   const ancestorPath = useMemo(() => {
     const names: string[] = []
     let p = items.find(i => i.id === item.parent_id)
     while (p) { names.unshift(p.title); p = items.find(i => i.id === p!.parent_id) }
+    if (zoneName) names.unshift(zoneName)
     return names.join(' › ')
-  }, [items, item.parent_id])
+  }, [items, item.parent_id, zoneName])
 
   const children = items.filter(i => i.parent_id === item.id)
   const isLeaf = children.length === 0
@@ -270,6 +280,9 @@ export function ProgressItemCard({
                 </span>
               )}
             </div>
+            {showLocation && ancestorPath && (
+              <div className="text-[9px] text-site-400 truncate mt-0.5">{ancestorPath}</div>
+            )}
             <div className="flex items-center gap-1.5 mt-1">
               <ProgressBar value={displayActual} planned={displayPlanned} status={displayStatus} className="flex-1 h-1.5" />
               <span className={`text-[11px] font-bold flex-shrink-0 ${displayStatus === 'delayed' ? 'text-red-600' : 'text-site-700'}`}>{displayActual}%</span>
@@ -412,6 +425,7 @@ export function ProgressItemCard({
         <ProgressItemCard
           key={child.id}
           item={child}
+          zones={zones}
           expanded={expanded}
           onToggle={onToggle}
           onUpdate={onUpdate}

@@ -138,20 +138,34 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
       const cached = cacheGet<ProgressItem[]>(`progress:${projectId}`)
       if (cached) { setItems(cached.data); setFetchError(null); return }
     }
-    const { data, error } = await supabase.rpc('get_visible_progress_items', { p_project_id: projectId })
-    if (error) {
-      console.error('progress_items fetch error:', error)
+    // PostgREST caps a set-returning RPC at 1000 rows by default — a big
+    // floor-structured site silently loses its deepest items (and the tree
+    // renders childless parents as fake 0% leaves). Page with .range() until
+    // a short page; the RPC's ORDER BY (level, code) keeps pages stable.
+    const PAGE = 1000
+    const all: ProgressItem[] = []
+    let fetchErr: string | null = null
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .rpc('get_visible_progress_items', { p_project_id: projectId })
+        .range(from, from + PAGE - 1)
+      if (error) { fetchErr = error.message; break }
+      const page = (data ?? []) as ProgressItem[]
+      all.push(...page)
+      if (page.length < PAGE) break
+    }
+    if (fetchErr) {
+      console.error('progress_items fetch error:', fetchErr)
       // Only fall back to cache when offline — don't mask a real online error.
       const cached = !getOnline() ? cacheGet<ProgressItem[]>(`progress:${projectId}`) : null
       if (cached) {
         setItems(cached.data)
         setFetchError(null)
       } else {
-        setFetchError(error.message)
+        setFetchError(fetchErr)
       }
     } else {
-      const rows = (data ?? []) as ProgressItem[]
-      const sorted = [...rows].sort((a, b) => a.code.localeCompare(b.code))
+      const sorted = [...all].sort((a, b) => a.code.localeCompare(b.code))
       setItems(sorted)
       cacheSet(`progress:${projectId}`, sorted)
       setFetchError(null)

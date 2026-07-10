@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, lazy, Suspense } from 'react'
 import { useParams, useNavigate, Navigate } from 'react-router-dom'
 import {
-  ChevronLeft, Plus, Building2, RefreshCw,
+  ChevronLeft, ChevronDown, ChevronRight, Plus, Building2, RefreshCw,
   CheckCircle2, AlertTriangle, Clock, Minus,
   ListChecks, AlertCircle, Download, FileCheck2,
   FileText, Receipt, Shield, Bot, CloudRain,
@@ -161,9 +161,12 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
 
   const roots = useMemo(() => items.filter(i => i.parent_id === null), [items])
 
-  // Auto-expand all level-1 items first time
+  // Auto-expand all level-1 items first time — but only when the tree is
+  // small. A floor-structured site has 70+ roots; expanding them all makes a
+  // 25,000px wall on a phone. Big sites start collapsed instead.
   const autoExpanded = useMemo(() => {
     if (expanded.size > 0) return expanded
+    if (roots.length > 12) return new Set<string>()
     return new Set(roots.map(r => r.id))
   }, [expanded, roots])
 
@@ -763,9 +766,17 @@ function ZoneSection({
   onEdit: (item: ProgressItem) => void
   onDelete: (item: ProgressItem) => void
 }) {
-  const zoneRoots = items.filter(i => i.parent_id === null && i.zone_id === zone.id)
+  // Floors must order by sort_order (G/F=0, 1/F=1 … 18/F=18), NOT by code —
+  // code sorts alphabetically (1/F, 10/F, 11/F … 2/F). Non-floor roots have
+  // null sort_order and keep their original code order.
+  const zoneRoots = items
+    .filter(i => i.parent_id === null && i.zone_id === zone.id)
+    .sort((a, b) => (a.sort_order ?? Number.MAX_SAFE_INTEGER) - (b.sort_order ?? Number.MAX_SAFE_INTEGER))
   const rollup = computeRollup(getZoneLeaves(items, zone.id))
   const StatusIcon = STATUS_ICON[rollup.status] ?? Minus
+  // Floor-structured zones carry 19+ roots each — collapsed by default so a
+  // 4-tower site opens as a handful of headers, not a wall. Small zones open.
+  const [open, setOpen] = useState(zoneRoots.length <= 10)
 
   return (
     <section>
@@ -780,36 +791,39 @@ function ZoneSection({
           </button>
         )
       ) : (
-      /* Zone header */
+      /* Zone header — tap to expand/collapse the zone's items */
       <div className="card-md p-4 mb-2">
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-xs text-site-500 flex-shrink-0">{zone.id}</span>
-              <h2 className="font-bold text-site-900 truncate">{zone.name}</h2>
+        <button onClick={() => setOpen(o => !o)} className="w-full text-left min-h-0">
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                {open ? <ChevronDown size={16} className="text-site-400 flex-shrink-0" /> : <ChevronRight size={16} className="text-site-400 flex-shrink-0" />}
+                <span className="font-mono text-xs text-site-500 flex-shrink-0">{zone.id}</span>
+                <h2 className="font-bold text-site-900 truncate">{zone.name}</h2>
+              </div>
+              <p className="text-[11px] text-site-400 mt-0.5">
+                {rollup.leafCount === 0 ? '尚未有進度項目' : `${rollup.leafCount} 個 leaf 項目自動匯總`}
+              </p>
             </div>
-            <p className="text-[11px] text-site-400 mt-0.5">
-              {rollup.leafCount === 0 ? '尚未有進度項目' : `${rollup.leafCount} 個 leaf 項目自動匯總`}
-            </p>
+            <span className={`flex-shrink-0 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium ${STATUS_PILL[rollup.status]}`}>
+              <StatusIcon size={11} />
+              {PROGRESS_STATUS_ZH[rollup.status]}
+            </span>
           </div>
-          <span className={`flex-shrink-0 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium ${STATUS_PILL[rollup.status]}`}>
-            <StatusIcon size={11} />
-            {PROGRESS_STATUS_ZH[rollup.status]}
-          </span>
-        </div>
 
-        <div className="flex items-center gap-2">
-          <ProgressBar
-            value={rollup.actual}
-            planned={rollup.planned}
-            status={rollup.status}
-            className="flex-1"
-          />
-          <span className="text-sm font-bold text-site-900 flex-shrink-0">{rollup.actual}%</span>
-          <span className="text-xs text-site-500 flex-shrink-0">/ 計劃 {rollup.planned}%</span>
-        </div>
+          <div className="flex items-center gap-2">
+            <ProgressBar
+              value={rollup.actual}
+              planned={rollup.planned}
+              status={rollup.status}
+              className="flex-1"
+            />
+            <span className="text-sm font-bold text-site-900 flex-shrink-0">{rollup.actual}%</span>
+            <span className="text-xs text-site-500 flex-shrink-0">/ 計劃 {rollup.planned}%</span>
+          </div>
+        </button>
 
-        {canEdit && (
+        {canEdit && open && (
           <button
             onClick={onAddRoot}
             className="mt-3 w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-safety-700 bg-safety-50 border border-safety-200 hover:bg-safety-100 py-2 rounded-lg"
@@ -820,8 +834,8 @@ function ZoneSection({
       </div>
       )}
 
-      {/* Items in this zone */}
-      {zoneRoots.length === 0 ? (
+      {/* Items in this zone (hideZoneHeader mode has no header to toggle) */}
+      {(!open && !hideZoneHeader) ? null : zoneRoots.length === 0 ? (
         !canEdit && (
           <div className="text-center text-xs text-site-400 py-3">— 暫無項目 —</div>
         )
@@ -831,6 +845,7 @@ function ZoneSection({
             <ProgressItemCard
               key={root.id}
               item={root}
+              zones={[zone]}
               expanded={expanded}
               onToggle={onToggle}
               onUpdate={onUpdate}

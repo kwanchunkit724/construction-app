@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { ProgressBar } from './ProgressBar'
 import { ProgressItemCard } from './ProgressItemCard'
@@ -38,10 +38,23 @@ export function GroupedProgressView({ mode, items, zones, handlers }: {
   const [profiles, setProfiles] = useState<Record<string, UserProfile>>({})
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
-  const leaves = useMemo(
-    () => items.filter(i => !items.some(c => c.parent_id === i.id) && i.node_kind !== 'floor'),
-    [items],
-  )
+  // Leaves sorted by location (分區 → 樓層 sort_order → code) so every group
+  // reads 一座 G/F → 1/F → … → 四座 instead of insertion order. Sorted ONCE
+  // here; groups below preserve this order when they filter.
+  const leaves = useMemo(() => {
+    const byId = new Map(items.map(i => [i.id, i]))
+    const rootSort = (l: ProgressItem): number => {
+      let cur: ProgressItem | undefined = l
+      while (cur && cur.parent_id) cur = byId.get(cur.parent_id)
+      return cur?.sort_order ?? Number.MAX_SAFE_INTEGER
+    }
+    return items
+      .filter(i => !items.some(c => c.parent_id === i.id) && i.node_kind !== 'floor')
+      .sort((a, b) =>
+        (a.zone_id ?? '').localeCompare(b.zone_id ?? '')
+        || rootSort(a) - rootSort(b)
+        || a.code.localeCompare(b.code))
+  }, [items])
 
   // resolve names for the 判頭 view group headers
   const assigneeIds = useMemo(() => {
@@ -50,9 +63,14 @@ export function GroupedProgressView({ mode, items, zones, handlers }: {
     for (const l of leaves) { for (const u of l.assigned_to ?? []) s.add(u); for (const u of l.delegated_to ?? []) s.add(u) }
     return [...s]
   }, [mode, leaves])
+  // Request each id at most ONCE — an id that never resolves (RLS-hidden
+  // profile) must not retrigger the effect forever (fetch loop + permanent
+  // "…" group headers).
+  const requested = useRef<Set<string>>(new Set())
   useEffect(() => {
-    const missing = assigneeIds.filter(id => !profiles[id])
+    const missing = assigneeIds.filter(id => !requested.current.has(id))
     if (missing.length === 0) return
+    missing.forEach(id => requested.current.add(id))
     let alive = true
     supabase.from('user_profiles').select('*').in('id', missing).then(({ data }) => {
       if (!alive || !data) return
@@ -63,7 +81,7 @@ export function GroupedProgressView({ mode, items, zones, handlers }: {
       })
     })
     return () => { alive = false }
-  }, [assigneeIds, profiles])
+  }, [assigneeIds])
 
   const groups = useMemo((): Array<{ key: string; name: string; leaves: ProgressItem[] }> => {
     if (mode === 'trade') {
@@ -85,7 +103,9 @@ export function GroupedProgressView({ mode, items, zones, handlers }: {
         }
       }
       const out = [...byPerson.entries()].map(([u, ls]) => ({
-        key: u, name: profiles[u]?.name ?? '…', leaves: [...new Set(ls)],
+        // RLS can hide a non-member assignee's profile — fall back to a
+        // stable label instead of a permanent "…".
+        key: u, name: profiles[u]?.name ?? `成員 ${u.slice(-6)}`, leaves: [...new Set(ls)],
       }))
       out.sort((a, b) => b.leaves.length - a.leaves.length)
       const unassigned = leaves.filter(l => (l.assigned_to ?? []).length === 0 && (l.delegated_to ?? []).length === 0)
@@ -138,6 +158,8 @@ export function GroupedProgressView({ mode, items, zones, handlers }: {
                   <ProgressItemCard
                     key={`${g.key}-${l.id}`}
                     item={{ ...l, level: 2 }}
+                    zones={zones}
+                    showLocation
                     expanded={handlers.expanded}
                     onToggle={handlers.onToggle}
                     onUpdate={handlers.onUpdate}
