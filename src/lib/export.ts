@@ -135,6 +135,16 @@ export interface ExportProgressOptions {
   showGap: boolean             // 差距 (實際−計劃) column
   reportPeriod: string         // e.g. 2026-W23 (free text, optional)
   audience: ReportAudience     // owner one-pager vs internal one-pager + appendix
+  // ── T4 (v110): dimension filters — 工種版 / 判頭對數版 ──
+  // trades: leaf-level 工種 filter (empty = all). assigneeId: only leaves
+  // assigned/delegated to this person (the 判頭 statement — their scope, their
+  // % — the document you settle accounts against). Both filter LEAVES; parents
+  // appear only as ancestors of matching leaves and their rollups are computed
+  // over the FILTERED leaf set so a 判頭 report never counts someone else's work.
+  trades: string[]
+  assigneeId: string | null
+  // display labels for the report header (resolved by the modal)
+  filterLabel: string
 }
 
 export const ALL_STATUSES: ProgressStatus[] = ['not-started', 'in-progress', 'completed', 'delayed', 'blocked']
@@ -148,14 +158,14 @@ export function exportPreset(p: 'internal' | 'owner' | 'exception', project: Pro
   // force groupByZone=false so the export stays flat and matches the UI.
   const groupByZone = !templateFor(project.project_type).autoZone
   if (p === 'owner') {
-    return { zoneIds, includeUnzoned: true, depth: 2, statuses: [...NO_NOTSTARTED], onlyBehind: false, groupByZone, showSummary: true, showGap: true, reportPeriod: '', audience: 'owner' }
+    return { zoneIds, includeUnzoned: true, depth: 2, statuses: [...NO_NOTSTARTED], onlyBehind: false, groupByZone, showSummary: true, showGap: true, reportPeriod: '', audience: 'owner', trades: [], assigneeId: null, filterLabel: '' }
   }
   if (p === 'exception') {
-    return { zoneIds, includeUnzoned: true, depth: 2, statuses: ['delayed', 'blocked'], onlyBehind: true, groupByZone, showSummary: true, showGap: true, reportPeriod: '', audience: 'internal' }
+    return { zoneIds, includeUnzoned: true, depth: 2, statuses: ['delayed', 'blocked'], onlyBehind: true, groupByZone, showSummary: true, showGap: true, reportPeriod: '', audience: 'internal', trades: [], assigneeId: null, filterLabel: '' }
   }
   // internal defaults to FULL depth — sub-細項 leaves are where the real ticks
   // live; cutting at 3 made the report lie about what was actually done.
-  return { zoneIds, includeUnzoned: true, depth: 99, statuses: [...NO_NOTSTARTED], onlyBehind: false, groupByZone, showSummary: true, showGap: true, reportPeriod: '', audience: 'internal' }
+  return { zoneIds, includeUnzoned: true, depth: 99, statuses: [...NO_NOTSTARTED], onlyBehind: false, groupByZone, showSummary: true, showGap: true, reportPeriod: '', audience: 'internal', trades: [], assigneeId: null, filterLabel: '' }
 }
 
 const UNZONED = '__unzoned__'
@@ -240,8 +250,11 @@ export function buildReportModel(project: Project, items: ProgressItem[], opts: 
       const planned = plannedProgressOf(it)
       return { actual, planned, status: deriveLeafStatus(it, planned), gap: actual - planned, delta }
     }
-    const r = computeRollup(getDescendantLeaves(items, it.id))
-    return { actual: r.actual, planned: r.planned, status: r.status, gap: r.actual - r.planned, delta: aggDelta(getDescendantLeaves(items, it.id), r.actual) }
+    // Parent rollup over the FILTERED leaf set — a 判頭/工種 report's parent
+    // rows must not absorb other people's/trades' progress.
+    const descLeaves = getDescendantLeaves(items, it.id).filter(inScope)
+    const r = computeRollup(descLeaves)
+    return { actual: r.actual, planned: r.planned, status: r.status, gap: r.actual - r.planned, delta: aggDelta(descLeaves, r.actual) }
   }
   const zoneKeyOf = (it: ProgressItem): string => {
     if (it.zone_id && project.zones.some(z => z.id === it.zone_id)) return it.zone_id
@@ -250,9 +263,23 @@ export function buildReportModel(project: Project, items: ProgressItem[], opts: 
   const zoneNameOf = (key: string) => key === UNZONED ? '未分區 / 共用' : (project.zones.find(z => z.id === key)?.name ?? key)
 
   const zoneSel = new Set(opts.zoneIds)
+  // T4 dimension filters — applied to LEAVES only. Parents survive as ancestors
+  // of matching leaves, and every aggregate below (zone agg / summary / parent
+  // eff) runs over the FILTERED leaf set, so a 判頭/工種 report only counts the
+  // work it claims to cover.
+  const tradeSel = new Set(opts.trades ?? [])
+  const leafDimOk = (it: ProgressItem): boolean => {
+    if (tradeSel.size > 0 && !(it.trade && tradeSel.has(it.trade))) return false
+    if (opts.assigneeId && !(it.assigned_to ?? []).includes(opts.assigneeId) && !(it.delegated_to ?? []).includes(opts.assigneeId)) return false
+    return true
+  }
   const inScope = (it: ProgressItem) => {
     const k = zoneKeyOf(it)
-    return k === UNZONED ? opts.includeUnzoned : zoneSel.has(k)
+    const zoneOk = k === UNZONED ? opts.includeUnzoned : zoneSel.has(k)
+    if (!zoneOk) return false
+    // leaf: must also match the dimension filters; parent: kept for structure,
+    // its eff/agg is computed over filtered descendant leaves below.
+    return isLeaf(it) ? leafDimOk(it) : true
   }
   const scopeItems = items.filter(inScope)
 
@@ -269,7 +296,12 @@ export function buildReportModel(project: Project, items: ProgressItem[], opts: 
   // keep qualified items + their ancestor chain (to preserve tree context).
   const byId = new Map(items.map(i => [i.id, i]))
   const keep = new Set<string>()
+  const dimFiltering = tradeSel.size > 0 || !!opts.assigneeId
   for (const it of scopeItems) {
+    // With a dimension filter active, only LEAVES seed the keep-set — parents
+    // enter solely as ancestors, so a branch with zero matching leaves never
+    // prints an empty section.
+    if (dimFiltering && !isLeaf(it)) continue
     if (!qualifies(it)) continue
     keep.add(it.id)
     let p = it.parent_id ? byId.get(it.parent_id) : undefined
@@ -364,7 +396,10 @@ const STATUS_PILL: Record<ProgressStatus, { bg: string; fg: string; bar: string;
 // Level (structure) — neutral blue-grey bands.
 const LEVEL_BG: Record<number, string> = { 1: '#dbe3ec', 2: '#eef2f6', 3: '#ffffff' }
 const gapColour = (g: number) => g < 0 ? '#b91c1c' : g > 0 ? '#15803d' : '#64748b'
-const fileTag = (opts: ExportProgressOptions) => opts.reportPeriod ? safeName(opts.reportPeriod) : dateStr()
+const fileTag = (opts: ExportProgressOptions) => {
+  const base = opts.reportPeriod ? safeName(opts.reportPeriod) : dateStr()
+  return opts.filterLabel ? `${safeName(opts.filterLabel)}_${base}` : base
+}
 
 // ── Excel ────────────────────────────────────────────────────
 export async function exportProgressToExcel(project: Project, items: ProgressItem[], opts: ExportProgressOptions) {
@@ -381,7 +416,7 @@ export async function exportProgressToExcel(project: Project, items: ProgressIte
 
   if (model.summary && opts.showSummary) {
     pushRow([model.summary.verdict.line], null)
-    pushRow([`${project.name} — 進度報告`], null)
+    pushRow([`${project.name} — 進度報告${opts.filterLabel ? `（${opts.filterLabel}）` : ''}`], null)
     pushRow([`產生：${new Date().toLocaleString('zh-HK')}${opts.reportPeriod ? `   期數：${opts.reportPeriod}` : ''}`], null)
     pushRow([`整體：計劃 ${model.summary.planned}% / 實際 ${model.summary.actual}% / 差距 ${model.summary.gap}%   ·   落後 ${model.summary.behind} 項 / 共 ${model.summary.total} 項`], null)
     pushRow([`延誤 ${model.summary.counts.delayed} · 阻塞 ${model.summary.counts.blocked} · 進行中 ${model.summary.counts['in-progress']} · 已完成 ${model.summary.counts.completed} · 未開始 ${model.summary.counts['not-started']}`], null)
@@ -521,7 +556,7 @@ function reportHtml(project: Project, model: ReportModel, opts: ExportProgressOp
   const moreAttn = attn.length > 12 ? `<div class="pgblk" style="font-size:12px; color:#64748b; margin-top:4px;">…另有 ${attn.length - 12} 項，詳見內部版附錄。</div>` : ''
 
   const onePager = `
-    <div class="pgblk" style="font-size:13px; color:#64748b; margin-bottom:6px;">${escapeHtml(project.name)} — 進度報告</div>
+    <div class="pgblk" style="font-size:13px; color:#64748b; margin-bottom:6px;">${escapeHtml(project.name)} — 進度報告${opts.filterLabel ? `　<span style="background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:6px; font-weight:600;">${escapeHtml(opts.filterLabel)}</span>` : ''}</div>
     <div class="pgblk" style="background:${toneHex(s.verdict.tone)}; color:#fff; border-radius:10px; padding:16px 18px; font-size:20px; font-weight:800; margin-bottom:16px;">${escapeHtml(s.verdict.line)}</div>
     <div class="pgblk" style="display:flex; gap:12px; margin-bottom:18px;">
       ${card('整體實際', `${s.actual}%`, '#0f172a')}

@@ -1,11 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { X, FileSpreadsheet, FileText, Loader2, ChevronDown, RotateCcw } from 'lucide-react'
-import type { Project, ProgressItem, ProgressStatus } from '../types'
+import type { Project, ProgressItem, ProgressStatus, UserProfile } from '../types'
 import { PROGRESS_STATUS_ZH } from '../types'
 import {
   type ExportProgressOptions, type ReportDepth,
   ALL_STATUSES, exportPreset, buildReportModel,
 } from '../lib/export'
+import { useTrades, tradeName } from '../lib/trades'
+import { supabase } from '../lib/supabase'
 
 // Pre-export picker. Audience-first: pick 業主版（一頁紙）or 內部版（詳細）and go;
 // everything else lives behind 進階. A live scope counter shows what will land
@@ -57,6 +59,39 @@ export function ExportProgressModal({ project, items, onClose }: {
     set({ zoneIds: opts.zoneIds.includes(id) ? opts.zoneIds.filter(z => z !== id) : [...opts.zoneIds, id] })
   const toggleStatus = (s: ProgressStatus) =>
     set({ statuses: opts.statuses.includes(s) ? opts.statuses.filter(x => x !== s) : [...opts.statuses, s] })
+
+  // ── T4: 工種 / 判頭 filters ──
+  const trades = useTrades()
+  // trades actually used in this project — no point offering empty chips
+  const usedTrades = useMemo(() => {
+    const used = new Set(items.map(i => i.trade).filter(Boolean) as string[])
+    return trades.filter(t => used.has(t.code))
+  }, [trades, items])
+  // people assigned/delegated anywhere in the tree = 判頭 export candidates
+  const assigneeIds = useMemo(() => {
+    const s = new Set<string>()
+    for (const i of items) { for (const u of i.assigned_to ?? []) s.add(u); for (const u of i.delegated_to ?? []) s.add(u) }
+    return [...s]
+  }, [items])
+  const [assignees, setAssignees] = useState<UserProfile[]>([])
+  useEffect(() => {
+    if (assigneeIds.length === 0) { setAssignees([]); return }
+    let alive = true
+    supabase.from('user_profiles').select('*').in('id', assigneeIds).then(({ data }) => {
+      if (alive && data) setAssignees(data as UserProfile[])
+    })
+    return () => { alive = false }
+  }, [assigneeIds.join(',')]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // keep the report-header label in sync with the dimension filters
+  function setDimensions(nextTrades: string[], nextAssignee: string | null) {
+    const parts: string[] = []
+    if (nextTrades.length > 0) parts.push('工種：' + nextTrades.map(c => tradeName(trades, c)).join('、'))
+    if (nextAssignee) parts.push('判頭：' + (assignees.find(a => a.id === nextAssignee)?.name ?? ''))
+    set({ trades: nextTrades, assigneeId: nextAssignee, filterLabel: parts.join(' · ') })
+  }
+  const toggleTrade = (code: string) =>
+    setDimensions(opts.trades.includes(code) ? opts.trades.filter(c => c !== code) : [...opts.trades, code], opts.assigneeId)
 
   // live scope counter — what will actually land in the file, before render.
   const scope = useMemo(() => {
@@ -131,7 +166,7 @@ export function ExportProgressModal({ project, items, onClose }: {
           {/* advanced disclosure */}
           <button onClick={() => setAdvanced(a => !a)}
             className="w-full flex items-center justify-between text-sm font-semibold text-site-600 py-1">
-            進階設定（分區 / 深度 / 狀態 / 期數）
+            進階設定（分區 / 工種 / 判頭 / 深度 / 狀態）
             <ChevronDown size={16} className={`transition ${advanced ? 'rotate-180' : ''}`} />
           </button>
 
@@ -153,6 +188,38 @@ export function ExportProgressModal({ project, items, onClose }: {
                   <Chip active={opts.includeUnzoned} onClick={() => set({ includeUnzoned: !opts.includeUnzoned })}>未分區 / 共用</Chip>
                 </div>
               </div>
+
+              {/* T4: 工種版 — filter to selected trades */}
+              {usedTrades.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between">
+                    <Label>工種（工種版：只出所選工種）</Label>
+                    {opts.trades.length > 0 && (
+                      <button onClick={() => setDimensions([], opts.assigneeId)} className="text-xs text-safety-700 hover:underline">清除</button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {usedTrades.map(t => (
+                      <Chip key={t.code} active={opts.trades.includes(t.code)} onClick={() => toggleTrade(t.code)}>{t.name_zh}</Chip>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* T4: 判頭對數版 — only their assigned items, their rollups */}
+              {assignees.length > 0 && (
+                <div>
+                  <Label>判頭／負責人（判頭對數版：只出佢嘅項目同 %）</Label>
+                  <select
+                    className="input"
+                    value={opts.assigneeId ?? ''}
+                    onChange={e => setDimensions(opts.trades, e.target.value || null)}
+                  >
+                    <option value="">全部人</option>
+                    {assignees.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </div>
+              )}
 
               {/* depth */}
               <div>
