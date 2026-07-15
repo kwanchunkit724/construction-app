@@ -41,6 +41,12 @@ export interface DocumentUploadSheetProps {
   // rejection reason as a banner so the resubmitter knows what to fix.
   suggestedRevisionLabel?: string
   rejectionNote?: string
+  // v112 (guided 文件): lock the 類型 to one value (picker hidden), or narrow
+  // the picker to a subset (施工方案及物料送審 = the two submission types).
+  presetType?: DocumentType
+  typeOptionsOverride?: DocumentType[]
+  // v112: 圖則分類 / user-defined 文件類型 label, stamped on the header row.
+  categoryLabel?: string
   onClose(): void
   onUploaded?(documentId: string): void
 }
@@ -100,6 +106,9 @@ export function DocumentUploadSheet({
   leafItems,
   suggestedRevisionLabel,
   rejectionNote,
+  presetType,
+  typeOptionsOverride,
+  categoryLabel,
   onClose,
   onUploaded,
 }: DocumentUploadSheetProps) {
@@ -111,7 +120,7 @@ export function DocumentUploadSheet({
   const [title, setTitle] = useState('')
   const [revisionLabel, setRevisionLabel] = useState(suggestedRevisionLabel ?? '')
   const [reviewDueDate, setReviewDueDate] = useState('')
-  const [docType, setDocType] = useState<DocumentType>('material_submission')
+  const [docType, setDocType] = useState<DocumentType>(presetType ?? typeOptionsOverride?.[0] ?? 'material_submission')
   const [pickedItemId, setPickedItemId] = useState<string>(progressItemId ?? '')
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [softWarnNotice, setSoftWarnNotice] = useState<string | null>(null)
@@ -123,9 +132,10 @@ export function DocumentUploadSheet({
   const isUploading = slots.some(s => s.status === 'uploading')
 
   // 圖則 hidden unless the user holds the drawing carve-out (D-25).
-  const typeOptions = TYPE_OPTIONS.filter(
+  const typeOptions = (typeOptionsOverride ?? TYPE_OPTIONS).filter(
     t => t !== 'drawing' || canUploadDrawingType,
   )
+  const typeLocked = !!presetType
 
   // 進度項目 picker only when NOT pre-linked and we have leaf items to offer.
   const showItemPicker = !progressItemId && !isNewVersion && !!leafItems && leafItems.length > 0
@@ -139,7 +149,7 @@ export function DocumentUploadSheet({
     setTitle('')
     setRevisionLabel(suggestedRevisionLabel ?? '')
     setReviewDueDate('')
-    setDocType('material_submission')
+    setDocType(presetType ?? typeOptionsOverride?.[0] ?? 'material_submission')
     setPickedItemId(progressItemId ?? '')
     setSubmitError(null)
     setSoftWarnNotice(null)
@@ -271,6 +281,7 @@ export function DocumentUploadSheet({
         progressItemId: effectiveItemId,
         revisionLabel: revisionLabel.trim() || undefined,
         reviewDueDate: reviewDueDate || undefined,
+        categoryLabel,
         onProgress,
       })
       setSlots(prev =>
@@ -384,17 +395,23 @@ export function DocumentUploadSheet({
             <>
               <div>
                 <label className="label">類型</label>
-                <select
-                  value={docType}
-                  onChange={e => setDocType(e.target.value as DocumentType)}
-                  className="input"
-                >
-                  {typeOptions.map(t => (
-                    <option key={t} value={t}>
-                      {DOCUMENT_TYPE_ZH[t]}
-                    </option>
-                  ))}
-                </select>
+                {typeLocked ? (
+                  <p className="input bg-site-50 text-site-600 flex items-center">
+                    {DOCUMENT_TYPE_ZH[docType]}{categoryLabel ? ` · ${categoryLabel}` : ''}
+                  </p>
+                ) : (
+                  <select
+                    value={docType}
+                    onChange={e => setDocType(e.target.value as DocumentType)}
+                    className="input"
+                  >
+                    {typeOptions.map(t => (
+                      <option key={t} value={t}>
+                        {DOCUMENT_TYPE_ZH[t]}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <p className="text-[10px] text-site-400 mt-1">
                   文件編號：{DOC_PREFIX[docType]}-（提交後自動產生）
                 </p>

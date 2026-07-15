@@ -47,6 +47,7 @@ interface DocumentsContextType {
     progressItemId?: string
     revisionLabel?: string
     reviewDueDate?: string
+    categoryLabel?: string
     onProgress?: (pct: number) => void
   }): Promise<{ documentId: string | null; error: string | null }>
 
@@ -271,6 +272,7 @@ export function DocumentsProvider({
     progressItemId,
     revisionLabel,
     reviewDueDate,
+    categoryLabel,
     onProgress,
   }: {
     documentType: DocumentType
@@ -279,6 +281,9 @@ export function DocumentsProvider({
     progressItemId?: string
     revisionLabel?: string
     reviewDueDate?: string
+    // v112 (guided 文件): 圖則分類 (結構圖 / Arch圖…) or a user-defined 文件類型
+    // label. NULL for every classic upload.
+    categoryLabel?: string
     onProgress?: (pct: number) => void
   }): Promise<{ documentId: string | null; error: string | null }> {
     if (!profile) return { documentId: null, error: '未登入' }
@@ -334,6 +339,7 @@ export function DocumentsProvider({
         title: title.trim(),
         doc_number: (docNumber as string) ?? null,
         review_due_date: reviewDueDate || null,
+        ...(categoryLabel ? { category_label: categoryLabel } : {}),
         created_by: profile.id,
       })
       .select()
