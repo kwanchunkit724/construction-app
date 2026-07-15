@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext'
 import { cacheGet, cacheSet, getOnline, subscribeOnline } from '../lib/offline'
 import { debounce, REFETCH_DEBOUNCE_MS } from '../lib/realtime'
 import type { Project, ProjectMember, ProjectRole, ProjectType, Zone } from '../types'
+import { GUIDED_DEFAULT_TRADES, GUIDED_LOCKED_DOC_TYPES, GUIDED_DEFAULT_DRAWING_TYPES } from '../types'
 import { templateFor } from '../lib/progressTemplates'
 
 interface ProjectsContextType {
@@ -13,7 +14,7 @@ interface ProjectsContextType {
   fetchError: string | null
   refetch: () => Promise<void>
   // Admin
-  createProject: (name: string, zones: Zone[], projectType?: ProjectType) => Promise<{ error: string | null }>
+  createProject: (name: string, zones: Zone[], projectType?: ProjectType, opts?: { progressMode?: 'classic' | 'guided' }) => Promise<{ error: string | null }>
   assignPMs: (projectId: string, pmIds: string[]) => Promise<{ error: string | null }>
   deleteProject: (projectId: string) => Promise<{ error: string | null }>
   // User
@@ -101,7 +102,12 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     return subscribeOnline(online => { if (online) void refetch() })
   }, [session, refetch])
 
-  async function createProject(name: string, zones: Zone[], projectType: ProjectType = 'general') {
+  async function createProject(
+    name: string,
+    zones: Zone[],
+    projectType: ProjectType = 'general',
+    opts?: { progressMode?: 'classic' | 'guided' },
+  ) {
     if (!profile) return { error: '未登入' }
     // small_works (autoZone) ships with one implicit zone so the operator
     // never hits the "尚未設定分區" dead-end on a one-room job. For every
@@ -109,14 +115,31 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     // keeps the existing two-arg call path byte-identical.
     const template = templateFor(projectType)
     const effectiveZones: Zone[] = template.autoZone ? [{ id: 'A', name: '工地' }] : zones
-    const { error } = await supabase.from('projects').insert({
+    const guided = opts?.progressMode === 'guided'
+    const { data, error } = await supabase.from('projects').insert({
       name: name.trim(),
       zones: effectiveZones,
       project_type: projectType,
       assigned_pm_ids: [],
       created_by: profile.id,
-    })
+      // only sent for guided projects, so classic creation keeps working
+      // even if the v112 column hasn't been applied yet.
+      ...(guided ? { progress_mode: 'guided' } : {}),
+    }).select('id').single()
     if (error) return { error: error.message }
+    // v112: seed the guided dictionaries — default 工種, locked 文件類型,
+    // default 圖則類型. Best-effort: a seed failure must not orphan the
+    // project (every dict is addable in-app afterwards).
+    if (guided && data) {
+      const pid = (data as { id: string }).id
+      const rows = [
+        ...GUIDED_DEFAULT_TRADES.map((label, i) => ({ project_id: pid, kind: 'trade', label, sort_order: i })),
+        ...GUIDED_LOCKED_DOC_TYPES.map((label, i) => ({ project_id: pid, kind: 'doc_type', label, sort_order: i, locked: true })),
+        ...GUIDED_DEFAULT_DRAWING_TYPES.map((label, i) => ({ project_id: pid, kind: 'drawing_type', label, sort_order: i })),
+      ]
+      const { error: dictErr } = await supabase.from('project_dicts').insert(rows)
+      if (dictErr) console.error('guided dict seed error:', dictErr)
+    }
     await refetch()
     return { error: null }
   }

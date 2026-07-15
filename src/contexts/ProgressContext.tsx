@@ -88,6 +88,9 @@ interface AddItemInput {
   sort_order?: number | null
   // v110 (T1): 工種 tag (trades dictionary code). Display/grouping/export only.
   trade?: string | null
+  // v112 (guided): 位置 + per-project 工種 label dimensions on the flat leaf.
+  location?: string | null
+  trade_label?: string | null
 }
 
 const ProgressContext = createContext<ProgressContextType | null>(null)
@@ -239,6 +242,8 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
       node_kind: input.node_kind ?? null,
       sort_order: input.sort_order ?? null,
       trade: input.trade ?? null,
+      location: input.location ?? null,
+      trade_label: input.trade_label ?? null,
       assigned_to: [],
       delegated_to: [],
       last_updated_by: profile.id,

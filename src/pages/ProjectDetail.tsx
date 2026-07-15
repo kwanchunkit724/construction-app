@@ -17,6 +17,8 @@ import { BottomNav } from '../components/BottomNav'
 import { Sidebar } from '../components/Sidebar'
 import { ProgressBar } from '../components/ProgressBar'
 import { ProgressItemCard } from '../components/ProgressItemCard'
+import { GuidedProgress } from '../components/guided/GuidedProgress'
+import { GuidedDocs } from '../components/guided/GuidedDocs'
 import { CreateItemModal } from '../components/CreateItemModal'
 import { UpdateProgressModal } from '../components/UpdateProgressModal'
 import { AssignmentModal } from '../components/AssignmentModal'
@@ -48,7 +50,7 @@ import { computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH, deriveStatus, deriveL
 import type { ProgressItem, ProgressStatus, Zone, CategoryDomain, CategoryStream, UnitState } from '../types'
 import { templateFor } from '../lib/progressTemplates'
 
-type Tab = 'progress' | 'issues' | 'si-vo' | 'tools' | 'equipment' | 'assistant'
+type Tab = 'progress' | 'issues' | 'si-vo' | 'tools' | 'equipment' | 'assistant' | 'files'
 
 const STATUS_ICON: Record<ProgressStatus, typeof Minus> = {
   'not-started': Minus,
@@ -204,6 +206,9 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   // consecutive item lists indistinguishable — restore zone labels in that case.
   const template = templateFor(project.project_type)
   const hideZoneChrome = template.autoZone && project.zones.length <= 1
+  // v112: guided projects swap the whole progress surface for the button-drill
+  // navigation — no tree, no view chips, no toolbar.
+  const isGuided = project.progress_mode === 'guided'
 
   // v57: narrow the tree + tiles to the selected category. The tag lives on the
   // 大項 (root); an item is visible iff its root matches. A 未分類 root only shows
@@ -386,6 +391,7 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
       <div className="bg-white border-b border-site-200">
         <div className="max-w-2xl md:max-w-7xl mx-auto flex">
           <TabButton active={tab === 'progress'} onClick={() => setTab('progress')} icon={ListChecks} label="進度" />
+          {isGuided && <TabButton active={tab === 'files'} onClick={() => setTab('files')} icon={FolderOpen} label="文件" />}
           {showIssuesTab && <TabButton active={tab === 'issues'} onClick={() => setTab('issues')} icon={AlertCircle} label="問題" badge={openIssueCount} />}
           {showSiVoTab && <TabButton active={tab === 'si-vo'} onClick={() => setTab('si-vo')} icon={FileCheck2} label="文書" />}
           {showToolsTab && <TabButton active={tab === 'tools'} onClick={() => setTab('tools')} icon={Wrench} label="工具" />}
@@ -402,7 +408,13 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
           </div>
         )}
 
-        {tab === 'progress' && (
+        {tab === 'progress' && isGuided && (
+          loading
+            ? <div className="py-10 flex justify-center"><Spinner size={28} /></div>
+            : <GuidedProgress project={project} />
+        )}
+
+        {tab === 'progress' && !isGuided && (
           <>
             {isMaintenance && earliestCompletion && (
               <EarliestCompletionTile date={earliestCompletion.date} days={earliestCompletion.days} />
@@ -538,6 +550,10 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
               </div>
             )}
           </>
+        )}
+
+        {tab === 'files' && isGuided && (
+          <GuidedDocs project={project} />
         )}
 
         {tab === 'issues' && showIssuesTab && (

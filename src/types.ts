@@ -30,9 +30,17 @@ export interface UserProfile {
   created_at: string
 }
 
+// Guided 進度表 (v112): a zone is either a 大樓 (building — has floors) or
+// 外圍 (external — processes tick 位置 instead of floors). Classic projects
+// predate these fields and read them as undefined.
+export type ZoneKind = 'building' | 'external'
+
 export interface Zone {
   id: string
   name: string
+  kind?: ZoneKind
+  // building zones only: the immutable floor list set at 開盤 (地庫…天面).
+  floors?: string[]
 }
 
 // ── Problem 4 / P1: project type ────────────────────────────
@@ -51,6 +59,16 @@ export const PROJECT_TYPE_ZH: Record<ProjectType, string> = {
   maintenance: '大樓維修 (MBIS/MWIS)',
 }
 
+// Guided 進度表: the site map is a simple grid — zones placed on cells, the
+// rest of the grid renders as 外圍 ground. No rotation, no free canvas.
+export interface SiteMap {
+  cols: number
+  rows: number
+  cells: { zone_id: string; x: number; y: number }[]
+}
+
+export type ProgressMode = 'classic' | 'guided'
+
 export interface Project {
   id: string
   name: string
@@ -59,9 +77,33 @@ export interface Project {
   // P1: defaults to 'general' at the DB level (v42 migration). Older rows
   // that predate the column read back as 'general' too.
   project_type: ProjectType
+  // v112: 'guided' = the fixed 大樓→分區→工種→樓層→位置→工序 drill navigation;
+  // every pre-v112 row reads 'classic' (free tree) — old projects untouched.
+  progress_mode?: ProgressMode
+  site_map?: SiteMap | null
   created_by: string | null
   created_at: string
 }
+
+// ── v112: per-project dictionaries for the guided 進度表 ──────
+export type DictKind = 'trade' | 'location' | 'process' | 'doc_type' | 'drawing_type'
+
+export interface ProjectDict {
+  id: string
+  project_id: string
+  kind: DictKind
+  label: string
+  sort_order: number
+  // locked rows are the hard-coded entries (圖則, 施工方案及物料送審) — the
+  // delete RLS policy refuses them, the UI hides the delete affordance.
+  locked: boolean
+  created_by: string | null
+  created_at: string
+}
+
+export const GUIDED_DEFAULT_TRADES = ['結構', '泥水及裝修', 'BS']
+export const GUIDED_LOCKED_DOC_TYPES = ['圖則', '施工方案及物料送審']
+export const GUIDED_DEFAULT_DRAWING_TYPES = ['結構圖', 'Arch圖', 'GDP', '水電圖', '泥井圖']
 
 export interface ProjectMember {
   id: string
@@ -197,6 +239,13 @@ export interface ProgressItem {
   // stays parent_id. NULL = 未分類 (every pre-v110 row). Codes live in the
   // `trades` dictionary table (src/lib/trades.ts).
   trade: string | null
+  // ── v112: guided-mode dimensions ──
+  // location = 位置 (走廊 / 垃圾房 / 𨋢大堂…); trade_label = per-project 工種
+  // label (結構 / 泥水及裝修 / BS…) — separate from `trade` because that column
+  // is FK-locked to the global trades(code) dictionary. Both NULL on every
+  // classic row.
+  location: string | null
+  trade_label: string | null
   // ── v109: 樓層/翼結構 (E6 free tree, E7 opt-in) ──
   // node_kind is a DISPLAY label only (icon / wizard / range targeting) — the
   // tree semantics stay parent_id. NULL on every pre-v109 row = 舊模式,
@@ -799,6 +848,8 @@ export interface Document {
   // ── P2 / S8 (v46): optional review deadline on the register header.
   // 逾期 is derived client-side (review_due_date < today AND status submitted).
   review_due_date: string | null
+  // v112 (guided 文件): 圖則分類 or user-defined 文件類型 label. NULL = classic.
+  category_label?: string | null
   created_by: string | null
   created_at: string
   updated_at: string
