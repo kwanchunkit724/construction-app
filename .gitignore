@@ -40,3 +40,11 @@ ios/.DS_Store
 
 # Capacitor Android (future)
 android/
+
+# Android signing — NEVER commit keystores or credentials
+*.jks
+*.keystore
+key.properties
+android/key.properties
+
+.vercel
