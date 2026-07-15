@@ -1,0 +1,93 @@
+{
+  "summary": "CK工程 (com.kwanchunkit.constructionapp) is already live on the iOS App Store; the Google Play account is created but stuck at \"pending identity verification.\" Nothing publishes until that verification clears, and the account-type choice (Personal vs Organization) is permanent and decides the single biggest variable in the timeline. STRONG RECOMMENDATION: register/verify as an ORGANIZATION account. CK工程 is a real commercial company with a live store presence, and Organization accounts are EXEMPT from Google's new closed-testing gate (12 testers opted-in continuously for 14 days) that otherwise blocks new Personal accounts from production. The cost of going Organization is obtaining a D-U-N-S number, which in Hong Kong can take up to ~30 working days — so that is the long pole and must be started first. If the user instead stays Personal (already verified, wants to move fast on identity but accepts the testing detour), the agent must run a 12-tester/14-day closed test before applying for production access.\n\nThe codebase is technically READY on the Android side: targetSdk/compileSdk = 36 (exceeds the Aug 31 2025 mandatory API-35 floor), the Codemagic android-internal-test workflow already builds a release AAB, and android/app/build.gradle already has a release signingConfig wired to env vars (CM_KEYSTORE_PATH/PASSWORD/KEY_ALIAS/KEY_PASSWORD) via Codemagic Environment groups. The ONE hard technical gap: today's Play artifact has been debug-signed for Internal App Sharing only. For production you must generate a real, permanently-backed-up upload keystore, enroll in Play App Signing on the first production release, and load that keystore into Codemagic — the upload key signs every future update and cannot be casually swapped.\n\nversionName is hardcoded \"1.3\" and versionCode falls back to 1; both are overridable via Gradle -PversionCode / -PversionName properties, so the agent will drive versionCode off a monotonic CI value (e.g. timestamp or build number) exactly like the iOS workflow already does with agvtool.\n\nDivision of labor: the USER owns everything gated on legal identity, money, and Google account ownership (account type decision, D-U-N-S request, business/government documents, $25 fee, payments profile, identity verification, IARC/data-safety attestations that are legal declarations, and — if Personal — recruiting the 12+ real testers). The AGENT owns everything buildable and configurable: keystore generation + Codemagic wiring, AAB build targeting API 36, versionCode strategy, store-listing assets (icon 512, feature graphic 1024x500, phone + tablet screenshots), zh-HK listing copy, privacy-policy reuse from the iOS submission, and drafting (not legally attesting) the Data Safety + content-rating answers for the user to confirm.",
+  "checklist": [
+    {
+      "item": "DECIDE account type — Organization (recommended) vs Personal. This is PERMANENT and decides whether the 12-tester/14-day gate applies. Organization = exempt from the gate but needs a D-U-N-S number; Personal = no D-U-N-S but mandatory closed test before production.",
+      "who": "user",
+      "notes": "Make this decision FIRST — everything downstream branches on it. CK工程 is a real company with live iOS presence, so Organization is the right call to skip the testing detour and show as a verified business on the listing."
+    },
+    {
+      "item": "If going Organization: check if CK工程 already has a D-U-N-S number; if not, request a free one from Dun & Bradstreet HK immediately. Ensure the D-U-N-S company name + address EXACTLY match what will be entered in Play Console.",
+      "who": "user",
+      "notes": "LONG POLE: D&B Hong Kong quotes up to ~30 working days. Start this before anything else. Free of charge. Mismatched name/address = verification rejection."
+    },
+    {
+      "item": "Gather identity documents: government photo ID of the representative + official business-registration / organization document + a live company website + working org contact email & phone.",
+      "who": "user",
+      "notes": "Organization verification requires all of these. The public 'developer name/email/phone' shown on Play is also set here. Personal accounts need only government photo ID + verified email/phone + device verification."
+    },
+    {
+      "item": "Pay the US$25 one-time Play Console registration fee via the linked Google Payments profile (Business profile for Organization). Confirm profile COUNTRY and ACCOUNT TYPE are correct — they are immutable once set.",
+      "who": "user",
+      "notes": "One-time only, not annual (unlike Apple). For Organization, the Payments profile must carry the entity's legal name/address used in identity verification."
+    },
+    {
+      "item": "Complete developer identity verification in Play Console: submit ID/org documents, verify contact email + phone via OTP, wait for Google's 'verified & active' email.",
+      "who": "user",
+      "notes": "This is the CURRENT BLOCKER ('pending identity verification'). Google review after submission: hours to several days. Nothing publishes until this clears."
+    },
+    {
+      "item": "Generate a production UPLOAD KEYSTORE (keytool, RSA 2048, ~25yr validity, stable alias) and back it up securely (password manager + offline copy). Provide keystore + storePassword + keyAlias + keyPassword to load into Codemagic.",
+      "who": "agent",
+      "notes": "Critical: today's AAB is debug-signed (Internal App Sharing only). The release signingConfig in android/app/build.gradle already reads CM_KEYSTORE_PATH/CM_KEYSTORE_PASSWORD/CM_KEY_ALIAS/CM_KEY_PASSWORD — agent generates the keystore and wires these as a Codemagic android_signing block + Environment group. Upload key can be reset if lost; never let it be ephemeral."
+    },
+    {
+      "item": "Enroll in Play App Signing on the FIRST production (or closed-test) release. Confirm Google holds the app-signing key while CK keeps the upload key.",
+      "who": "user",
+      "notes": "Mandatory for AAB uploads. One-time at first upload. Agent prepares the upload-key-signed AAB; user confirms the enrollment prompt in Play Console. The upload certificate must match for every future update."
+    },
+    {
+      "item": "Set the production versionCode strategy: drive versionCode off a monotonic CI value via Gradle -PversionCode (build number or epoch), keep versionName as the human string (e.g. 1.3). Each upload's versionCode must strictly exceed the previous.",
+      "who": "agent",
+      "notes": "android/app/build.gradle already supports project.hasProperty('versionCode')/-PversionName overrides; default fallback is versionCode 1 / versionName '1.3'. Mirror the iOS pattern (timestamp-based). Package name com.kwanchunkit.constructionapp must never change."
+    },
+    {
+      "item": "Build the production AAB via Codemagic android-internal-test workflow (or a new android-production workflow), signed with the real upload key, targeting API 36, with the chosen versionCode.",
+      "who": "agent",
+      "notes": "Workflow already produces a release AAB and runs npx cap sync android. targetSdk 36 exceeds the Aug 31 2025 API-35 mandate. Verify AndroidManifest only requests permissions actually used (Camera, Photos/Media, POST_NOTIFICATIONS, INTERNET) — no SMS/Call-Log/MANAGE_EXTERNAL_STORAGE/background-location to avoid extra Permissions Declaration forms."
+    },
+    {
+      "item": "Prepare store-listing graphic assets: app icon 512x512 PNG (alpha, <=1MB), feature graphic exactly 1024x500 (JPEG or 24-bit PNG, NO alpha, <=1MB), 2-8 phone screenshots (16:9 or 9:16, 320-3840px), plus 7-inch & 10-inch tablet screenshots (CK targets BlueStacks tablet 1600x900).",
+      "who": "agent",
+      "notes": "Tablet set strongly recommended so listing shows as tablet-optimized. Agent can produce/capture these; user reviews."
+    },
+    {
+      "item": "Write zh-HK store-listing text: app name (<=30 chars), short description (<=80 chars), full description (<=4000 chars). Set zh-HK as a listing language and category (Business/Productivity).",
+      "who": "agent",
+      "notes": "Must be Traditional Chinese to match app locale. Agent drafts; user reviews tone/branding."
+    },
+    {
+      "item": "Provide the privacy policy URL (reuse the one already accepted for iOS / Apple account-deletion). Must be a public, non-geofenced, non-PDF, stable HTTPS HTML page, linked in Play Console AND inside the app.",
+      "who": "user",
+      "notes": "Release blocker. The URL belongs to the user's hosting; agent can confirm the in-app link exists and is reachable."
+    },
+    {
+      "item": "Complete the Data Safety form: declare phone/account data (Supabase phone+password auth), user content (drawings, permit/issue photos, progress notes), push device identifiers (OneSignal), TLS-in-transit encryption, and account+data deletion availability (reuse Apple deletion flow).",
+      "who": "user",
+      "notes": "Agent DRAFTS the answers from the codebase (auth model, storage, OneSignal, account-deletion flow); user must legally attest and submit. Must align with privacy policy or release is blocked."
+    },
+    {
+      "item": "Complete IARC content-rating questionnaire (will rate Everyone / PEGI 3), Target Audience (adults, not child-directed), Ads declaration ('No ads'), and Data-deletion declaration linking the account-deletion flow.",
+      "who": "user",
+      "notes": "All are App Content items that block production if missing. Agent can pre-fill recommended answers; user submits the attestations. No Families/child-safety path applies."
+    },
+    {
+      "item": "ONLY IF PERSONAL ACCOUNT: recruit 15-20 real Google-account testers (staff / 判頭 / foremen), enable the closed-testing track opt-in URL or email list, confirm >=12 actually INSTALL FROM PLAY (sideload does NOT count), and keep them opted-in for 14 continuous days.",
+      "who": "user",
+      "notes": "Skipped entirely if Organization. Recruit a 15-20 buffer so attrition never drops below 12 (which resets the 14-day clock). Same Google email must opt in AND install. Agent prepares the closed-track AAB; user manages real human testers."
+    },
+    {
+      "item": "ONLY IF PERSONAL ACCOUNT: after 14 continuous days, click 'Apply for production access' and answer the application questions substantively (recruiting difficulty, tester engagement, feedback summary, audience, value proposition, first-year installs, what changed from feedback).",
+      "who": "user",
+      "notes": "Not automatic at day 14 — must actively apply. Thin/templated answers are a common rejection cause. Review takes up to 7 days. Agent can help draft app-specific answers; user submits."
+    },
+    {
+      "item": "Create the production release: upload the upload-key-signed AAB, add release notes (<=500 chars/language), and submit. For first launch you cannot use staged rollout (updates only).",
+      "who": "agent",
+      "notes": "Agent prepares AAB + release notes; user clicks final submit (and confirms Play App Signing enrollment on first upload). Google review typically <=7 days for a new app."
+    }
+  ],
+  "timeline": "Two scenarios, driven entirely by the account-type decision:\n\nORGANIZATION PATH (recommended) — dominated by the D-U-N-S wait:\n- If CK already HAS a D-U-N-S: identity verification (hours–few days) -> agent builds signed AAB + assets in parallel (1–2 days, can overlap verification) -> create production release -> Google review (typically <=7 days). Realistic end-to-end: ~1.5–2 weeks.\n- If CK needs a NEW D-U-N-S: D&B Hong Kong up to ~30 working days (the long pole) -> then identity verification (hours–few days) -> production release -> review (<=7 days). Realistic end-to-end: ~5–7 weeks, almost all of it waiting on D-U-N-S. The agent's build/asset/listing work (1–2 days) overlaps this wait and is not on the critical path.\n\nPERSONAL PATH (already-verifiable identity, but mandatory testing detour):\n- Identity verification (hours–few days) -> closed-test build approved (~1–3 days for a new account) -> 14 CONTINUOUS days with >=12 opted-in testers (longer if the count ever drops below 12 and resets) -> apply for production access -> production-access review (up to 7 days) -> production release review (up to 7 days). Realistic minimum: ~3.5–4.5 weeks, and fragile to tester attrition.\n\nNet: Organization-with-existing-DUNS is fastest (~2 weeks). Personal is ~3.5–4.5 weeks and risky. Organization-needing-DUNS is slowest on the calendar (~5–7 weeks) but requires the least active effort and no human-tester logistics. The 1–2 days of agent build/listing/asset work fits inside whichever wait dominates.",
+  "versionUpdateProcess": "After the FIRST production approval, you NEVER repeat the testing-track onboarding — the 12-tester/14-day gate is a one-time unlock for production access (and only ever applied to Personal accounts). Every future update is:\n1. Agent bumps versionCode to a value strictly greater than the live one (driven off CI build number/epoch via -PversionCode); versionName updated for humans (e.g. 1.3 -> 1.4).\n2. Agent builds a new AAB via Codemagic, signed with the SAME upload key, same package name com.kwanchunkit.constructionapp, targeting API 36 (stays >= the current API-35 floor).\n3. Upload to the PRODUCTION track -> Create release -> add release notes (<=500 chars/language) -> submit. Can be automated from Codemagic via the Google Play Developer API (android-publisher) instead of manual console upload.\n4. Every update IS re-reviewed — there is no skip. Update reviews are usually faster than the first submission: a few hours to ~1–3 days typically, up to 7 in exceptional cases. Keep a 5–7 day buffer before any marketing date.\n5. Use STAGED ROLLOUT for updates (5% -> 10% -> 50% -> 100%) to limit blast radius on the live user base — staged rollout is available for updates only, not first launch. If a build misbehaves, Manage rollout -> Halt (previous version serves new users automatically); Resume to continue. Managed Publishing lets you get an update approved and hold it, then publish on your own schedule.\nSo: yes each update is re-reviewed, but you do NOT 'wait again' on the closed test — testing tracks become optional best-practice de-risking, not a mandate. iOS users are entirely unaffected (separate store, separate pipeline).",
+  "trigger14day": "The 14-day milestone ONLY exists on the PERSONAL-account path; an Organization account never encounters it.\n\nWhat it means (Personal only): you can apply for production access once at least 12 testers have been opted-in to your CLOSED testing track CONTINUOUSLY for 14 consecutive days. Key mechanics:\n- The 14-day clock starts only AFTER (a) your closed-test release is live/approved AND (b) >=12 testers have actually opted in and INSTALLED FROM GOOGLE PLAY (sideloading the AAB does not count). It does NOT start when you first create the track.\n- The 14 days must be UNBROKEN. If the opted-in count ever drops below 12 on any day, the timer effectively RESETS to zero. Mitigation: recruit a 15–20 buffer so normal attrition never takes you under 12.\n- Nothing unlocks automatically when the clock hits 14 days. You must ACTIVELY go to the Play Console Dashboard, click 'Apply for production access', and answer the application questions (tester-recruitment difficulty, how testers engaged with features, feedback summary, intended audience, value proposition, estimated first-year installs, what you changed based on feedback, how you decided it was ready). Give substantive, app-specific answers — thin/templated answers are a top rejection cause. Then Google reviews for up to 7 days.\n\nWhat to DO when it hits: open Play Console Dashboard -> confirm tester count has held >=12 for the full 14 days -> click 'Apply for production access' -> submit detailed answers (agent can draft these from the app's real feature set and tester feedback) -> wait up to 7 days for approval -> then create the first production release.\n\nIf going Organization (recommended), there is NO 14-day trigger at all — you create a production release directly after identity verification, and this entire milestone is bypassed."
+}

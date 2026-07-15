@@ -1,0 +1,312 @@
+[
+  {
+    "feature": "工地指令",
+    "seq": 1,
+    "actor": "62010003",
+    "action": "開單 SI-mqosi57x-1",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 2,
+    "actor": "62010003",
+    "action": "加內容版本 SI-mqosi57x-1",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 3,
+    "actor": "62010003",
+    "action": "提交 SI-mqosi57x-1",
+    "expected": "allow",
+    "actual": "allow (http 204)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 4,
+    "actor": "62010001",
+    "action": "批核 SI-mqosi57x-1 (總承)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 5,
+    "actor": "62000001",
+    "action": "批核 SI-mqosi57x-1 (PM)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 6,
+    "actor": "62020001",
+    "action": "開單 SI-mqosi57x-2",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 7,
+    "actor": "62020001",
+    "action": "加內容版本 SI-mqosi57x-2",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 8,
+    "actor": "62020001",
+    "action": "提交 SI-mqosi57x-2",
+    "expected": "allow",
+    "actual": "allow (http 204)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 9,
+    "actor": "62010001",
+    "action": "批核 SI-mqosi57x-2 (總承)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 10,
+    "actor": "62000001",
+    "action": "批核 SI-mqosi57x-2 (PM)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 11,
+    "actor": "62010002",
+    "action": "開單 SI-mqosi57x-3",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 12,
+    "actor": "62010002",
+    "action": "加內容版本 SI-mqosi57x-3",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 13,
+    "actor": "62010002",
+    "action": "提交 SI-mqosi57x-3",
+    "expected": "allow",
+    "actual": "allow (http 204)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 14,
+    "actor": "62010001",
+    "action": "批核 SI-mqosi57x-3 (總承)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 15,
+    "actor": "62000001",
+    "action": "批核 SI-mqosi57x-3 (PM)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 16,
+    "actor": "62030003",
+    "action": "開單 SI-mqosi57x-4",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 17,
+    "actor": "62030003",
+    "action": "加內容版本 SI-mqosi57x-4",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 18,
+    "actor": "62030003",
+    "action": "提交 SI-mqosi57x-4",
+    "expected": "allow",
+    "actual": "allow (http 204)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 19,
+    "actor": "62010001",
+    "action": "批核 SI-mqosi57x-4 (總承)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 20,
+    "actor": "62000001",
+    "action": "批核 SI-mqosi57x-4 (PM)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 21,
+    "actor": "62020003",
+    "action": "開單 SI-mqosi57x-5",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 22,
+    "actor": "62020003",
+    "action": "加內容版本 SI-mqosi57x-5",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 23,
+    "actor": "62020003",
+    "action": "提交 SI-mqosi57x-5",
+    "expected": "allow",
+    "actual": "allow (http 204)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 24,
+    "actor": "62010001",
+    "action": "批核 SI-mqosi57x-5 (總承)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 25,
+    "actor": "62000001",
+    "action": "批核 SI-mqosi57x-5 (PM)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 26,
+    "actor": "62040001",
+    "action": "開單 SI-mqosi57x-6",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 27,
+    "actor": "62040001",
+    "action": "加內容版本 SI-mqosi57x-6",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 28,
+    "actor": "62040001",
+    "action": "提交 SI-mqosi57x-6",
+    "expected": "allow",
+    "actual": "allow (http 204)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 29,
+    "actor": "62010001",
+    "action": "批核 SI-mqosi57x-6 (總承)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 30,
+    "actor": "62000001",
+    "action": "批核 SI-mqosi57x-6 (PM)",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "工地指令",
+    "seq": 31,
+    "actor": "62000003",
+    "action": "越權開單",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"site_instructions\"",
+    "pass": true,
+    "note": ""
+  }
+]

@@ -1,0 +1,312 @@
+[
+  {
+    "feature": "文件/圖則",
+    "seq": 1,
+    "actor": "62010003",
+    "action": "取文件編號 material_submission",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 2,
+    "actor": "62010003",
+    "action": "取文件編號 method_statement",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 3,
+    "actor": "62010003",
+    "action": "取文件編號 inspection",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 4,
+    "actor": "62010003",
+    "action": "取文件編號 other",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 5,
+    "actor": "62010001",
+    "action": "取文件編號 material_submission",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 6,
+    "actor": "62010001",
+    "action": "取文件編號 method_statement",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 7,
+    "actor": "62010001",
+    "action": "取文件編號 inspection",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 8,
+    "actor": "62010001",
+    "action": "取文件編號 other",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 9,
+    "actor": "62010002",
+    "action": "取文件編號 material_submission",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 10,
+    "actor": "62010002",
+    "action": "取文件編號 method_statement",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 11,
+    "actor": "62010002",
+    "action": "取文件編號 inspection",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 12,
+    "actor": "62010002",
+    "action": "取文件編號 other",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 13,
+    "actor": "62020003",
+    "action": "取文件編號 material_submission",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 14,
+    "actor": "62020003",
+    "action": "取文件編號 method_statement",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 15,
+    "actor": "62020003",
+    "action": "取文件編號 inspection",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 16,
+    "actor": "62020003",
+    "action": "取文件編號 other",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 17,
+    "actor": "62020001",
+    "action": "取文件編號 material_submission",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 18,
+    "actor": "62020001",
+    "action": "取文件編號 method_statement",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 19,
+    "actor": "62020001",
+    "action": "取文件編號 inspection",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 20,
+    "actor": "62020001",
+    "action": "取文件編號 other",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 21,
+    "actor": "62020002",
+    "action": "取文件編號 material_submission",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 22,
+    "actor": "62020002",
+    "action": "取文件編號 method_statement",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 23,
+    "actor": "62020002",
+    "action": "取文件編號 inspection",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 24,
+    "actor": "62020002",
+    "action": "取文件編號 other",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 25,
+    "actor": "62000002",
+    "action": "老總取文件編號",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 26,
+    "actor": "62010003",
+    "action": "取圖則編號 (D-25)",
+    "expected": "deny",
+    "actual": "deny (http 400) 沒有權限產生文件編號",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 27,
+    "actor": "62000002",
+    "action": "取圖則編號 (D-25)",
+    "expected": "deny",
+    "actual": "deny (http 400) 沒有權限產生文件編號",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 28,
+    "actor": "62010004",
+    "action": "取圖則編號 (D-25)",
+    "expected": "deny",
+    "actual": "deny (http 400) 沒有權限產生文件編號",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 29,
+    "actor": "62000001",
+    "action": "取圖則編號",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 30,
+    "actor": "62010001",
+    "action": "取圖則編號",
+    "expected": "allow",
+    "actual": "allow (http 200)",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "文件/圖則",
+    "seq": 31,
+    "actor": "62010004",
+    "action": "工人取文件編號",
+    "expected": "deny",
+    "actual": "deny (http 400) 沒有權限產生文件編號",
+    "pass": true,
+    "note": ""
+  }
+]

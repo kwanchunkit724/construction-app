@@ -1,0 +1,38 @@
+{
+  "case_key": "issue-export-actors",
+  "passed": true,
+  "summary": "v36 RPC get_issue_actor_profiles works as designed on prod: as PM it returned all 6 issue actors of project cccc2026 including the 2 non-member actors (67e25666 'Admin', fe29e025 'PM Kwan') that the plain user_profiles .in() select misses (4/6 rows under v17 RLS). Only {id,name} is exposed; an unviewable project id and an anon caller both get 0 rows, while an approved subcontractor_worker gets the same 6 names consistent with issues visibility. Read-only case, no residual rows.",
+  "bugs": [],
+  "improvements": [
+    {
+      "title": "問題 Excel 冇 issue 編號同位置欄 — 爭議時引用唔到",
+      "who": "pm",
+      "why": "同判頭拗數時要講得出『邊單問題、邊座邊層』；而家位置淨係埋喺標題自由文字（例：2座3樓天花滲水），又冇穩定編號，會議上只可以講『6月10號嗰單滲水』",
+      "effort": "S"
+    },
+    {
+      "title": "匯出唔包處理紀錄（comments/escalation thread）— 爭議核心證據缺席",
+      "who": "pm",
+      "why": "issue_comments 入面邊個幾時上報、邊個推咗去邊層、講過咩，先係糾紛時嘅審計線索；而家 Excel 只有 header 一行，第二個 sheet『處理紀錄』就齊",
+      "effort": "M"
+    },
+    {
+      "title": "照片得個數字冇連結 — 爭議現場要開 app 逐單搵返",
+      "who": "pm",
+      "why": "Excel 寫『照片數 3』但攞唔到相；同業主/判頭對質時相先係證據，需要 signed URL 或者出埋 PDF 附縮圖",
+      "effort": "M"
+    },
+    {
+      "title": "離場成員名冇標記、解決者角色冇紀錄",
+      "who": "pm",
+      "why": "報表見到 'PM Kwan' 但唔知佢已經離場定係邊間公司；issues 有 reporter_role 但冇 resolver_role，離場後角色就考古唔返",
+      "effort": "S"
+    },
+    {
+      "title": "客戶端匯出做咗兩次名單查詢（plain select + RPC）",
+      "who": "pm",
+      "why": "RPC 一個 call 已覆蓋全部名；地盤訊號差時少一個 round-trip 就快一截，純客戶端清理",
+      "effort": "S"
+    }
+  ]
+}

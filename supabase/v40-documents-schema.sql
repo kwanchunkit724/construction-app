@@ -1,0 +1,90 @@
+-- =============================================================
+-- v40-documents-schema.sql — HEADER / APPLY-ORDER INDEX
+-- =============================================================
+-- Program 2026-06 — 文件系統 (Documents Register) Phase A.
+-- Authoritative spec: .planning/program-2026-06/FILE-SYSTEM-DESIGN.md
+-- (§1 data model, §1.4 RPCs, §1.5 helpers+RLS, §2.1 bucket RLS,
+--  §4.2 id-preserving backfill, §4.3 one-direction sync triggers).
+--
+-- NOTE ON VERSION NUMBER: the design doc was written when latest was
+-- v37 and called this "v38". v38 + v39 were since taken
+-- (v38-meta-change-history.sql; v39 reserved for the later
+-- "documents-write-flip" contract phase, §4.5). So Phase A ships as
+-- v40 — content is unchanged from the spec, only the prefix moved.
+--
+-- This migration is split (it would exceed ~600 lines as one file),
+-- following the v5-split / v9-split / v10-split precedent. Apply the
+-- numbered files in THIS ORDER, in one logical run (Supabase SQL
+-- Editor; the user applies to prod by hand and verifies by EXECUTION):
+--
+--   APPLY ORDER:  1, 2, 3, 4, 5, 7, 6, 8   (note 7 BEFORE 6 — see B5)
+--
+-- WHY 7 BEFORE 6 (apply-order B5 fix): the sync trigger (split 7) must be
+-- LIVE before the backfill (split 6) runs, so that any drawing/version a
+-- live iOS v1.3 client writes *during* the backfill window is mirrored
+-- forward immediately instead of slipping through the gap between "trigger
+-- not yet installed" and "backfill already scanned that row". The trigger is
+-- now self-sufficient: split 7 defensively upserts the parent header before
+-- the version (on conflict do nothing), so installing it ahead of the
+-- backfill cannot FK-violate. THEN run the backfill (split 6) to sweep in
+-- everything that existed before the trigger went live.
+--
+-- RE-RUN split 6 ONCE MORE after 7→6 if you want belt-and-braces coverage of
+-- rows written in the brief instant between installing the trigger and
+-- starting the backfill: split 6 is fully idempotent (every insert is
+-- `on conflict (id) do nothing`, the 'migrated' event is guarded by a
+-- NOT EXISTS), so a second pass only fills genuine gaps and is otherwise a
+-- no-op. (Optional — the trigger already covers the live window; this just
+-- closes the theoretical race at the boundary.)
+--
+--   supabase/v40-split/1-tables.sql
+--       documents, document_versions (+ deferred current_version_id FK,
+--       v8 pattern), document_events, document_counters; leaf-only
+--       trigger (NULL-tolerant; legacy-bypass per B4); indexes (§1.5).
+--   supabase/v40-split/2-files-enabled-flag.sql
+--       app_config.files_enabled column + get_files_enabled() /
+--       set_files_enabled(boolean) RPCs (clone of v10-split/7).
+--   supabase/v40-split/3-helpers-and-rls.sql
+--       can_upload_document (判頭 INCLUDED) + can_review_document
+--       helpers; enable RLS + all table policies per the §1.5 table;
+--       document_versions write-guard trigger (B3 ii — no UPDATE policy).
+--   supabase/v40-split/4-rpcs.sql
+--       log_document_event + apply_document_supersede_side_effects helpers +
+--       next_document_number + supersede_document_version +
+--       review_document_version + withdraw_document_version (all §1.4;
+--       supersede/review are SECURITY DEFINER with in-body auth per B1).
+--   supabase/v40-split/5-storage-bucket.sql
+--       PRIVATE bucket project-docs + storage.objects SELECT/INSERT
+--       policies (no update/delete), per v9-si-vo-storage-bucket.sql.
+--   supabase/v40-split/7-sync-triggers.sql   ← APPLIED BEFORE 6 (B5)
+--       one-direction security-definer AFTER triggers
+--       drawings/drawing_versions → documents/document_versions (§4.3),
+--       idempotent, non-recursive; defensively upserts the header first.
+--   supabase/v40-split/6-backfill.sql        ← APPLIED AFTER 7 (B5)
+--       id-preserving backfill of drawings/drawing_versions →
+--       documents/document_versions (§4.2), single tx, on conflict
+--       do nothing, one 'migrated' event each. (Re-run once more if you
+--       want to close the trigger-install/backfill-start boundary race.)
+--   supabase/v40-split/8-realtime-and-verify.sql
+--       add documents + document_versions to supabase_realtime;
+--       EXECUTE-verification query footer (v8/v37 style).
+--
+-- ADDITIVE ONLY — new tables/columns/functions/bucket/policies only.
+-- Safe to run while live iOS v1.3 clients are writing drawings/
+-- drawing_versions (they never see these objects). Each split file is
+-- idempotent (create or replace / if not exists / drop ... if exists /
+-- on conflict do nothing) so the whole set is re-runnable.
+--
+-- APPLE ACCOUNT-DELETION NOTE (see v20-delete-account-fk-cascade.sql):
+-- the four new actor columns —
+--   documents.created_by, document_versions.submitted_by,
+--   document_versions.reviewed_by, document_events.actor_id —
+-- are ALL declared `references user_profiles(id) on delete set null`
+-- at table-creation time (1-tables.sql), so deleting a user does NOT
+-- block on these tables; the rows survive with a NULL actor
+-- ("已刪除用戶" on the UI). v20 enumerates pre-existing FKs that were
+-- NO ACTION / NOT NULL and had to be repointed; these new FKs are born
+-- correct and need no v20-style repoint. Still: when v20's enumeration
+-- list is next revised, add these four (column, table) pairs to it for
+-- documentation completeness. No action required for this migration.
+-- =============================================================

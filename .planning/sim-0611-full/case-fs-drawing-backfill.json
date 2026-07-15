@@ -1,0 +1,40 @@
+{
+  "case_key": "fs-drawing-backfill",
+  "passed": true,
+  "summary": "As PM: documents with legacy_drawing_id IS NOT NULL = 2 == drawings = 2, id sets identical; both known drawing ids exist as documents with same uuid, document_type=drawing, legacy_drawing_id==id and current_version_id matching the drawing. All 4 migrated document_versions keep bucket_id=project-drawings with byte-identical file_path and correct status map (current->approved, superseded->superseded); PM-signed URL on the real blob returned HTTP 200 application/pdf. Denials hold: subcontractor drawing-type insert 42501, worker insert 42501, PM direct PATCH of version status = 0 rows (RPC-only), while worker retains read+sign rights.",
+  "bugs": [
+    {
+      "title": "Migrated register rows can point at blobs that do not exist in storage (seed demo/s204-*.pdf) with no missing-file signal",
+      "severity": "P3",
+      "repro": "As PM sign project-drawings/demo/s204-v2.pdf (file_path of migrated doc 67738f15 current version) -> 404 Object not found, while the register row shows status=approved and looks healthy until preview is tapped",
+      "evidence": ".planning/sim-0611-full/fs2-sign-demo.json {statusCode:404,error:not_found}; backfill by design copies zero blobs so any legacy path that never had a real object migrates as a dead pointer",
+      "layer": "both"
+    }
+  ],
+  "improvements": [
+    {
+      "title": "Backfilled drawings have doc_number NULL — give migrated docs a DWG- number or a 舊圖 label",
+      "who": "pm",
+      "why": "HK correspondence/RFI references drawings by number; in the 文件 register the two migrated 圖則 sit unnumbered next to numbered native docs, so a PM cannot cite them consistently",
+      "effort": "S"
+    },
+    {
+      "title": "Show 由舊圖則遷移 badge instead of bare 批准 status on migrated versions",
+      "who": "pm",
+      "why": "Migrated versions read status=approved with no reviewed_by — a PM doing a dispute audit may assume a review cycle happened that never did; the migrated document_event exists but is buried in the timeline",
+      "effort": "S"
+    },
+    {
+      "title": "檔案遺失 indicator / register health check for versions whose blob 404s",
+      "who": "pm",
+      "why": "The register is sold as dispute evidence; a row whose signed URL 404s silently undermines that trust — surface it in the list, not only on preview tap",
+      "effort": "M"
+    },
+    {
+      "title": "Make it obvious 文件 is now the canonical home of 圖則 during the dual-write window",
+      "who": "subcontractor",
+      "why": "判頭 looking for the latest revision can still find drawings under the old 圖則 tab AND under 文件; without an in-app pointer they may act on a stale view of which register is authoritative",
+      "effort": "S"
+    }
+  ]
+}

@@ -148,13 +148,14 @@ construction,site,project,management,progress,issue,tracking,contractor,PM,Hong 
 |----------|----------------|-------------------|------|
 | Phone Number | Yes | No | App Functionality（帳號識別） |
 | Name | Yes | No | App Functionality |
-| Photos | Yes | No | App Functionality（問題報告） |
-| User Content (notes, messages) | Yes | No | App Functionality |
+| Photos | Yes | No | App Functionality（問題、圖則、工地指令、許可證、每日日誌） |
+| Audio Data | Yes | No | App Functionality（工地指令語音備忘） |
+| Coarse Location | Yes | No | App Functionality（工地指令現場位置標示；單次、非背景追蹤） |
+| User Content (notes, drawings, signatures) | Yes | No | App Functionality |
 | Device ID | Yes | No | App Functionality（推送通知 routing） |
 
 ### Data NOT Collected
-- Location
-- Contacts
+- Contacts（裝置通訊錄 — 聯絡人功能只係用戶手動輸入，唔讀手機通訊錄）
 - Browsing history
 - Search history
 - Health & fitness
@@ -196,9 +197,14 @@ Role: 系統管理員（Admin，可以見到全部功能）
 > professionals. Sign-in is by phone number. A demo admin account is provided
 > in Sign-in Information.
 >
-> Camera / Photo Library is only accessed when reporting issues.
-> Push notifications are used to alert users of issue assignments and
-> approval decisions — never for marketing.
+> Permissions are all user-initiated, per feature:
+> - Camera / Photo Library: attach photos when reporting issues, and when
+>   uploading drawings, Site Instructions, Permits to Work and daily logs.
+> - Location (when-in-use): requested ONLY when a user chooses to geo-tag a
+>   Site Instruction's on-site location. No background tracking.
+> - Microphone: ONLY to record an optional voice memo on a Site Instruction.
+> Push notifications alert users of issue / Site Instruction / Variation Order /
+> Permit to Work assignments and approval decisions — never for marketing.
 >
 > Privacy policy: https://construction-app-lime-six.vercel.app/privacy-policy.html
 

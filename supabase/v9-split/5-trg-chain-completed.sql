@@ -1,0 +1,16 @@
+-- =============================================================
+-- v9-split/5-trg-chain-completed.sql — Chain completion lock
+-- =============================================================
+-- The chain-completion lock-on-final-approve logic lives INSIDE
+-- dispatch_after_approval() (see v9-split/4-trg-approval-created.sql).
+-- When current_step >= jsonb_array_length(chain_snapshot), the
+-- doc row receives status='locked' + locked_at=now() in the same
+-- transaction as the final approvals INSERT.
+--
+-- Plan 02-02 (SI) adds si_lock_guard trigger that enforces
+-- post-lock immutability on si_versions inserts.
+-- Plan 02-06 (VO) will add the equivalent vo_lock_guard.
+--
+-- This file is intentionally a marker. No DDL required.
+-- =============================================================
+select 'Chain completion lock is implemented inside dispatch_after_approval() — see v9-split/4.' as note;

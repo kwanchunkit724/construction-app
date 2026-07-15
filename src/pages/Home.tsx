@@ -1,12 +1,74 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Building2, Clock, ChevronRight, CheckCircle2, XCircle } from 'lucide-react'
+import { Building2, Clock, ChevronRight, CheckCircle2, XCircle, FileText } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { useAuth } from '../contexts/AuthContext'
 import { useProjects } from '../contexts/ProjectsContext'
+import { canAuthorDaily } from '../contexts/DailiesContext'
+import { supabase } from '../lib/supabase'
 import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
 import type { Project, ProjectRole } from '../types'
+
+// 今日工地概況 — per-project "did I keep my records live today?" signal from the
+// v94 get_my_site_status RPC. Input-only (showing up / logging), never output
+// numbers — so it can't tempt fake progress ticks.
+interface SiteTodayStatus {
+  daily_done: boolean
+  progress_today: boolean
+  doc_24h: boolean
+}
+
+const PROGRESS_EDITOR_ROLES = ['pm', 'main_contractor', 'subcontractor', 'general_foreman']
+function canEditProgressClient(
+  profile: { id: string; global_role: string } | null,
+  memberships: { user_id: string; project_id: string; status: string; role: string }[],
+  projects: Project[],
+  projectId: string,
+): boolean {
+  if (!profile) return false
+  if (profile.global_role === 'admin') return true
+  const project = projects.find(p => p.id === projectId)
+  if (project?.assigned_pm_ids.includes(profile.id)) return true
+  const m = memberships.find(mb => mb.user_id === profile.id && mb.project_id === projectId && mb.status === 'approved')
+  return !!m && PROGRESS_EDITOR_ROLES.includes(m.role)
+}
+
+// Compact "today" pills on each project card. Each pill only renders for a user
+// who can actually act on it (canDaily / canProgress), so a read-only role never
+// sees a permanent red 日誌. 新文件 is purely informational (shown only when true).
+function SitePills({ status, canDaily, canProgress }: {
+  status?: SiteTodayStatus
+  canDaily: boolean
+  canProgress: boolean
+}) {
+  if (!status) return null
+  const showDoc = status.doc_24h
+  if (!canDaily && !canProgress && !showDoc) return null
+  return (
+    <div className="flex flex-wrap gap-1 mt-1.5">
+      {canDaily && (
+        <span className={`inline-flex items-center gap-0.5 text-[11px] px-1.5 py-0.5 rounded-full font-medium ${
+          status.daily_done ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+        }`}>
+          {status.daily_done ? <CheckCircle2 size={11} /> : <XCircle size={11} />} 日誌
+        </span>
+      )}
+      {canProgress && (
+        <span className={`inline-flex items-center gap-0.5 text-[11px] px-1.5 py-0.5 rounded-full font-medium ${
+          status.progress_today ? 'bg-green-100 text-green-700' : 'bg-site-100 text-site-500'
+        }`}>
+          {status.progress_today ? <CheckCircle2 size={11} /> : <Clock size={11} />} 進度
+        </span>
+      )}
+      {showDoc && (
+        <span className="inline-flex items-center gap-0.5 text-[11px] px-1.5 py-0.5 rounded-full font-medium bg-blue-50 text-blue-700">
+          <FileText size={11} /> 新文件
+        </span>
+      )}
+    </div>
+  )
+}
 
 const RECENT_MS = 24 * 60 * 60 * 1000  // 24h
 
@@ -58,6 +120,21 @@ export default function Home() {
     return memberships.filter(m => m.user_id === profile.id && m.status === 'pending').length
   }, [memberships, profile])
 
+  const [siteStatus, setSiteStatus] = useState<Record<string, SiteTodayStatus>>({})
+  useEffect(() => {
+    if (!profile) return
+    let alive = true
+    supabase.rpc('get_my_site_status').then(({ data, error }) => {
+      if (!alive || error || !data) return
+      const m: Record<string, SiteTodayStatus> = {}
+      for (const r of data as Array<{ project_id: string } & SiteTodayStatus>) {
+        m[r.project_id] = { daily_done: r.daily_done, progress_today: r.progress_today, doc_24h: r.doc_24h }
+      }
+      setSiteStatus(m)
+    })
+    return () => { alive = false }
+  }, [profile])
+
   // Recently-decided memberships in the last 24h — fall-back signal for
   // users whose push notifications are off or delayed.
   const recentDecisions = useMemo(() => {
@@ -92,6 +169,9 @@ export default function Home() {
           <p className="text-sm text-site-500 mt-0.5">{profile.company}</p>
         )}
       </div>
+
+      {/* 待我審批 — pull-side surface for the documents review queue (S8) */}
+      <PendingReviewsTile />
 
       {/* Recent membership decisions — visible even if push notification missed */}
       {recentDecisions.length > 0 && (
@@ -159,6 +239,11 @@ export default function Home() {
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-site-900 truncate">{project.name}</p>
                   <p className="text-xs text-site-500 mt-0.5">{roleLabel}</p>
+                  <SitePills
+                    status={siteStatus[project.id]}
+                    canDaily={canAuthorDaily(profile, memberships, projects, project.id)}
+                    canProgress={canEditProgressClient(profile, memberships, projects, project.id)}
+                  />
                 </div>
                 <ChevronRight size={18} className="text-site-300" />
               </Link>
@@ -167,5 +252,39 @@ export default function Home() {
         )}
       </div>
     </AppLayout>
+  )
+}
+
+// Flag-gated 待我審批 tile. Calls list_my_pending_reviews once; renders only
+// when files_enabled AND the reviewer has ≥1 document waiting. The push from
+// v41 deep-links into /project/:id/files; this is the pull-side counterpart.
+function PendingReviewsTile() {
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    supabase.rpc('list_my_pending_reviews').then(({ data, error }) => {
+      if (cancelled || error || !data) return
+      setCount((data as unknown[]).length)
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  if (count === 0) return null
+
+  return (
+    <Link
+      to="/reviews"
+      className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-center gap-3 hover:bg-amber-100 transition-colors"
+    >
+      <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0">
+        <FileText size={20} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-amber-800">📄 待我審批 {count} 份文件</p>
+        <p className="text-xs text-amber-700/80 mt-0.5">跨工地文件審批，撳入去逐份處理</p>
+      </div>
+      <ChevronRight size={18} className="text-amber-400" />
+    </Link>
   )
 }

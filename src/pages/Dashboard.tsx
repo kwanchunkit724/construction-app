@@ -14,6 +14,7 @@ import {
   computeRollup, getZoneLeaves, PROGRESS_STATUS_ZH,
 } from '../types'
 import type { ProgressItem, ProgressStatus, Issue, UserProfile } from '../types'
+import { templateFor } from '../lib/progressTemplates'
 
 interface ActivityEvent {
   id: string
@@ -35,12 +36,23 @@ export default function Dashboard() {
   const [users, setUsers] = useState<Record<string, UserProfile>>({})
   const [loading, setLoading] = useState(true)
 
-  // Visible projects for this user (admin sees all)
+  // Visible projects for this user:
+  // - admin → all projects
+  // - assigned PM → projects in assigned_pm_ids (already included below)
+  // - approved member (老總 / MC / 判頭 / 安全主任 / etc.) → projects where
+  //   the user holds an approved membership, scoped read-only portfolio
   const visibleProjects = useMemo(() => {
     if (!profile) return []
     if (profile.global_role === 'admin') return projects
-    return projects.filter(p => p.assigned_pm_ids.includes(profile.id))
-  }, [profile, projects])
+    const approvedProjectIds = new Set(
+      memberships
+        .filter(m => m.user_id === profile.id && m.status === 'approved')
+        .map(m => m.project_id),
+    )
+    return projects.filter(
+      p => p.assigned_pm_ids.includes(profile.id) || approvedProjectIds.has(p.id),
+    )
+  }, [profile, projects, memberships])
 
   // Stable key for project IDs — prevents re-running fetch when project array
   // reference changes but underlying ids didn't.
@@ -148,15 +160,19 @@ export default function Dashboard() {
     return <AppLayout title="儀表板 Dashboard" wide><div className="py-20 flex justify-center"><Spinner size={32} /></div></AppLayout>
   }
   if (!profile) return <Navigate to="/login" replace />
-  if (profile.global_role !== 'admin' && !projects.some(p => p.assigned_pm_ids.includes(profile.id))) {
-    return <Navigate to="/home" replace />
-  }
+  // All authenticated users with at least one approved membership (or admin)
+  // may view the dashboard — they see only their scoped projects (visibleProjects
+  // above). Previously non-admin / non-assigned-PM members were hard-redirected
+  // to /home, giving 老總 / MC / 判頭 / 安全主任 no cross-site overview at all.
 
   // Aggregated stats
   const projectStats = visibleProjects.map(p => {
     const projectItems = allItems.filter(i => i.project_id === p.id)
     const allLeaves = p.zones.flatMap(z => getZoneLeaves(projectItems, z.id))
-    const rollup = computeRollup(allLeaves)
+    // plainMean: a project's full leaf set spans disciplines/units, so qty_total
+    // weighting would let one big quantity leaf (e.g. 大型開挖 42000 m³) dominate
+    // the project % — the 97% bug. Branch rollups in ProjectDetail are unchanged.
+    const rollup = computeRollup(allLeaves, new Date(), { plainMean: true })
     return { project: p, rollup, leafCount: allLeaves.length }
   })
 
@@ -174,6 +190,12 @@ export default function Dashboard() {
         <StatCard label="進度落後" count={delayed} icon={TrendingDown} color="bg-red-50 text-red-700 border-red-200" />
         <StatCard label="處理中問題" count={openIssues} icon={AlertCircle} color="bg-amber-50 text-amber-700 border-amber-200" />
       </div>
+
+      {/* 處理中問題 是跨工地匯總，行級權限會過濾停用咗「問題」模組嘅工地（RLS 回傳 0 行），
+          而呢個全域頁面冇 ModulesProvider，無法逐項目標示，所以加一句註腳避免誤會少計。 */}
+      <p className="text-[11px] text-site-400 -mt-3 mb-5 md:mb-6">
+        ※ 已停用「問題」模組嘅工地唔計入「處理中問題」數
+      </p>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         {/* Project progress overview — takes 2/3 on desktop */}
@@ -205,7 +227,7 @@ export default function Dashboard() {
                         {PROGRESS_STATUS_ZH[rollup.status]}
                       </span>
                     </div>
-                    <p className="text-[10px] text-site-400 mt-0.5">{leafCount} 個 leaf · {project.zones.length} 個分區</p>
+                    <p className="text-[10px] text-site-400 mt-0.5">{leafCount} 個 leaf{templateFor(project.project_type).autoZone ? '' : ` · ${project.zones.length} 個分區`}</p>
                   </div>
                   <ChevronRight size={16} className="text-site-300 flex-shrink-0" />
                 </Link>

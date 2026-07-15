@@ -1,0 +1,302 @@
+[
+  {
+    "feature": "聯絡人",
+    "seq": 1,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 電工",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 2,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 水喉",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 3,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 紮鐵",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 4,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 棚架",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 5,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 機電",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 6,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 泥水",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 7,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 油漆",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 8,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 玻璃",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 9,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 消防",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 10,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 吊船",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 11,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 清拆",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 12,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 園境",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 13,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 防水",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 14,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 冷氣",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 15,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 雲石",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 16,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 鋁窗",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 17,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 天花",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 18,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 地板",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 19,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 門鎖",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 20,
+    "actor": "62000001",
+    "action": "PM 加聯絡人 燒焊",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 21,
+    "actor": "62010001",
+    "action": "越權加聯絡人",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"contacts\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 22,
+    "actor": "62010003",
+    "action": "越權加聯絡人",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"contacts\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 23,
+    "actor": "62010004",
+    "action": "越權加聯絡人",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"contacts\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 24,
+    "actor": "62000002",
+    "action": "越權加聯絡人",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"contacts\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 25,
+    "actor": "62000003",
+    "action": "越權加聯絡人",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"contacts\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 26,
+    "actor": "62000004",
+    "action": "越權加聯絡人",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"contacts\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 27,
+    "actor": "62020002",
+    "action": "越權加聯絡人",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"contacts\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 28,
+    "actor": "62030003",
+    "action": "越權加聯絡人",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"contacts\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 29,
+    "actor": "62040001",
+    "action": "越權加聯絡人",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"contacts\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "聯絡人",
+    "seq": 30,
+    "actor": "62020004",
+    "action": "越權加聯絡人",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"contacts\"",
+    "pass": true,
+    "note": ""
+  }
+]

@@ -1,0 +1,43 @@
+{
+  "case_key": "export-data-soundness",
+  "title": "報表數據完整性 — Excel/PDF export reads soundness",
+  "date": "2026-06-11",
+  "persona": "60001001 李PM (assigned_pm)",
+  "project": "cccc2026-2026-2026-2026-000026202620",
+  "method": "Read src/lib/export.ts to extract the exact reads/joins the Excel+PDF export depends on, then replicated buildReportModel + the issues-export profile lookup via Supabase REST as the assigned PM and asserted soundness of every rendered cell.",
+  "what_export_reads": {
+    "progress_excel_pdf": "progress_items via RPC get_visible_progress_items (code,title,zone_id,level,parent_id,actual_progress,planned_start,planned_end,tracking_mode,floor_labels,floors_completed,notes,last_updated_at) + project.zones JSON. zone_id resolved against project.zones (unmatched -> __unzoned__ bucket). planned% is SCHEDULE-DERIVED via plannedProgressOf(dates), NOT the stored planned_progress column. Status re-derived live via deriveStatus(actual,plannedFromDates), deliberately overriding stored progress_items.status. + progress_snapshots for 本期 Δ.",
+    "issues_excel": "issues rows + a users map built from user_profiles.select('*').in('id', [reporter_id, resolved_by]). Missing profile -> name renders '—' (export.ts L600/L603).",
+    "history": "progress_history.select('*').eq(item_id) order created_at desc; updated_by is a raw uuid (name resolved elsewhere)."
+  },
+  "checks_passed": [
+    "zone_id resolvable: 0 null, 0 ghost (all 36 items map to A/B/C/D or are leaves under zoned parents)",
+    "code/title: 0 blank",
+    "actual_progress / planned_progress: 0 null across 36 items",
+    "last_updated_at: 0 null, all valid 2026 timestamps (Excel 更新 column sound)",
+    "last_updated_by: 0 unresolvable to a visible profile (23 null = never-updated seed, benign; progress export renders only last_updated_at not the name)",
+    "progress_history: fetchable as PM (rows returned for updated leaves; updated_by resolves to visible profiles)",
+    "floors tracking: floor_labels/floors_completed arrays consistent, no orphan floors"
+  ],
+  "bugs": [
+    {
+      "title": "Progress export fabricates 計劃%/差距 and flips status for items with no planned dates — DB-declared 落後 item exports as 進行中 超前",
+      "severity": "P1",
+      "layer": "client",
+      "root_cause": "buildReportModel.effOf() computes leaf planned% solely from plannedProgressOf(planned_start,planned_end), which returns 0 when an item has no dates, and feeds that 0 into gap (actual-0) and deriveStatus(actual,0). It has NO 未排期 guard. The in-app ProgressItemCard (L128,L191-195) DOES guard on isScheduled() and shows '未排期' instead of a variance for unscheduled items. So the same item reads differently in-app vs in the exported report.",
+      "evidence": "Live DB row 03-01 水管立管 (id bbbb0001-...031 zone A and bbbb0003-...031 zone C): actual_progress=25, planned_progress=60, planned_start=null, planned_end=null, status='delayed'. App shows 未排期 (no false variance). Export renders 計劃 0% / 差距 +25% / status 進行中 (超前) — overriding the DB's own stored status='delayed'. 5 displayed leaf rows show fabricated +gap: 02-01 電線1/F (A,B) gap +61%, 01-01 批盪1/F (A) +100%, 03-01 水管立管 (A,C) +25%. 6 leaves total have stored planned_progress != export-rendered planned. The one-pager verdict line + red/amber/green pills + 需要關注 list all consume this wrong status, so a behind item is reported as ahead and omitted from the attention list.",
+      "repro": "As PM open project cccc2026 progress -> export PDF/Excel (any preset incl. owner one-pager). Compare 03-01 水管立管 row to the same row on the progress screen: screen=未排期, report=進行中 +25%. 28/29 leaves in this project lack planned dates, so most planned% / 差距 / status cells in the report are schedule-derived 0-based, not the operator's stored plan.",
+      "fix_hint": "In effOf/the row render, when a leaf isScheduled()===false: suppress 計劃%/差距/Δ (render 未排期 like the app) and exclude it from gap-based status + verdict math, OR fall back to stored planned_progress. Rollups already exclude unscheduled leaves (computeRollup averages planned over scheduled only) — leaf rows are the only place the guard is missing."
+    },
+    {
+      "title": "Issues export blanks 報告者/解決者 to '—' for non-member actors — audit trail loses who reported/resolved",
+      "severity": "P2",
+      "layer": "db",
+      "root_cause": "exportIssuesToExcel resolves names via user_profiles.select('*').in('id', ids) under RLS. PM can see all project issues, but user_profiles RLS only exposes profiles the PM shares an APPROVED membership with. Issues reported/resolved by users who are not (or no longer) project_members resolve to undefined -> export prints '—'.",
+      "evidence": "Project cccc2026 has 7 issues. reporter_id fe29e025-... (4 issues, reporter_role subcontractor/main_contractor) and resolved_by 67e25666-... (1 issue) are NOT in project_members (members are only the 5 6000xxxx personas). The exact export query user_profiles?id=in.(...) as PM returns 4/6 actors; fe29e025 and 67e25666 are MISSING. So 4 issues export 報告者='—' and 2 export 解決者='—'. This directly undercuts the product's core promise of an audit trail that survives disputes — in a real dispute an issue could be reported by someone whose membership was later removed, and the export would erase their name.",
+      "repro": "As PM export issues to Excel for cccc2026: rows for issues 4573c3d3,1bc7676e,8b11c263,23eca1f0 show 報告者 '—'; 8b11c263,23eca1f0 show 解決者 '—'.",
+      "fix_hint": "Either widen user_profiles RLS so a project's PM can read the profile of anyone who has authored an issue/comment in their project, or persist a denormalised reporter_name/resolver_name snapshot on the issue at write time so historical names survive membership changes."
+    }
+  ],
+  "notes": "Read-only; no rows written. Both findings reproduced through the exact client query paths (RPC get_visible_progress_items for progress; user_profiles .in(id,ids) for issues). The progress-export P1 is the headline: the export silently overrides the DB's stored 落後 status because 28/29 leaves carry a stored planned_progress but no planned dates, and the export's planned% is dates-only with no 未排期 guard (the app has the guard). Zone/code/title/timestamp/history soundness all PASS."
+}

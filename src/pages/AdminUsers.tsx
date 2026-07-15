@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, RefreshCw, Phone } from 'lucide-react'
+import { Search, RefreshCw, Phone, ClipboardList } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { Modal } from '../components/Modal'
+import { InFlightApprovalsModal } from '../components/admin/InFlightApprovalsModal'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useStepUp } from '../contexts/StepUpContext'
 import { ROLE_ZH, SUB_ROLE_ZH } from '../types'
 import type { UserProfile, GlobalRole, SubRole } from '../types'
 
@@ -16,6 +18,8 @@ const ROLE_FILTERS: ({ value: GlobalRole | 'all'; label: string })[] = [
   { value: 'subcontractor', label: ROLE_ZH.subcontractor },
   { value: 'subcontractor_worker', label: ROLE_ZH.subcontractor_worker },
   { value: 'owner', label: ROLE_ZH.owner },
+  { value: 'safety_officer', label: ROLE_ZH.safety_officer },
+  { value: 'general_foreman', label: ROLE_ZH.general_foreman },
 ]
 
 const ROLE_PILL: Record<GlobalRole, string> = {
@@ -25,6 +29,8 @@ const ROLE_PILL: Record<GlobalRole, string> = {
   subcontractor: 'bg-amber-100 text-amber-700',
   subcontractor_worker: 'bg-site-100 text-site-700',
   owner: 'bg-green-100 text-green-700',
+  safety_officer: 'bg-red-100 text-red-700',
+  general_foreman: 'bg-orange-100 text-orange-700',
 }
 
 export default function AdminUsers() {
@@ -35,12 +41,14 @@ export default function AdminUsers() {
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<GlobalRole | 'all'>('all')
   const [editing, setEditing] = useState<UserProfile | null>(null)
+  const [viewingInFlight, setViewingInFlight] = useState<UserProfile | null>(null)
 
   async function fetchUsers() {
+    // v17 narrowed user_profiles SELECT policy to self + project teammates,
+    // so admin must go through the admin_list_user_profiles RPC (security
+    // definer + row_security off) to enumerate every user.
     const { data, error } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .order('created_at', { ascending: false })
+      .rpc('admin_list_user_profiles')
     if (error) console.error('users fetch error:', error)
     else setUsers((data as UserProfile[]) ?? [])
   }
@@ -86,6 +94,8 @@ export default function AdminUsers() {
     subcontractor: users.filter(u => u.global_role === 'subcontractor').length,
     subcontractor_worker: users.filter(u => u.global_role === 'subcontractor_worker').length,
     owner: users.filter(u => u.global_role === 'owner').length,
+    safety_officer: users.filter(u => u.global_role === 'safety_officer').length,
+    general_foreman: users.filter(u => u.global_role === 'general_foreman').length,
   }
 
   return (
@@ -152,13 +162,22 @@ export default function AdminUsers() {
                   {u.company && <span className="truncate">{u.company}</span>}
                 </div>
               </div>
-              <button
-                onClick={() => setEditing(u)}
-                disabled={u.id === profile.id}
-                className="text-xs font-semibold text-safety-700 bg-safety-50 hover:bg-safety-100 border border-safety-200 px-3 py-2 rounded-lg flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                編輯角色
-              </button>
+              <div className="flex flex-col gap-1.5 flex-shrink-0">
+                <button
+                  onClick={() => setEditing(u)}
+                  disabled={u.id === profile.id}
+                  className="text-xs font-semibold text-safety-700 bg-safety-50 hover:bg-safety-100 border border-safety-200 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed min-h-0"
+                >
+                  編輯角色
+                </button>
+                <button
+                  onClick={() => setViewingInFlight(u)}
+                  className="text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-3 py-2 rounded-lg flex items-center justify-center gap-1 min-h-0"
+                  title="查看用戶嘅待處理簽核工作"
+                >
+                  <ClipboardList size={12} /> 查看待處理簽核
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -169,6 +188,15 @@ export default function AdminUsers() {
           user={editing}
           onClose={() => setEditing(null)}
           onUpdated={async () => { setEditing(null); await fetchUsers() }}
+        />
+      )}
+
+      {viewingInFlight && (
+        <InFlightApprovalsModal
+          open
+          userId={viewingInFlight.id}
+          userName={viewingInFlight.name}
+          onClose={() => setViewingInFlight(null)}
         />
       )}
     </AppLayout>
@@ -182,21 +210,23 @@ function EditRoleModal({
   onClose: () => void
   onUpdated: () => void
 }) {
+  const { requireStepUp } = useStepUp()
   const [role, setRole] = useState<GlobalRole>(user.global_role)
   const [subRole, setSubRole] = useState<SubRole>(user.sub_role)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
   async function save() {
+    if (!(await requireStepUp('membership'))) return
     setSubmitting(true)
     setError('')
-    const { error: e } = await supabase
-      .from('user_profiles')
-      .update({
-        global_role: role,
-        sub_role: role === 'main_contractor' ? subRole : null,
-      })
-      .eq('id', user.id)
+    // v17: user_profiles UPDATE policy + trigger blocks direct role changes.
+    // Use admin_update_user_role RPC (security definer, admin-gated).
+    const { error: e } = await supabase.rpc('admin_update_user_role', {
+      p_target: user.id,
+      p_global_role: role,
+      p_sub_role: role === 'main_contractor' ? subRole : '',
+    })
     setSubmitting(false)
     if (e) setError(e.message)
     else onUpdated()
@@ -219,7 +249,7 @@ function EditRoleModal({
 
       <label className="label">全域角色</label>
       <div className="grid grid-cols-1 gap-2 mb-4">
-        {(['admin', 'pm', 'main_contractor', 'subcontractor', 'subcontractor_worker', 'owner'] as GlobalRole[]).map(r => (
+        {(['admin', 'pm', 'general_foreman', 'main_contractor', 'safety_officer', 'subcontractor', 'subcontractor_worker', 'owner'] as GlobalRole[]).map(r => (
           <button
             key={r}
             type="button"

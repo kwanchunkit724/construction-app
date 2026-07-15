@@ -1,0 +1,36 @@
+{
+  "case_key": "daily-log",
+  "date": "2026-06-11",
+  "project_id": "cccc2026-2026-2026-2026-000026202620",
+  "passed": true,
+  "code_read": [
+    "src/contexts/DailiesContext.tsx",
+    "supabase/v11-dailies-schema.sql",
+    "supabase/v35-daily-sim-fixes.sql (FIX 2: dailies_insert HKT-today guard)"
+  ],
+  "assertions": [
+    {"step": "R1", "actor": "60001004 黃管工 (main_contractor/foreman)", "action": "POST /dailies upsert on_conflict=project_id,user_id,date — weather 大風, 2 freeform items, zh-HK notes [fullsim-0611]", "expect": "success", "result": "HTTP 200, row 7dce1041-07b9-4292-bb58-b6e00a14cf41", "pass": true},
+    {"step": "R2", "actor": "60001005 何判頭 (subcontractor)", "action": "POST /dailies own row", "expect": "denied (client mirrors: 只有總承建商管工或工程師可以填寫日誌)", "result": "HTTP 403 code 42501", "pass": true},
+    {"step": "R3", "actor": "60001004 foreman", "action": "POST /dailies date=2026-06-10 (backdated insert — the v35 FIX 2 hole)", "expect": "denied", "result": "HTTP 403 code 42501 — v35 guard verified BY EXECUTION on prod", "pass": true},
+    {"step": "R4b", "actor": "60001004 foreman", "action": "PATCH own yesterday-dated row 4626a8ba (date=2026-06-10, from sim-0610)", "expect": "0 rows (locked)", "result": "HTTP 200 [] — 0 rows", "pass": true},
+    {"step": "R9", "actor": "60001004 foreman", "action": "DELETE own yesterday-dated row", "expect": "0 rows (locked)", "result": "HTTP 200 [] — 0 rows", "pass": true},
+    {"step": "R5", "actor": "60001004 foreman", "action": "PATCH own TODAY row setting date=2026-06-10 (sneak-backdate via update)", "expect": "denied by WITH CHECK", "result": "HTTP 403 code 42501", "pass": true},
+    {"step": "R6", "actor": "60001001 李PM (pm)", "action": "GET today dailies", "expect": "sees foreman row", "result": "HTTP 200, 1 row visible", "pass": true},
+    {"step": "R7", "actor": "60001002 王老總 (general_foreman)", "action": "GET today dailies", "expect": "sees foreman row", "result": "HTTP 200, 1 row visible", "pass": true},
+    {"step": "R8", "actor": "60001005 何判頭 (subcontractor)", "action": "GET today dailies", "expect": "readable per v11 'all approved members read (transparency)'", "result": "HTTP 200, 1 row visible — matches documented design", "pass": true},
+    {"step": "R10/R11", "actor": "60001004 foreman", "action": "DELETE own today row (cleanup)", "expect": "allowed same-day; row gone", "result": "HTTP 200 1 row deleted; verify GET returns []", "pass": true}
+  ],
+  "cleanup": "Today's [fullsim-0611] daily deleted via same-day delete window (R10, verified R11). Yesterday-dated [sim-0610] rows untouched (locked by design, pre-existed this run).",
+  "bugs": [],
+  "improvements": [
+    {"title": "日誌缺出勤人數同機械欄 (labour & plant counts)", "who": "general_foreman/pm", "why": "HK 地盤日記標準內容係各工種出勤人數（紮鐵X人/釘板Y人）同場內機械（天秤/挖掘機）— 呢啲數字係 EOT/索償糾紛嘅核心證據，而家只能塞入 freeform 文字，事後冇得統計", "effort": "M"},
+    {"title": "日誌唔可以附相", "who": "foreman", "why": "大風吹冧棚網想即場影兩張相做證據，而家相只可以經 issues/drawings 入，日誌同證據分開兩度", "effort": "M"},
+    {"title": "天氣單選 enum，冇天文台警告信號", "who": "foreman/pm", "why": "停工/索償睇嘅係 8號風球、紅/黑雨、酷熱警告，唔係「大風」；而且香港朝雨晏晴好常見，單一天氣冇 AM/PM 之分，事後查唔到邊日掛波", "effort": "S"},
+    {"title": "「複製琴日」一鍵帶入昨日內容", "who": "foreman", "why": "管工晏晝得幾分鐘食飯時間填，progress item 要喺成棵樹度逐個揀；帶入昨日揀過嘅項目改兩改，30秒搞掂", "effort": "S"},
+    {"title": "隔日鎖死冇補簽流程", "who": "foreman/pm", "why": "v35 啱啱封咗 API 補填漏洞（正確），但現實係管工收工趕車成日漏咗填，真地盤日記係翌朝補寫+主任簽認；考慮做「PM 會簽先解鎖補填」流程取代硬鎖", "effort": "M"},
+    {"title": "冇主任/PM 簽認狀態", "who": "pm/general_foreman", "why": "香港地盤日記要 RE/工地主任 countersign 先有爭議效力；而家 PM 睇得到但冇「已閱/簽認」記錄，糾紛時證明唔到 PM 當日知情", "effort": "M"},
+    {"title": "判頭睇到管工日誌全文（注意而非 bug）", "who": "subcontractor", "why": "v11 寫明透明化係刻意設計，但管工寫「XX判頭進度慢」嘅內部評語判頭即日睇到，可能令管工唔敢寫真話；考慮 notes 欄分內部/公開", "effort": "S"}
+  ],
+  "env_note": "MinGW curl (8.8.0) in this worktree shell fails exit 43 on ALL requests; used C:\\Windows\\System32\\curl.exe instead. Environment issue, not an app bug.",
+  "evidence_log": ".planning/sim-0611-full/log-daily-log.txt"
+}

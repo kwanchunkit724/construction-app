@@ -1,0 +1,16 @@
+-- =============================================================
+-- v9-split/3-trg-vo-submitted.sql — VO submission push fan-out
+-- =============================================================
+-- VO submission push fan-out is implemented INSIDE the submit_vo(p_vo_id)
+-- RPC body (see supabase/v9-vo-schema.sql). The RPC snapshots
+-- approval_chain_steps where doc_type='vo' into chain_snapshot AND
+-- calls push_dispatcher for chain_snapshot[0] holders within the same
+-- transaction — atomic submission + notification.
+--
+-- This file is intentionally a marker. No DDL required.
+-- Phase 3 PTW will instantiate the same pattern as 7-trg-ptw-submitted.sql.
+--
+-- Verification: select prosrc from pg_proc where proname='submit_vo'
+--   must contain 'push_dispatcher(' and 'jsonb_agg(' and '父工地指令尚未鎖定'
+-- =============================================================
+select 'VO submission fan-out is implemented inside submit_vo() — see v9-vo-schema.sql.' as note;

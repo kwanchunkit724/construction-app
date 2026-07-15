@@ -1,7 +1,9 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { phoneToEmail, normalizePhone } from '../lib/phone'
-import { pushLoginUser, pushLogoutUser } from '../lib/push'
+import { pushLoginUser, pushLogoutUser, consumePendingDeepLink } from '../lib/push'
+import { cacheGet, cacheSet, cacheClearAll, getOnline } from '../lib/offline'
+import { clearBiometricCredential } from '../lib/biometric'
 import type { UserProfile, GlobalRole, SubRole } from '../types'
 
 interface AuthContextType {
@@ -37,11 +39,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq('id', userId)
       .single()
     if (error) {
+      // Only trust the cached profile when actually OFFLINE — so a logged-in
+      // user opening the app offline keeps their role/identity instead of
+      // being bounced from gated routes. When online, a failed fetch (e.g.
+      // an admin revoked the role, expired token) must NOT re-pin a stale
+      // role: fall through to setProfile(null).
+      if (!getOnline()) {
+        const cached = cacheGet<UserProfile>(`profile:${userId}`)
+        if (cached && cached.data.id === userId) {
+          console.warn('Offline — using cached profile:', error.message)
+          setProfile(cached.data)
+          return
+        }
+      }
       console.error('Failed to load profile:', error)
       setProfile(null)
       return
     }
     setProfile(data as UserProfile)
+    cacheSet(`profile:${userId}`, data as UserProfile)
+  }
+
+  // Drain any cold-launch deep link queued by src/lib/push.ts BEFORE the
+  // HashRouter mounted. Safe to call multiple times — consumePendingDeepLink
+  // returns null after the first drain. Plan 02-09 / Open Q 4.
+  function drainPendingDeepLink() {
+    const pending = consumePendingDeepLink()
+    if (!pending) return
+    const link = pending.startsWith('#/')
+      ? pending
+      : (pending.startsWith('/') ? '#' + pending : '#/' + pending)
+    try { window.location.hash = link } catch { /* noop */ }
   }
 
   useEffect(() => {
@@ -49,11 +77,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const user = data.session?.user
       if (user) {
         setSession({ user_id: user.id })
-        loadProfile(user.id).finally(() => setLoading(false))
+        loadProfile(user.id).finally(() => {
+          setLoading(false)
+          drainPendingDeepLink()
+        })
         // Best-effort: associate OneSignal subscription with this user
         void pushLoginUser(user.id)
       } else {
         setLoading(false)
+        drainPendingDeepLink()
       }
     })
 
@@ -132,6 +164,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // surfaced — sign-out should always succeed.
     await pushLogoutUser().catch(() => {})
     await supabase.auth.signOut()
+    // Clear any biometric-stored step-up password + its opt-in flag so they do
+    // NOT survive sign-out on a shared device (construction crews share phones).
+    await clearBiometricCredential().catch(() => {})
+    try { localStorage.removeItem('ck_stepup_biometric_optin') } catch { /* noop */ }
+    // Drop all cached reads (profile + data) so the next user on a shared
+    // device never sees the previous user's offline data.
+    cacheClearAll()
   }
 
   async function refreshProfile() {

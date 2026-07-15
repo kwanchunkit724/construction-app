@@ -1,0 +1,382 @@
+[
+  {
+    "feature": "問題",
+    "seq": 1,
+    "actor": "62010004",
+    "action": "工人報問題 (一座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 2,
+    "actor": "62010004",
+    "action": "工人報問題 (一座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 3,
+    "actor": "62010004",
+    "action": "工人即時問題 snag (一座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 4,
+    "actor": "62010003",
+    "action": "判頭報問題 (一座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 5,
+    "actor": "62020004",
+    "action": "工人報問題 (二座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 6,
+    "actor": "62020004",
+    "action": "工人報問題 (二座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 7,
+    "actor": "62020004",
+    "action": "工人即時問題 snag (二座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 8,
+    "actor": "62020003",
+    "action": "判頭報問題 (二座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 9,
+    "actor": "62030004",
+    "action": "工人報問題 (三座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 10,
+    "actor": "62030004",
+    "action": "工人報問題 (三座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 11,
+    "actor": "62030004",
+    "action": "工人即時問題 snag (三座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 12,
+    "actor": "62030003",
+    "action": "判頭報問題 (三座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 13,
+    "actor": "62040004",
+    "action": "工人報問題 (外圍)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 14,
+    "actor": "62040004",
+    "action": "工人報問題 (外圍)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 15,
+    "actor": "62040004",
+    "action": "工人即時問題 snag (外圍)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 16,
+    "actor": "62040003",
+    "action": "判頭報問題 (外圍)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 17,
+    "actor": "62010003",
+    "action": "判頭升級問題→總承 (一座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 18,
+    "actor": "62010003",
+    "action": "判頭留言",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 19,
+    "actor": "62010003",
+    "action": "判頭升級問題→總承 (一座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 20,
+    "actor": "62010003",
+    "action": "判頭留言",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 21,
+    "actor": "62020003",
+    "action": "判頭升級問題→總承 (二座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 22,
+    "actor": "62020003",
+    "action": "判頭留言",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 23,
+    "actor": "62020003",
+    "action": "判頭升級問題→總承 (二座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 24,
+    "actor": "62020003",
+    "action": "判頭留言",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 25,
+    "actor": "62030003",
+    "action": "判頭升級問題→總承 (三座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 26,
+    "actor": "62030003",
+    "action": "判頭留言",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 27,
+    "actor": "62030003",
+    "action": "判頭升級問題→總承 (三座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 28,
+    "actor": "62030003",
+    "action": "判頭留言",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 29,
+    "actor": "62040003",
+    "action": "判頭升級問題→總承 (外圍)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 30,
+    "actor": "62040003",
+    "action": "判頭留言",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 31,
+    "actor": "62040003",
+    "action": "判頭升級問題→總承 (外圍)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 32,
+    "actor": "62040003",
+    "action": "判頭留言",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 33,
+    "actor": "62010001",
+    "action": "總承解決問題 (一座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 34,
+    "actor": "62020001",
+    "action": "總承解決問題 (二座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 35,
+    "actor": "62030001",
+    "action": "總承解決問題 (三座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 36,
+    "actor": "62040001",
+    "action": "總承解決問題 (外圍)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 37,
+    "actor": "62020004",
+    "action": "工人改非自己問題",
+    "expected": "deny",
+    "actual": "deny (http 200) 0 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "問題",
+    "seq": 38,
+    "actor": "62000004",
+    "action": "安全主任改任何問題 (v66)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": ""
+  }
+]

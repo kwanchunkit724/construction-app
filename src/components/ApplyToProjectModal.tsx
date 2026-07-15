@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { ShieldAlert } from 'lucide-react'
 import { Modal } from './Modal'
 import { Spinner } from './Spinner'
 import { useProjects } from '../contexts/ProjectsContext'
@@ -94,6 +96,17 @@ export function ApplyToProjectModal({
               <option key={r} value={r}>{ROLE_ZH[r]}</option>
             ))}
           </select>
+          {/* S20: non-blocking nudge —申請工人角色 with no green card on file. */}
+          {role === 'subcontractor_worker' && !profile?.green_card_no && (
+            <div className="mt-2 text-xs bg-amber-100 text-amber-700 border border-amber-200 rounded-xl px-3 py-2 flex items-start gap-2">
+              <ShieldAlert size={14} className="mt-0.5 shrink-0" />
+              <span>
+                申請工人角色建議先喺
+                <Link to="/profile" className="font-semibold underline mx-0.5">個人資料</Link>
+                登記平安咭，方便審批。（非必填）
+              </span>
+            </div>
+          )}
         </div>
 
         {error && (

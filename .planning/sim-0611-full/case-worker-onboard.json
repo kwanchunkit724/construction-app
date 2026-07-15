@@ -1,0 +1,32 @@
+{
+  "case_key": "worker-onboard",
+  "passed": true,
+  "summary": "新工人入職+審批 full chain passed on live prod. Worker 60001006 pending membership restored, duplicate-apply blocked (23505), self-approve blocked (0 rows). admin_or_pm_list_applicants now works for PM and 判頭 approver (name+phone returned, the 0610 42702 bug is verified fixed by execution), returns [] for foreman and the worker per design; PM approve PATCH succeeded and the worker immediately gained progress visibility.",
+  "bugs": [],
+  "improvements": [
+    {
+      "title": "判頭歸屬 missing on worker application — PM cannot tell whose gang the applicant is",
+      "who": "pm",
+      "why": "Approval card shows only name+phone+company (company was null here). On a multi-sub site a PM approving 工人 needs to know 邊個判頭嘅人 before letting them into the project; today he must phone around, which is exactly the WhatsApp loop the app replaces.",
+      "effort": "M"
+    },
+    {
+      "title": "No push to approvers when a new worker applies (INSERT has no trigger)",
+      "who": "pm",
+      "why": "v5-split/5-trg-membership.sql only fires on UPDATE (approved/rejected push to the worker). Nothing notifies the PM/判頭 that someone is waiting — the applicant stands at the gate until the PM happens to open the Projects page. New-hire day 1 is the worst time for silent queues.",
+      "effort": "S"
+    },
+    {
+      "title": "平安咭 (green card) number/expiry not captured at onboarding",
+      "who": "pm",
+      "why": "HK law requires every site worker to hold a valid 平安咭. PM approving a stranger from a phone number has no way to check it in-app; sites keep a paper copy instead, defeating the shared audit trail.",
+      "effort": "M"
+    },
+    {
+      "title": "PendingApprovalCard fires one applicant RPC per card (N+1)",
+      "who": "pm",
+      "why": "Projects.tsx calls admin_or_pm_list_applicants once per pending membership even though the RPC already returns ALL applicants for the project. Monday morning with 15 new workers = 15 identical round-trips on site 4G; list should be fetched once per project.",
+      "effort": "S"
+    }
+  ]
+}

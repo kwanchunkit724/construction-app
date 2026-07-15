@@ -23,12 +23,38 @@ workflows:
       - name: Build web app
         script: npm run build
 
+      - name: Check bundle size
+        script: node scripts/check-bundle-size.cjs
+
+      - name: Purge stale build outputs (anti-cache)
+        # Codemagic mac_mini_m2 persistent runners can keep stale dist/ +
+        # ios/App/App/public/ between builds. Wipe so each build refreshes.
+        script: |
+          rm -rf dist
+          rm -rf ios/App/App/public
+          npm run build
+
       - name: Sync Capacitor
         script: npx cap sync ios
+
+      - name: Verify packaged bundle matches fresh dist
+        script: |
+          DIST_INDEX=$(grep -oE 'index-[A-Za-z0-9_-]+\.js' dist/index.html | head -1)
+          PACK_INDEX=$(grep -oE 'index-[A-Za-z0-9_-]+\.js' ios/App/App/public/index.html | head -1)
+          echo "dist/ main bundle:       $DIST_INDEX"
+          echo "ios packaged bundle:     $PACK_INDEX"
+          if [ "$DIST_INDEX" != "$PACK_INDEX" ]; then
+            echo "ERROR: packaged bundle is stale; cap sync did not refresh ios/App/App/public"
+            exit 1
+          fi
 
       - name: Set bundle version from build number
         script: |
           agvtool new-version -all "$(date +%s)"
+          # Bump marketing version (CFBundleShortVersionString) too — App Store
+          # Connect rejects re-uploading the same MARKETING_VERSION once a build
+          # has been approved. Derive monotonic 1.0.<BUILD_NUMBER> per CI run.
+          agvtool new-marketing-version "1.6"
         working_directory: ios/App
 
       - name: Fetch App Store signing files
@@ -123,12 +149,38 @@ workflows:
       - name: Build web app
         script: npm run build
 
+      - name: Check bundle size
+        script: node scripts/check-bundle-size.cjs
+
+      - name: Purge stale build outputs (anti-cache)
+        # Codemagic mac_mini_m2 persistent runners can keep stale dist/ +
+        # ios/App/App/public/ between builds. Wipe so each build refreshes.
+        script: |
+          rm -rf dist
+          rm -rf ios/App/App/public
+          npm run build
+
       - name: Sync Capacitor
         script: npx cap sync ios
+
+      - name: Verify packaged bundle matches fresh dist
+        script: |
+          DIST_INDEX=$(grep -oE 'index-[A-Za-z0-9_-]+\.js' dist/index.html | head -1)
+          PACK_INDEX=$(grep -oE 'index-[A-Za-z0-9_-]+\.js' ios/App/App/public/index.html | head -1)
+          echo "dist/ main bundle:       $DIST_INDEX"
+          echo "ios packaged bundle:     $PACK_INDEX"
+          if [ "$DIST_INDEX" != "$PACK_INDEX" ]; then
+            echo "ERROR: packaged bundle is stale; cap sync did not refresh ios/App/App/public"
+            exit 1
+          fi
 
       - name: Set bundle version from build number
         script: |
           agvtool new-version -all "$(date +%s)"
+          # Bump marketing version (CFBundleShortVersionString) too — App Store
+          # Connect rejects re-uploading the same MARKETING_VERSION once a build
+          # has been approved. Derive monotonic 1.0.<BUILD_NUMBER> per CI run.
+          agvtool new-marketing-version "1.6"
         working_directory: ios/App
 
       - name: Fetch App Store signing files
@@ -190,3 +242,266 @@ workflows:
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
         submit_to_app_store: false
+
+  android-internal-test:
+    # Build-only workflow producing a debug-signed APK + AAB for sideload testing.
+    # Used until the Google Play developer account identity verification clears.
+    # Once verified, switch to android-play-store workflow (TODO: add) which
+    # adds android_signing + publishing.google_play.
+    name: Android Internal Test Build
+    max_build_duration: 60
+    # mac_mini_m2 is on the free tier; linux_x2 requires a paid plan.
+    # Mac instances build Android fine via the bundled Android SDK + JDK.
+    instance_type: mac_mini_m2
+
+    environment:
+      vars:
+        PACKAGE_NAME: "com.kwanchunkit.constructionapp"
+        VITE_SUPABASE_URL: "https://syyntodkvexkbpjrskjj.supabase.co"
+        VITE_SUPABASE_ANON_KEY: "sb_publishable_BHKTjGCKkot6GVa2M6BCMQ_0qBAl1jP"
+      node: latest
+      java: 21
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+
+    scripts:
+      - name: Install Node dependencies
+        script: npm ci
+
+      - name: Build web app
+        script: npm run build
+
+      - name: Check bundle size
+        script: node scripts/check-bundle-size.cjs
+
+      - name: Purge stale build outputs (anti-cache)
+        # Codemagic mac_mini_m2 instances are persistent across builds.
+        # Stale `dist/` + `android/app/src/main/assets/public/` from prior
+        # builds can survive and get repackaged if cap sync's copy step
+        # doesn't fully overwrite. Wipe them so each build starts clean.
+        script: |
+          rm -rf dist
+          rm -rf android/app/src/main/assets/public
+          rm -f android/app/src/main/assets/capacitor.config.json
+          rm -f android/app/src/main/assets/capacitor.plugins.json
+          # Re-run vite build now that dist is gone.
+          npm run build
+
+      - name: Sync Capacitor
+        script: npx cap sync android
+
+      - name: Verify packaged bundle matches fresh dist
+        # Defensive check: confirm packaged index.html references the exact
+        # same main bundle hash that vite just emitted. Fail the build if not.
+        script: |
+          DIST_INDEX=$(grep -oE 'index-[A-Za-z0-9_-]+\.js' dist/index.html | head -1)
+          PACK_INDEX=$(grep -oE 'index-[A-Za-z0-9_-]+\.js' android/app/src/main/assets/public/index.html | head -1)
+          echo "dist/ main bundle:       $DIST_INDEX"
+          echo "android packaged bundle: $PACK_INDEX"
+          if [ "$DIST_INDEX" != "$PACK_INDEX" ]; then
+            echo "ERROR: packaged bundle is stale; cap sync did not refresh assets/public"
+            exit 1
+          fi
+
+      - name: Set Android version code from build number
+        script: |
+          cd android
+          echo "VERSION_CODE=$(($(date +%s) % 2100000000))" >> $CM_ENV
+          echo "VERSION_NAME=1.6" >> $CM_ENV
+
+      - name: Build debug APK + release AAB (debug-signed for now)
+        script: |
+          cd android
+          # Make gradlew executable — Windows doesn't preserve the +x bit
+          # when committing, so the script lands without exec permission on
+          # Mac/Linux runners.
+          chmod +x ./gradlew
+          # Debug APK — directly sideloadable on user's phone
+          ./gradlew assembleDebug \
+            -PversionCode=$VERSION_CODE \
+            -PversionName=$VERSION_NAME
+          # Release AAB — debug-signed; sufficient for Internal App Sharing
+          # in Play Console. Cannot be promoted to internal/production track
+          # until proper release keystore is configured (post identity-check).
+          ./gradlew bundleDebug \
+            -PversionCode=$VERSION_CODE \
+            -PversionName=$VERSION_NAME
+
+    artifacts:
+      - android/app/build/outputs/**/*.apk
+      - android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/**/mapping.txt
+
+  android-play-store:
+    # Release-signed AAB for Google Play Internal Testing track upload.
+    # Activated after Google Play developer identity verification cleared.
+    #
+    # Required Codemagic env-vars (set under Environment groups →
+    # `android_play_store_credentials`, marked secure):
+    #   CM_KEYSTORE          base64-encoded upload-keystore.jks
+    #   CM_KEYSTORE_PASSWORD store password
+    #   CM_KEY_ALIAS         alias name (e.g. 'upload')
+    #   CM_KEY_PASSWORD      key password (often same as store password)
+    #   GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS  service-account JSON for
+    #                        publishing.google_play (paste full JSON content)
+    #
+    # Generate keystore locally once (keytool from JDK 21):
+    #   keytool -genkey -v -keystore upload-keystore.jks -alias upload \
+    #     -keyalg RSA -keysize 2048 -validity 10000
+    # Then base64-encode + upload to Codemagic:
+    #   openssl base64 -A -in upload-keystore.jks -out upload-keystore.jks.b64
+    # Paste contents of .b64 into the CM_KEYSTORE env var (secure).
+    #
+    # CRITICAL: back up upload-keystore.jks somewhere safe. Losing it
+    # means you cannot ship updates to this app — Play will reject any
+    # AAB signed by a different upload key.
+    name: Android Play Store Release
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    environment:
+      groups:
+        - android_play_store_credentials
+      vars:
+        PACKAGE_NAME: "com.kwanchunkit.constructionapp"
+        VITE_SUPABASE_URL: "https://syyntodkvexkbpjrskjj.supabase.co"
+        VITE_SUPABASE_ANON_KEY: "sb_publishable_BHKTjGCKkot6GVa2M6BCMQ_0qBAl1jP"
+      android_signing:
+        - upload_keystore
+      node: latest
+      java: 21
+
+    # Triggered manually from Codemagic UI OR via API. Not auto-pushed
+    # to avoid every main commit creating a Play Console upload.
+    # Once you want auto-publishing, add:
+    #   triggering:
+    #     events: [push]
+    #     branch_patterns:
+    #       - pattern: main
+    #         include: true
+
+    scripts:
+      - name: Install Node dependencies
+        script: npm ci
+
+      - name: Build web app
+        script: npm run build
+
+      - name: Check bundle size
+        script: node scripts/check-bundle-size.cjs
+
+      - name: Purge stale build outputs (anti-cache)
+        # Codemagic mac_mini_m2 instances are persistent across builds.
+        # Stale `dist/` + `android/app/src/main/assets/public/` from prior
+        # builds can survive and get repackaged if cap sync's copy step
+        # doesn't fully overwrite. Wipe them so each build starts clean.
+        script: |
+          rm -rf dist
+          rm -rf android/app/src/main/assets/public
+          rm -f android/app/src/main/assets/capacitor.config.json
+          rm -f android/app/src/main/assets/capacitor.plugins.json
+          # Re-run vite build now that dist is gone.
+          npm run build
+
+      - name: Sync Capacitor
+        script: npx cap sync android
+
+      - name: Verify packaged bundle matches fresh dist
+        # Defensive check: confirm packaged index.html references the exact
+        # same main bundle hash that vite just emitted. Fail the build if not.
+        script: |
+          DIST_INDEX=$(grep -oE 'index-[A-Za-z0-9_-]+\.js' dist/index.html | head -1)
+          PACK_INDEX=$(grep -oE 'index-[A-Za-z0-9_-]+\.js' android/app/src/main/assets/public/index.html | head -1)
+          echo "dist/ main bundle:       $DIST_INDEX"
+          echo "android packaged bundle: $PACK_INDEX"
+          if [ "$DIST_INDEX" != "$PACK_INDEX" ]; then
+            echo "ERROR: packaged bundle is stale; cap sync did not refresh assets/public"
+            exit 1
+          fi
+
+      - name: Set Android version code from build number
+        script: |
+          cd android
+          # Play requires monotonically increasing versionCode across uploads.
+          # $BUILD_NUMBER is Codemagic's build counter — safe choice.
+          echo "VERSION_CODE=$BUILD_NUMBER" >> $CM_ENV
+          echo "VERSION_NAME=1.6" >> $CM_ENV
+
+      - name: Build release AAB (signed via Codemagic android_signing)
+        script: |
+          cd android
+          chmod +x ./gradlew
+          ./gradlew bundleRelease \
+            -PversionCode=$VERSION_CODE \
+            -PversionName=$VERSION_NAME
+
+    artifacts:
+      - android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/**/mapping.txt
+
+    # Auto-publish to Google Play Internal Testing is disabled until a
+    # Play Console service account JSON is provisioned. Re-enable by
+    # uncommenting the block below and setting
+    # GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS in Codemagic env vars
+    # (see Play Console → Setup → API access → Create service account).
+    #
+    # publishing:
+    #   google_play:
+    #     credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
+    #     track: internal
+
+  e2e-tests:
+    # Playwright E2E against the LIVE Supabase backend. Runs on the Codemagic
+    # runner because it has real network — the local build sandbox does not, so
+    # these specs (which log in to Supabase) can ONLY run here / in CI.
+    #
+    # playwright.config.ts auto-starts the app: webServer runs
+    # `npm run build && npm run preview` on :5173 (waits for 200), mobile viewport
+    # 390x844. Specs exercise the real DOM flows: drawings, SI/VO, PTW (+ fire-
+    # watch), account deletion.
+    #
+    # DEPENDS ON the test seed being present in the live project (applied once via
+    # the SQL editor): seed-test-auth.sql + seed-phase2.sql + seed-phase3.sql
+    # (personas 60000001-04 / 60000099, project 20002000, leaf 30003000). If the
+    # seed is missing the specs fail at login — that's a seed gap, not a code regression.
+    name: Playwright E2E (live Supabase)
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+
+    environment:
+      vars:
+        VITE_SUPABASE_URL: "https://syyntodkvexkbpjrskjj.supabase.co"
+        VITE_SUPABASE_ANON_KEY: "sb_publishable_BHKTjGCKkot6GVa2M6BCMQ_0qBAl1jP"
+        # Forces Playwright to start its own preview server (no reuse) + forbid .only.
+        CI: "true"
+      node: latest
+
+    # Runs on every push to main (the integration gate). Widen branch_patterns to
+    # 'claude/*' etc. to gate feature branches pre-merge (costs more CI minutes +
+    # more live-DB churn from the mutating specs).
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+
+    scripts:
+      - name: Install Node dependencies
+        script: npm ci
+
+      - name: Install Playwright Chromium
+        script: npx playwright install chromium
+
+      - name: Run E2E tests (Playwright builds + previews + runs all specs)
+        script: npm run test:e2e
+
+    artifacts:
+      # Traces (trace: retain-on-failure) for debugging any red spec.
+      - test-results/**
+      - playwright-report/**

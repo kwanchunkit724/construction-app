@@ -1,0 +1,21 @@
+# Mark binary assets so core.autocrlf=true never line-ending-munges them
+# (which would corrupt zip-based formats like .pptx and produce "empty" files).
+*.pptx  binary
+*.ppt   binary
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.ttf   binary
+*.otf   binary
+*.woff  binary
+*.woff2 binary
+*.aab   binary
+*.apk   binary
+*.ipa   binary
+*.jks   binary
+*.keystore binary
+*.xlsx  binary

@@ -1,0 +1,16 @@
+-- =============================================================
+-- v9-split/2-trg-si-submitted.sql — SI submission push fan-out
+-- =============================================================
+-- The SI submission push fan-out is implemented INSIDE the
+-- submit_si(p_si_id) RPC body (see supabase/v9-si-schema.sql).
+-- The RPC snapshots chain_steps into chain_snapshot AND calls
+-- push_dispatcher for chain_snapshot[0] holders within the same
+-- transaction — atomic submission + notification.
+--
+-- This file is intentionally a marker. No DDL required.
+-- Phase 3 PTW will instantiate the same pattern as submit_ptw().
+--
+-- Verification: select prosrc from pg_proc where proname='submit_si'
+--   must contain 'push_dispatcher(' and 'jsonb_agg('
+-- =============================================================
+select 'SI submission fan-out is implemented inside submit_si() — no separate trigger needed.' as note;

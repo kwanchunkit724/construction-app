@@ -1,6 +1,8 @@
 import { ReactNode } from 'react'
 import { BottomNav } from './BottomNav'
 import { Sidebar } from './Sidebar'
+import { OfflineBar } from './OfflineBar'
+import { HelpButton } from './tutorial/HelpButton'
 
 /**
  * Mobile: header + main + bottom nav (unchanged)
@@ -22,13 +24,15 @@ export function AppLayout({
 
       {/* Content area — pushed right on desktop to clear sidebar */}
       <div className="flex-1 flex flex-col md:pl-60 lg:pl-64">
+        <OfflineBar />
         {title && (
           <header
             className="sticky top-0 z-30 bg-white border-b border-site-200"
             style={{ paddingTop: 'env(safe-area-inset-top)' }}
           >
-            <div className={`max-w-2xl ${desktopMaxWidth} mx-auto px-4 md:px-6 py-3`}>
+            <div className={`max-w-2xl ${desktopMaxWidth} mx-auto px-4 md:px-6 py-3 flex items-center justify-between gap-2`}>
               <h1 className="text-lg md:text-xl font-bold text-site-900">{title}</h1>
+              <HelpButton variant="pill" />
             </div>
           </header>
         )}

@@ -1,0 +1,1248 @@
+{
+  "roles": [
+    {
+      "role": "admin (系統管理員 / 全域管理員)",
+      "summary": "The system owner/operator: creates and deletes site projects + their zones, assigns PMs, manages every user's global role, configures the SI/VO/PTW approval chains per project, flips the PTW feature flag, re-routes stuck approvals via admin_override, and has full read/write across all projects via RLS bypass — the one role that sees everything.",
+      "canDo": [
+        {
+          "feature": "Login as admin",
+          "route": "#/login",
+          "steps": "Open the live URL → it redirects to #/login. Enter phone (admin test account) + standard test password → tap 登入. AuthContext synthesizes <digits>@phone.local and signs in.",
+          "expected": "Lands on #/home. Sidebar (desktop ≥768px) shows admin-only extra entries 管理(Shield), 用戶(Users), 簽核流程設定(GitBranch); BottomNav (mobile) shows a 管理 tab. Verify these admin entries appear ONLY for global_role==='admin' (Sidebar.tsx isAdmin gate, BottomNav.tsx isAdmin gate)."
+        },
+        {
+          "feature": "Create a new site project (項目) with zones (分區)",
+          "route": "#/admin",
+          "steps": "Tap 新增工地項目 → CreateProjectModal opens. Type 項目名稱 (e.g. 油塘灣住宅發展項目 — DC2026). Default zone A 座 present; tap 加分區 to add more, fill 編號 + 分區名稱; remove with trash icon. Tap 建立項目.",
+          "expected": "createProject() inserts into projects with assigned_pm_ids=[] and created_by=profile.id. RLS 'Admin full access on projects' (v2-schema.sql L78) permits insert. Modal closes, list refetches, new card shows '{n} 個分區 · 0 位 PM'. Client validates: empty name → '請輸入項目名稱'; zero zones → '至少要有一個分區'; duplicate zone ids → '分區編號不可重複'."
+        },
+        {
+          "feature": "Assign / unassign PMs to a project",
+          "route": "#/admin",
+          "steps": "On a project card tap 指派 PM → AssignPMModal loads the PM list via admin_list_user_profiles() RPC, filtered to global_role==='pm'. Tick/untick PMs, tap 儲存（已選 N 人）.",
+          "expected": "assignPMs() writes projects.assigned_pm_ids (RLS admin-full-access permits update). Card 'N 位 PM' count updates. This is the gate that grants a PM project-level rights (dashboard, chain edit, membership approval). Verify a freshly created PM has no project powers until assigned here."
+        },
+        {
+          "feature": "Delete a project",
+          "route": "#/admin",
+          "steps": "On a project card tap the red trash icon → inline confirm shows 確認刪除 / 取消. Tap 確認刪除.",
+          "expected": "deleteProject() deletes the projects row; FK on delete cascade (project_members, approval_chain_steps, progress_items etc. reference projects on delete cascade) removes children. Card disappears, '當前可見項目' count drops. Verify cascade actually clears child rows (v2-schema project_members/projects FKs are on delete cascade)."
+        },
+        {
+          "feature": "Toggle the PTW (工作許可證) feature flag globally",
+          "route": "#/admin",
+          "steps": "At top of 管理 page, the PTW card shows a 已啟用/已關閉 button. Tap it to flip.",
+          "expected": "togglePtw() → setPtwEnabled() → set_ptw_enabled RPC (SECURITY DEFINER, admin-gated; app_config has deny-all RLS). When ON, PTW entries appear for all users (Sidebar showPtw); when OFF, only admin still sees PTW (Sidebar showPtw = ptwEnabled || isAdmin; PtwGate guards routes). Verify a non-admin loses the 工作許可證 nav entry and /ptw route once toggled OFF."
+        },
+        {
+          "feature": "Browse / search / filter every user",
+          "route": "#/admin/users",
+          "steps": "Page loads via admin_list_user_profiles() RPC. Type in 搜尋姓名/手機/公司 box; tap a role chip (全部/系統管理員/PM/總承建商/判頭/判頭工人/業主/安全主任/老總). Chip counts come from the full user list.",
+          "expected": "Full user list with phone, company, role pill, sub-role. Search filters by name/phone/company; chips filter by global_role. Verify the page header guard 只有系統管理員可以瀏覽此頁 shows for any non-admin who reaches it, and that admin_list_user_profiles raises 'admin only' for non-admins (RPC L155)."
+        },
+        {
+          "feature": "Edit a user's global role + main_contractor sub-role",
+          "route": "#/admin/users",
+          "steps": "Tap 編輯角色 on a user card → EditRoleModal. Pick a 全域角色; if 總承建商 chosen, pick 職位 (工程師/管工/安全部). Tap 儲存.",
+          "expected": "admin_update_user_role(p_target,p_global_role,p_sub_role) RPC (SECURITY DEFINER, admin-gated) writes the role — direct UPDATE is blocked by the enforce_user_profile_write_gate trigger for non-admins. Verify the 編輯角色 button is DISABLED for admin's own row (disabled={u.id===profile.id}). NOTE BUG: the role picker only lists admin/pm/main_contractor/subcontractor/subcontractor_worker/owner — it CANNOT set safety_officer or general_foreman even though both are valid GlobalRole values used by PTW chains and v13/v15. Flag this gap."
+        },
+        {
+          "feature": "View a user's in-flight SI/VO approval queue and re-route via admin_override",
+          "route": "#/admin/users",
+          "steps": "Tap 查看待處理簽核 on a user card → InFlightApprovalsModal. It lists SI/VO in submitted/in_review/revision_requested where that user is the current step holder (by chain role / optional_user_id / creator). Tap 重新分派 on a row → enter ≥10-char reason → 確認介入.",
+          "expected": "submit_approval(p_action_type='admin_override', reason≥10) advances/re-routes the doc and writes an append-only approvals audit row. Admin RLS sees all SI/VO. Verify reason <10 chars is rejected ('原因需至少 10 個字元') and that admin_override is logged. Per v9 note, admin_override must NOT satisfy a safety_officer PTW step — confirm PTW is intentionally excluded here (modal only loads SI+VO)."
+        },
+        {
+          "feature": "Configure SI / VO / PTW approval chains per project",
+          "route": "#/admin/projects/:id/chains",
+          "steps": "From 管理 tap 簽核流程 on a project card. Switch tabs SI/VO/PTW. Add/remove/reorder steps (加入步驟, up/down arrows, remove), pick required_role per step + optional specific user, or tap 預設範本 to load defaults. Tap 儲存.",
+          "expected": "saveChain() writes approval_chain_steps; RLS 'Admin or assigned PM writes chain' permits admin insert/update/delete (v9-chain-schema L122-141). canEdit true for admin so the editor (not read-only banner) shows. Already-submitted docs keep their frozen chain_snapshot. Verify changes persist after refresh."
+        },
+        {
+          "feature": "Approve / reject ANY project membership application",
+          "route": "#/projects",
+          "steps": "On 工地 page, 待審核申請 section. As admin, pendingForMe returns ALL pending memberships (Projects.tsx L50 'if admin return true'). Tap 批准 or 拒絕 on an applicant card.",
+          "expected": "approveMembership/rejectMembership UPDATE project_members.status; RLS 'Admin updates memberships' (v2-schema L136) permits it. KNOWN FRICTION BUG: the applicant name/phone in PendingApprovalCard is fetched via a DIRECT user_profiles SELECT (Projects.tsx L187), not the admin RPC. Under v17 narrowed SELECT policy (self / shares_project_with / is_pm_of_applicant) the admin does NOT match a brand-new applicant who shares no project, so the card shows 載入中.../? indefinitely. Verify and flag — admin approves blind."
+        },
+        {
+          "feature": "View the cross-project PM/admin dashboard",
+          "route": "#/dashboard",
+          "steps": "Tap 儀表板 in sidebar (visible because showDashboard = isAdmin || isPM).",
+          "expected": "Dashboard renders for admin. Verify charts/aggregates load across projects admin can read (admin RLS sees all projects/progress)."
+        },
+        {
+          "feature": "Open ANY project and all its tabs (full read/write bypass)",
+          "route": "#/project/:id (+ /si /vo /ptw /daily /materials /timetable /contacts /issue/:id)",
+          "steps": "From 工地 or by navigating, open any project even without a membership row. Open SI/VO lists, PTW (admin always sees PTW entry), daily logs, materials, timetable, contacts, issues.",
+          "expected": "Admin RLS bypass policies (v12-admin-bypass-* across v11 tables, can_view_project, can_manage_project_progress admin branch) let admin read/manage everything. Verify admin can add 大項/中項/細項 in progress (can_manage_project_progress admin branch true) and edit chains/issues regardless of membership."
+        },
+        {
+          "feature": "Export projects + assigned-PM roster to Excel",
+          "route": "#/admin",
+          "steps": "Tap the download icon next to 新增工地項目.",
+          "expected": "handleExport() pulls assigned PM profiles via admin_list_user_profiles() RPC then exportProjectsToExcel(). Verify an .xlsx downloads listing projects and their PMs (web-only; download UX)."
+        },
+        {
+          "feature": "Manual refresh of admin lists",
+          "route": "#/admin and #/admin/users",
+          "steps": "Tap the RefreshCw icon button on either page.",
+          "expected": "Re-runs refetch()/fetchUsers(); spinner animates while loading. Verify counts update after a change made elsewhere."
+        }
+      ],
+      "cannotDo": [
+        {
+          "feature": "Demote / delete THE admin's own account-criticality (self role-edit)",
+          "expected": "On #/admin/users the 編輯角色 button is hard-disabled for the admin's own row (disabled={u.id===profile.id}). Verify the button is greyed and unclickable; admin cannot accidentally strip their own admin role here."
+        },
+        {
+          "feature": "Set a user to safety_officer or general_foreman via the UI",
+          "expected": "GAP (not a security gate but a missing capability): EditRoleModal's role list omits safety_officer + general_foreman, so admin literally cannot assign these roles in the app even though admin_update_user_role accepts any text and PTW chains require safety_officer. Verify the two roles are absent from the picker; flag as a real bug for sale."
+        },
+        {
+          "feature": "Directly PATCH user_profiles role/phone/id from the client",
+          "expected": "Even as admin the app never does a raw UPDATE on user_profiles role — it must go through admin_update_user_role RPC. The enforce_user_profile_write_gate trigger reverts global_role/sub_role/phone/id on direct UPDATE unless caller is admin; the SELECT/UPDATE narrowing means admin enumeration is RPC-only. Verify a direct REST PATCH of another user's global_role (non-RPC) is rejected/no-ops for non-admins (the v17 self-promotion hole is closed)."
+        },
+        {
+          "feature": "Insert approvals or mutate the audit ledger directly",
+          "expected": "approvals table: INSERT policy with check(false) (RPC-only via submit_approval), NO update, NO delete policy — append-only. Verify admin cannot edit/delete an approvals row even from the override flow; only submit_approval writes."
+        },
+        {
+          "feature": "Use admin_override to satisfy a PTW safety_officer sign-off step",
+          "expected": "Per v9-chain-schema threat note T-02-04, admin_override must NOT discharge a safety_officer PTW step. The InFlightApprovalsModal only loads SI+VO (ACTIVE_STATUSES query on site_instructions/variation_orders) — PTW is intentionally NOT re-routable here. Verify no PTW rows appear in the re-route modal, so safety sign-off can't be admin-bypassed."
+        },
+        {
+          "feature": "Read/write the server-only push tables (notification_counters / notification_digest) or app_config directly",
+          "expected": "These tables have RLS enabled with NO client policies (deny-all). app_config is deny-all and only mutated via set_ptw_enabled RPC. Verify a direct client SELECT on notification_counters/app_config returns zero rows / permission denied even for admin."
+        },
+        {
+          "feature": "Reach sales/marketing surfaces inside the native app",
+          "expected": "/mission, /sell, /takeaway routes are registered only when !Capacitor.isNativePlatform(). On the native iOS/Android shell these fall through to /home. (On web they ARE reachable — public, no auth.) Verify on native build the admin cannot navigate to #/sell etc."
+        }
+      ],
+      "handoffs": [
+        {
+          "withRole": "pm",
+          "flow": "Admin creates the project + zones and assigns PM(s) (assigned_pm_ids). Only then does that PM gain project-level powers (dashboard, membership approval, chain editing, can_manage_project_progress). Admin → PM is the bootstrap handoff for every site."
+        },
+        {
+          "withRole": "all roles (pm, general_foreman, main_contractor, subcontractor, subcontractor_worker, owner, safety_officer)",
+          "flow": "Admin sets each user's global_role on #/admin/users (via admin_update_user_role RPC). The global role determines what each role can do app-wide — e.g. only pm/general_foreman global roles can add 大項/中項/細項 (the known can_manage_project_progress gate). Admin → everyone defines the RBAC baseline."
+        },
+        {
+          "withRole": "new applicants (any joining role)",
+          "flow": "A user applies to a project on #/projects (status pending). Admin (or the project PM, or a subcontractor for workers) approves/rejects in 待審核申請. Admin can approve ANY pending application system-wide — backstop when no PM is assigned yet."
+        },
+        {
+          "withRole": "main_contractor + pm + owner + safety_officer (approval chain participants)",
+          "flow": "Admin defines the SI/VO/PTW approval chains per project on /admin/projects/:id/chains (who signs in what order). Those chain steps drive which role each SI/VO/PTW routes to. Admin → chain → approvers' queues."
+        },
+        {
+          "withRole": "main_contractor / pm (stuck approvers)",
+          "flow": "When an approver is on leave/left and an SI/VO is stuck on their step, admin uses 查看待處理簽核 → 重新分派 (admin_override with ≥10-char reason) to push the doc forward, logging an audit entry. Admin unblocks the approval chain for the other roles."
+        },
+        {
+          "withRole": "all roles (PTW availability)",
+          "flow": "Admin flips the global PTW feature flag on #/admin. Turning it on/off makes the 工作許可證 entry and /ptw routes appear/disappear for every non-admin role; admin always retains PTW visibility for staging/review."
+        }
+      ]
+    },
+    {
+      "role": "pm (項目經理 / Project Manager)",
+      "summary": "The site's project manager: builds and owns the progress tree, assigns work to 總承建商/判頭, approves who joins the site, sits on the SI/VO approval chain (step 1 — after main_contractor), and reads the cross-project dashboard + exports reports.",
+      "canDo": [
+        {
+          "feature": "See the PM dashboard (cross-project rollup + activity feed)",
+          "route": "#/dashboard (sidebar 「儀表板」 link only appears for admin or assigned PM)",
+          "steps": "Login as 60001001 李PM → on desktop the left Sidebar shows 「儀表板」 (Sidebar.tsx:19-21 isPM = projects.some(assigned_pm_ids includes me)). Click it.",
+          "expected": "Loads (Dashboard.tsx:42 visibleProjects = projects where assigned_pm_ids.includes(me)). Should show 油塘灣 project card with progress rollup, hero stats (工地總數/進度正常/進度落後/處理中問題), and 最近動態 feed. VERIFY: gate at Dashboard.tsx:151 redirects to /home if NOT admin and NOT assigned PM — so a PM only sees projects where they are in assigned_pm_ids, never others."
+        },
+        {
+          "feature": "Open the project they manage and see the FULL progress tree",
+          "route": "#/project/:id (tab 進度)",
+          "steps": "Home 「我的工地」 → tap 油塘灣灣住宅發展項目. Progress tab is default.",
+          "expected": "Full tree of all 大項/中項/細項 across all zones renders. Visibility comes from RPC get_visible_progress_items (ProgressContext.tsx:99). PER v14-supervisor-narrowing.sql: a non-admin caller gets the full project set ONLY IF (a) they have an APPROVED project_members row AND (b) global_role in (pm, general_foreman). VERIFY the tree is non-empty. SEE cannotDo note about the assigned-PM-without-membership gap."
+        },
+        {
+          "feature": "Add a 大項 (root progress item) in a zone",
+          "route": "#/project/:id → 進度 tab → zone card → 「加入大項」 button",
+          "steps": "Inside the project, each ZoneSection shows a 「加入大項」 button when canEdit is true (ProjectDetail.tsx:433). Tap it → CreateItemModal → enter code+title → save.",
+          "expected": "Button visible because ProgressContext.canManageStructure is true for PM (ProgressContext.tsx:63-75: admin OR assigned_pm OR (global_role pm/general_foreman AND approved membership)). INSERT allowed server-side by v15 policy 'Managers can insert progress items' → can_manage_project_progress(). New 大項 appears at level 1. VERIFY it then shows in the tree (this is where the assigned-PM-no-membership bug bites — see cannotDo)."
+        },
+        {
+          "feature": "Add 中項/細項 (child items) and build the multi-level tree",
+          "route": "#/project/:id → 進度 tab → expand an item → 「加入子項」 on ProgressItemCard",
+          "steps": "Expand a 大項 → the card exposes an add-child affordance (ProjectDetail.tsx onAddChild → CreateItemModal with parent). Set tracking_mode percentage or floors (floor_labels). Save.",
+          "expected": "Child created at parent.level+1 (ProgressContext.addItem:142). Zone inherits parent.zone_id. Roll-up recomputes (computeRollup over descendant leaves). VERIFY parent % auto-aggregates from leaves."
+        },
+        {
+          "feature": "Delete a progress item",
+          "route": "#/project/:id → 進度 tab → item card delete action",
+          "steps": "On a ProgressItemCard, use the delete control (ProjectDetail.tsx:241 onDelete → deleteItem). Confirm.",
+          "expected": "Allowed by v15 'Managers can delete progress items' → can_manage_project_progress(). Cascade deletes children (parent_id ON DELETE CASCADE, v3-progress-schema.sql:13). VERIFY item + descendants disappear."
+        },
+        {
+          "feature": "Assign work (負責人 = 總承建商員工) and delegate (委派 = 判頭) on a leaf item",
+          "route": "#/project/:id → 進度 tab → item card → 指派/委派 (AssignmentModal)",
+          "steps": "Tap the assign control on an item. Modal has two tabs: 負責人 (candidates = approved main_contractor members) and 委派判頭 (candidates = approved subcontractor members). Tick people → 儲存.",
+          "expected": "setAssignment writes assigned_to/delegated_to (ProgressContext.setAssignment:220, allowed because canManageStructure→UPDATE policy passes). Candidate lists come from useProjects().memberships filtered to approved (AssignmentModal.tsx:36-41). VERIFY: candidates only show if there ARE approved main_contractor / subcontractor members; otherwise '此工地暫無已批准的…' empty state. The assignee then gains can_update_progress_item on that row."
+        },
+        {
+          "feature": "Update progress % / floors on any item (supervisor override)",
+          "route": "#/project/:id → 進度 tab → item card → 更新 (UpdateProgressModal)",
+          "steps": "Tap 更新 on any leaf → enter actual % (or tick floors) + notes → save.",
+          "expected": "canUpdateItem returns true for PM via canManageStructure short-circuit (ProgressContext.tsx:79-86). Server UPDATE policy 'Assignees or managers can update' passes. Status auto-derives (deriveStatus). A progress_history row is recorded. VERIFY history via HistoryModal."
+        },
+        {
+          "feature": "View item progress history",
+          "route": "#/project/:id → 進度 tab → item card → 歷史 (HistoryModal)",
+          "steps": "Tap history control → modal lists progress_history entries newest-first.",
+          "expected": "fetchHistory queries progress_history (ProgressContext.tsx:233). VERIFY each update the PM/assignee made appears with %/floors/notes/timestamp."
+        },
+        {
+          "feature": "Approve / reject membership applications for their project",
+          "route": "#/projects → 「待審核申請」 section",
+          "steps": "Go to 工地 tab. pendingForMe (Projects.tsx:42-62) lists pending applications where project.assigned_pm_ids includes me. Each PendingApprovalCard has 拒絕 / 批准.",
+          "expected": "approveMembership/rejectMembership update project_members (ProjectsContext.tsx:148-174). Server allows via 'PM approves memberships' policy (v2-schema.sql:142, gated on assigned_pm_ids). VERIFY applicant moves to approved and disappears from pending; applicant's Home shows 「工地申請已通過」."
+        },
+        {
+          "feature": "Approve / 批准並修改 / 退回 / 拒絕 a Site Instruction (SI) at the PM step",
+          "route": "#/project/:id/si → tap an SI → bottom SiApproverBar",
+          "steps": "Open 簽核 tab → 工地指令 → open an SI whose status is 審批中 (in_review) and whose current chain step required_role = 'pm'. Default chain is main_contractor → pm (v9-default-chain-seed.sql:106), so after the 總承建商 approves step 0, it lands on the PM. Use 批准 / 批准並修改 / 退回 (≥10 char reason) / 拒絕 (≥10 char reason).",
+          "expected": "SiApproverBar.canAct (SiApproverBar.tsx:26-31) shows buttons when status==='in_review' and profile.global_role===requiredRole ('pm'). Action goes through submit_approval RPC (SiContext.callApproval), which re-validates the caller is in active_role_holders for the step (v9-rpc-submit-approval.sql:82). NOTE active_role_holders includes assigned PMs for required_role='pm' (v9-rls-helpers.sql:40-43), so an assigned PM passes server-side even via the assigned_pm path. VERIFY status advances; on final-step approve the SI locks."
+        },
+        {
+          "feature": "Approve a Variation Order (VO) at the PM step",
+          "route": "#/project/:id/vo → tap a VO → VO approver bar",
+          "steps": "簽核 tab → 變更指令 → open a VO in 審批中 sitting at the PM step. Default VO chain is main_contractor → pm → owner (v9-default-chain-seed.sql:112). Approve / request revision / reject.",
+          "expected": "Same submit_approval RPC path (doc_type='vo'). PM gated identically to SI. After PM approves, VO advances to owner step. VERIFY HKD total_amount_cents is server-recomputed (recompute_vo_totals) and not editable by client to a wrong value."
+        },
+        {
+          "feature": "Create a Site Instruction (SI) draft and submit it",
+          "route": "#/project/:id/si → 新增",
+          "steps": "簽核 tab → 工地指令 → 「新增」 (button shows because SiContext.canSubmit includes 'pm', SiContext.tsx:39-42) → fill title/description/photos/voice/geo → save version → submit.",
+          "expected": "createDraftSi inserts site_instructions (RLS 'Submitter creates SI' requires can_edit_project_progress — PM qualifies via assigned_pm OR member role 'pm', v3:51-71). submit_si snapshots the chain and pushes step-0 holders. VERIFY SI appears with status 待批准/審批中."
+        },
+        {
+          "feature": "Submit a Variation Order against a locked SI",
+          "route": "#/project/:id/si/:siId → 「提出變更指令」 (only when SI status = locked)",
+          "steps": "Open a locked SI → 「提出變更指令」 button (SiDetail.tsx:186, canSubmitVO includes 'pm') → fill line items → submit.",
+          "expected": "VoSubmitForm creates the VO; total computed server-side. VERIFY confirmation screen shows server total and the SI now links to the VO."
+        },
+        {
+          "feature": "Report and manage Issues; act as handler when escalated to PM",
+          "route": "#/project/:id → 問題 tab; #/project/:id/issue/:issueId",
+          "steps": "問題 tab → 報告新問題 (shown because myRoleInProject is truthy, ProjectDetail.tsx:253). Open an issue: PM can comment, and can 上呈/標記為已解決/重新開啟 when current_handler_role='pm'.",
+          "expected": "canActOnIssue(myRole='pm', handler='pm') === true (IssuesContext.tsx:248-255). PM is the top of the escalation chain (getNextHandler('pm')=null, types.ts:243) — escalate is terminal. Issues reported by main_contractor/owner/pm/admin route directly to pm handler (getInitialHandler). VERIFY resolve marks resolved_by + timestamp."
+        },
+        {
+          "feature": "Export progress report (PDF/Excel) and issues Excel",
+          "route": "#/project/:id → top-bar Download (匯出) menu",
+          "steps": "On 進度 tab open the 匯出 menu → 「匯出進度報告…」 (ExportProgressModal). On 問題 tab → 「匯出 Excel」.",
+          "expected": "ExportProgressModal builds report via src/lib/export.ts; issues export fetches reporter/resolver profiles then exportIssuesToExcel (ProjectDetail.tsx:170-181). VERIFY a file downloads. NOTE: SI/VO and Tools tabs intentionally show 「此頁面冇匯出選項」."
+        },
+        {
+          "feature": "Use site tools: 每日日誌, 物料, 行事曆, 聯絡人",
+          "route": "#/project/:id/daily, /materials, /timetable, /contacts (mobile: 工具 tab)",
+          "steps": "Desktop: sidebar links appear when inside a project (Sidebar.tsx:33-41). Mobile: 工具 tab → ToolsSwitcher cards. Open each.",
+          "expected": "Routes are member-gated, not admin-gated (App.tsx:89-93). PM as project supervisor can view/edit daily diary, materials, timetable, contacts. VERIFY each list loads for the project."
+        },
+        {
+          "feature": "View SI/VO version history, approval timeline, and post-lock 抗議 comments",
+          "route": "#/project/:id/si/:siId → tabs 詳情 / 版本歷史 / 簽核紀錄 / 抗議",
+          "steps": "Open any SI → switch tabs. 抗議 tab only appears when status=locked (SiDetail.tsx:124).",
+          "expected": "簽核紀錄 shows full approval audit (who/when/action/reason). 抗議 lets PM add protest comments only after lock (RLS 'Insert protest only when locked'). VERIFY the audit trail is immutable/append-only."
+        }
+      ],
+      "cannotDo": [
+        {
+          "feature": "Access Admin area — create/delete projects, manage all users, configure approval chains",
+          "expected": "Routes /admin, /admin/users, /admin/projects/:id/chains are wrapped in <ProtectedRoute requireAdmin> (App.tsx:76-78). ProtectedRoute.tsx:10 redirects to /home when global_role !== 'admin'. VERIFY: navigating to #/admin as PM bounces to Home; Sidebar never renders 管理/用戶/簽核流程設定 for a PM (Sidebar.tsx:42-46 isAdmin only). NOTE: editing the per-project approval chain via save_chain_steps RPC IS allowed for an assigned PM (v9-default-chain-seed.sql:67-72), but there is NO PM-facing UI entry — only the admin-gated AdminProjectChains page reaches it, so in practice the PM cannot configure chains through the app."
+        },
+        {
+          "feature": "Approve an SI/VO step that is NOT assigned to the PM role",
+          "expected": "SiApproverBar renders nothing when canAct is false and user isn't admin (SiApproverBar.tsx:83). For step 0 (required_role main_contractor) the PM sees no action buttons. Even if a PM forged a submit_approval call, the RPC raises '你冇權批准呢個步驟' because they aren't in active_role_holders for main_contractor (v9-rpc-submit-approval.sql:83). VERIFY: open an SI sitting at the main_contractor step as PM → no approve bar."
+        },
+        {
+          "feature": "Admin override (管理員介入) on SI/VO",
+          "expected": "The 管理員介入 button only renders for isAdmin (SiApproverBar.tsx:132). Server: submit_approval action_type='admin_override' raises 'admin_override requires admin role' for non-admin (v9-rpc-submit-approval.sql:74). VERIFY PM never sees the purple 管理員介入 button."
+        },
+        {
+          "feature": "Approve memberships / see progress for a project the PM is NOT assigned to",
+          "expected": "pendingForMe only includes projects where assigned_pm_ids includes the PM (Projects.tsx:51). RLS 'PM approves memberships' / 'PM reads project memberships' both key on assigned_pm_ids (v2-schema.sql:115,142). get_visible_progress_items returns empty for a non-member, non-assigned project. VERIFY a PM cannot see or approve applications for an unrelated site."
+        },
+        {
+          "feature": "Manage users globally (change roles, delete other users)",
+          "expected": "user_profiles update policy is 'Users can update own profile' only (v2-schema.sql:73). No PM-wide user management UI (only /admin/users, admin-gated). VERIFY PM cannot change another user's global_role."
+        },
+        {
+          "feature": "Insert into approvals table directly (bypass the chain RPC)",
+          "expected": "approvals INSERT policy is `with check (false)` (v9-si-schema.sql:360-362) — the ONLY write path is the submit_approval SECURITY DEFINER RPC. VERIFY a raw insert from the client is rejected by RLS regardless of role."
+        },
+        {
+          "feature": "Delete an SI/VO or edit a locked SI version",
+          "expected": "No DELETE policy on site_instructions/si_versions (append-only). si_lock_guard trigger rejects new versions once locked ('工地指令已鎖定…'). Creator can only UPDATE while status=draft (v9-si-schema.sql:119-126). VERIFY PM cannot mutate a locked SI."
+        }
+      ],
+      "handoffs": [
+        {
+          "withRole": "subcontractor (判頭) / subcontractor_worker / main_contractor",
+          "flow": "Onboarding: a 判頭/員工 applies to the PM's site (#/projects → 申請加入工地, status=pending) → PM sees it in 待審核申請 and approves/rejects (#/projects). Only after approval do they become an approved member and gain visibility/issue-reporting on the site."
+        },
+        {
+          "withRole": "main_contractor (負責人) and subcontractor (判頭)",
+          "flow": "Work assignment: PM builds the 大項/中項/細項 tree, then via AssignmentModal assigns leaf items to 總承建商員工 (負責人) and/or 委派 to 判頭. Those assignees then gain can_update_progress_item on exactly those rows and can tick progress, which rolls back up into the PM's dashboard."
+        },
+        {
+          "withRole": "main_contractor",
+          "flow": "SI/VO approval chain (default main_contractor → pm[→ owner for VO]): a submitter (often subcontractor/main_contractor) creates+submits an SI/VO → step 0 main_contractor approves → it escalates to the PM, who approves/退回/拒絕 at step 1. PM is the second signer; for VO the document then continues to the owner."
+        },
+        {
+          "withRole": "owner (業主)",
+          "flow": "VO final approval: after the PM approves a VO (step 1), it advances to the owner (step 2, the final signer) per the default VO chain. PM hands the cost-bearing decision up to the owner."
+        },
+        {
+          "withRole": "subcontractor → main_contractor → pm (issue escalation)",
+          "flow": "Issue escalation chain: worker→判頭→總承建商→PM. The PM is the terminal handler — issues reported by main_contractor/owner/pm land directly on the PM, and main_contractor can escalate up to the PM, who resolves them (escalate beyond PM is disabled)."
+        },
+        {
+          "withRole": "admin",
+          "flow": "Project setup: admin creates the project, defines zones, and adds the PM to assigned_pm_ids (and configures the approval chain). The PM then takes over day-to-day: progress tree, assignments, membership approvals, and SI/VO sign-off. Admin retains 管理員介入 as the override escape hatch on stuck SI/VO chains."
+        }
+      ]
+    },
+    {
+      "role": "general_foreman (工地主任 / 老總)",
+      "summary": "On-site general foreman: a \"supervisor tier\" role that tracks/structures progress for the whole project, manages on-site materials and the contact directory, reports & comments on issues — but is NOT a daily-log author, NOT in the SI/VO/PTW approval chains, and has NO dashboard/admin access. Permission split is messy: GF is a supervisor for progress (v15) and materials (v16) but is excluded from the SI/VO/PTW `can_edit_project_progress` gate (v3) and the contacts write RLS (v11), while the client still shows VO + contacts write buttons → two real UI/RLS privilege bugs.",
+      "canDo": [
+        {
+          "feature": "Log in by phone + view 我的工地 (home)",
+          "route": "#/login → #/home",
+          "steps": "Open the live app. Enter phone 60001002 (王老總) + the standard test password, tap 登入. Land on #/home.",
+          "expected": "Welcome card shows 王老總 with role label 老總 (ROLE_ZH.general_foreman). 我的工地 lists 「油塘灣住宅發展項目 — DC2026」 with the per-project role label. Sidebar/BottomNav render. Verify NO 儀表板/管理/用戶 links appear (showDashboard = admin||assigned-PM only; GF is neither)."
+        },
+        {
+          "feature": "Apply to join a project (申請加入工地)",
+          "route": "#/projects",
+          "steps": "Tap 工地. Tap 申請加入工地, pick a project + role general_foreman, submit.",
+          "expected": "Row appears under 我的工地 with status 待審核 (pending). project_members insert succeeds (v26 discovery policy lets any authenticated user read the project list to apply). After an admin/PM approves, status flips to 已加入 and the project becomes openable. NOTE: GF cannot self-approve; approval must come from admin or the project's assigned PM."
+        },
+        {
+          "feature": "View full progress tree for the whole project",
+          "route": "#/project/:id  (進度 tab)",
+          "steps": "Open the DC2026 project → 進度 tab. Expand zones and 大項/中項/細項.",
+          "expected": "Every progress_items row in the project renders (get_visible_progress_items v14 returns the full tree for global_role general_foreman, unlike foreman/engineer/判頭 who only see assigned items + ancestors). Top stat tiles (已完成/進行中/落後/未開始) populate."
+        },
+        {
+          "feature": "Add structure — 大項 (root), 中項/細項 (children)",
+          "route": "#/project/:id  (進度 tab)",
+          "steps": "In a zone card tap 加入大項 → fill code+title → save. On any row open the ⋮ kebab → 加細項 → save.",
+          "expected": "New rows persist and reappear after 刷新. canManageStructure is true for GF (ProgressContext mirrors can_manage_project_progress v15, which includes approved member with global_role general_foreman). Server INSERT passes the 'Managers can insert progress items' policy."
+        },
+        {
+          "feature": "Update progress % / floors on any leaf, view 歷史",
+          "route": "#/project/:id  (進度 tab)",
+          "steps": "On a leaf tap the orange 更新 (Edit3) button → set %/tick floors + notes → save. Reopen ⋮ → 歷史.",
+          "expected": "actual_progress/status update, a progress_history row is written, 歷史 modal lists the entry. canUpdateItem returns true via canManageStructure; UPDATE passes 'Assignees or managers can update progress items' (v15)."
+        },
+        {
+          "feature": "Assign / delegate a leaf to members; delete a row",
+          "route": "#/project/:id  (進度 tab)",
+          "steps": "On a leaf ⋮ → 指派 → pick approved members (assigned/delegated) → save. To delete: ⋮ → 刪除 → 確認刪除.",
+          "expected": "AssignmentModal picker is populated (v21 'Approved members read project peers' lets a non-PM supervisor see peers). setAssignment + deleteItem succeed (delete passes 'Managers can delete progress items'). Verify the assignee badge appears in the expanded leaf detail."
+        },
+        {
+          "feature": "Manage drawings on a leaf (圖則版本管理)",
+          "route": "#/project/:id  (進度 tab → leaf ⋮ → 圖則)",
+          "steps": "Open a leaf ⋮ menu → 圖則 (N). Upload a PDF/image as a new version; mark current/superseded.",
+          "expected": "Drawings section opens inline; upload succeeds because drawings write RLS mirrors can_edit_project_progress AND drawings use the supervisor set — verify the version appears with 現行 status. (If upload is denied, that is a finding: drawings write also keys off can_edit_project_progress which excludes GF membership role — test this explicitly.)"
+        },
+        {
+          "feature": "Report a new issue (報告新問題)",
+          "route": "#/project/:id  (問題 tab)",
+          "steps": "問題 tab → 報告新問題 → title + description + optional photo → submit.",
+          "expected": "Issue created; reporter_role = general_foreman; current_handler_role routes to pm (getInitialHandler default branch). Insert passes 'Members create issues' (can_view_project + reporter_id=self)."
+        },
+        {
+          "feature": "Comment on any visible issue; reopen own resolved issue",
+          "route": "#/project/:id/issue/:issueId",
+          "steps": "Open an issue → type in 留言 box → 送出留言. For an issue you reported that is resolved: tap 重新開啟.",
+          "expected": "Comment inserts (issue_comments insert needs only can_view_project). 重新開啟 works because the issues UPDATE policy allows reporter_id = auth.uid() (v4-fix). Verify the activity log shows the reopened event."
+        },
+        {
+          "feature": "Create / edit / delete on-site materials (叫料 + 收料)",
+          "route": "#/project/:id  (工具 tab → 物料) or sidebar 物料",
+          "steps": "Open 物料 → tap the + FAB (加物料) → fill name/unit/qty/planned arrival → save. Edit any row (Pencil), record incoming qty (收料), or delete.",
+          "expected": "FAB visible (canManage includes general_foreman). Create/edit/delete ALL rows succeed — GF is a material supervisor in both UI (isSupervisor) and RLS (is_material_supervisor v16 includes general_foreman). Verify you can edit a row another user requested (supervisor right), not just your own."
+        },
+        {
+          "feature": "View daily logs (read-only), pick any past date",
+          "route": "#/project/:id  (工具 tab → 每日日誌) or sidebar 每日日誌",
+          "steps": "Open 每日日誌. Change the date picker to past days. Read other members' submissions.",
+          "expected": "All members' dailies render (dailies_select = any approved member). An amber banner 「你嘅角色唔可以寫每日日誌，只能閱讀」 shows on today, and NO 填寫今日日誌 CTA appears (canAuthor is false for GF). This is READ-ONLY — see cannotDo."
+        },
+        {
+          "feature": "View the unified 行事曆 (timetable)",
+          "route": "#/project/:id  (工具 tab → 行事曆) or sidebar 行事曆",
+          "steps": "Open 行事曆 and scroll material-arrival / progress-completion / meeting markers.",
+          "expected": "get_timetable RPC returns events for approved members; markers render. Read access works for GF as an approved member."
+        },
+        {
+          "feature": "View contact directory + tap-to-call",
+          "route": "#/project/:id  (工具 tab → 聯絡人) or sidebar 聯絡人",
+          "steps": "Open 聯絡人, search/filter by trade, tap a phone number.",
+          "expected": "Contact list loads (contacts_select = any approved member) and tel: links work. Reading is fine — but writing is where the bug is (see cannotDo / handoffs)."
+        },
+        {
+          "feature": "Create a Variation Order (VO) — ATTEMPT (will fail server-side)",
+          "route": "#/project/:id/vo",
+          "steps": "Open 變更指令 (VO). The 新增 button IS shown to GF (VoContext.canSubmit includes general_foreman). Start a draft against a locked SI and try to save/submit.",
+          "expected": "BUG TO VERIFY: the 新增 button renders for GF, but the variation_orders INSERT RLS ('Creator inserts draft VO') gates on can_edit_project_progress, which only accepts membership role in (pm, main_contractor, subcontractor) — general_foreman is excluded. Expect the create/submit to return a row-level-security error. UI offers an action the DB rejects — flag as a privilege/UX bug before sale."
+        },
+        {
+          "feature": "View SI / VO / approval documents (read)",
+          "route": "#/project/:id/si , #/project/:id/vo",
+          "steps": "Open 工地指令 (SI) and 變更指令 (VO) lists; open a document to read versions + approval trail.",
+          "expected": "Lists and details load (Members view SI/VO = can_view_project, true for approved GF). GF can read everything but the SI 新增 button is hidden (SiContext.canSubmit excludes general_foreman)."
+        },
+        {
+          "feature": "Export progress report / issues Excel",
+          "route": "#/project/:id  (Download menu in header)",
+          "steps": "On 進度 tab use the Download icon → 匯出進度報告… . On 問題 tab → 匯出 Excel.",
+          "expected": "Client-side export (xlsx/jspdf) runs over already-fetched data; file downloads. No special RLS — works for GF since they can read the full tree."
+        }
+      ],
+      "cannotDo": [
+        {
+          "feature": "Write / edit a daily site log (每日日誌)",
+          "expected": "GATE MUST HOLD. UI: no 填寫/編輯今日日誌 CTA; an amber banner explains GF can only read. RLS: dailies_insert requires global_role='main_contractor' AND sub_role in (foreman,engineer); GF is rejected even via direct REST. NOTE: contradicts the role brief which says GF 'writes daily logs' — confirm product intent. Verify by attempting a direct POST to /rest/v1/dailies as GF → expect RLS denial."
+        },
+        {
+          "feature": "Create a Site Instruction (SI)",
+          "expected": "Button hidden (SiContext.canSubmit excludes general_foreman) AND server-denied (site_instructions insert = can_edit_project_progress, excludes GF membership role). Verify the 新增 button is absent on #/project/:id/si and a direct INSERT is rejected."
+        },
+        {
+          "feature": "Create a Permit to Work (PTW)",
+          "expected": "Button hidden (PtwContext.canSubmit excludes general_foreman) AND server-denied (permits_to_work insert = can_edit_project_progress). PTW route is also feature-flagged (PtwGate); GF only sees it if app_config.ptw_enabled. Verify no 新增 PTW button and direct INSERT rejected."
+        },
+        {
+          "feature": "Create / edit / delete project contacts (聯絡人)",
+          "expected": "PRIVILEGE BUG — gate FAILS at the boundary. UI WRONGLY shows add/edit/delete buttons (ContactsContext.canManage includes general_foreman) but contacts RLS (v11) restricts INSERT/UPDATE/DELETE to global_role in (admin,pm). Verify: tap 加聯絡人 as GF, save → expect a row-level-security error surfaced. The button should be hidden for GF (align canManage with RLS, OR add general_foreman to the contacts write RLS)."
+        },
+        {
+          "feature": "Approve / reject / request-revision on SI or VO",
+          "expected": "GATE HOLDS by chain config. Default chains are SI [main_contractor→pm] and VO [main_contractor→pm→owner] (v9 seed). general_foreman is in NO default step, and submit_approval validates the caller is in active_role_holders for the current step. So GF sees no approve/reject buttons and a direct submit_approval call returns 「你冇權批准呢個步驟」 — UNLESS an admin manually inserts a general_foreman step via /admin/projects/:id/chains. Verify GF sees read-only SI/VO detail with no approval actions."
+        },
+        {
+          "feature": "Resolve or escalate an issue you didn't report",
+          "expected": "GATE HOLDS. canActOnIssue only returns true for handler roles pm/main_contractor/subcontractor/admin; general_foreman is never an issue handler (IssueHandlerRole has no general_foreman). UI hides 標記為已解決 / 上呈 for GF on others' issues; RLS update 'using' = admin OR has_role_in_project(current_handler) OR reporter. Verify the action buttons are absent unless GF is the reporter (reopen-only)."
+        },
+        {
+          "feature": "Access the dashboard / admin / user management / chain editor",
+          "expected": "GATE HOLDS. Sidebar omits 儀表板 (showDashboard=admin||assigned-PM), 管理/用戶/簽核流程設定 (isAdmin only). Routes /admin, /admin/users, /admin/projects/:id/chains are ProtectedRoute requireAdmin → GF is redirected/blocked. Verify hitting #/admin as GF bounces away from the admin screen."
+        },
+        {
+          "feature": "Approve membership applications (待審核申請)",
+          "expected": "GATE HOLDS. Projects page pendingForMe only surfaces approvals to admin, the project's assigned PM, or a subcontractor approving their workers. GF is not an approver → no 待審核申請 section appears. Verify the section is absent for GF even when pending applications exist in the project."
+        },
+        {
+          "feature": "Create or delete projects, assign PMs",
+          "expected": "GATE HOLDS. No project-create/assign UI outside /admin (admin-only). projects insert/update/delete RLS is admin-gated. Verify GF has no path to create a project."
+        }
+      ],
+      "handoffs": [
+        {
+          "withRole": "admin",
+          "flow": "Admin creates the project + zones and approves GF's membership (or assigns a PM). Only after approval does GF gain full progress-tree visibility and structural edit rights. Admin is also the ONLY actor who can add a general_foreman step into the SI/VO/PTW approval chain (/admin/projects/:id/chains) if the business wants GF to approve — by default GF approves nothing."
+        },
+        {
+          "withRole": "pm",
+          "flow": "PM and GF are the two supervisor-tier roles for progress: either can build the 大項/中項/細項 structure, assign leaves, and tick progress. GF reports/escalates issues that route up to the PM (getInitialHandler(general_foreman)=pm), so the PM is GF's issue-resolution counterpart. PM (not GF) owns the dashboard and approves memberships."
+        },
+        {
+          "withRole": "main_contractor (engineer/foreman)",
+          "flow": "GF assigns progress leaves to MC foremen/engineers, who then tick progress only on their assigned items. MC foreman/engineer (NOT GF) are the daily-log authors — GF reads their dailies for the audit trail. MC also raises SI/VO; GF can read those but not create SI (and VO create is buggy — see below)."
+        },
+        {
+          "withRole": "subcontractor (判頭)",
+          "flow": "判頭 submits material requests and reports issues that escalate subcontractor→main_contractor→pm. GF, as a material supervisor, can edit/receive/delete any material row including 判頭's requests, and assigns progress leaves to 判頭 for execution."
+        },
+        {
+          "withRole": "owner (業主)",
+          "flow": "Owner is the terminal approver on the default VO chain (main_contractor→pm→owner). GF is not in this chain; GF's role around VO is read-only document tracking, and the VO 新增 button shown to GF is a bug (server rejects)."
+        }
+      ]
+    },
+    {
+      "role": "main_contractor (總承建商員工 — engineer / foreman / safety sub-role)",
+      "summary": "總承建商前線員工：簽核工地指令(SI)與變更指令(VO)的第一關審批人、處理判頭上呈的問題、上載/管理圖則、發起 PTW；safety sub_role 負責 PTW 安全簽核。本身不是項目結構的管理者(不能加大項)。",
+      "canDo": [
+        {
+          "feature": "登入 + 申請加入工地 (membership as main_contractor)",
+          "route": "#/login → #/projects (申請加入工地)",
+          "steps": "用 60001003 (陳工程師) 或 60001004 (黃管工) + 測試密碼電話登入。到底部『工地』分頁 → 點『申請加入工地』→ 選『油塘灣住宅發展項目 — DC2026』→ 選擇 project role『總承建商員工』→ 提交。等 PM/Admin 批准後狀態變『已批准』。",
+          "expected": "申請後出現 pending 卡片；PM 批准後可在 #/home 見到該工地。注意 RLS：can_view_project / 大部分審批權限睇嘅係 *per-project membership role*，所以 membership 必須係 main_contractor（見 v9-rls-helpers.sql active_role_holders, v3-progress-schema.sql can_edit_project_progress）。"
+        },
+        {
+          "feature": "查看工地進度 (大/中/細項 + 分區匯總) — 唯讀",
+          "route": "#/project/:id (進度 tab)",
+          "steps": "由 #/home 點工地卡片入 ProjectDetail，預設『進度』分頁。展開分區看 leaf 項目百分比 / 樓層完成。",
+          "expected": "可見全部進度(get_visible_progress_items RPC)。除非被指派(assigned_to/delegated_to)否則『更新』按鈕唔出（canUpdateItem，ProgressContext.tsx:79）。"
+        },
+        {
+          "feature": "更新被指派項目的進度 (若 PM 將 leaf 指派/委派俾你)",
+          "route": "#/project/:id (進度 tab) → 項目卡『更新』",
+          "steps": "若 PM 在 AssignmentModal 將某 leaf 的 assigned_to/delegated_to 加入你，卡片會出現『更新』。點開 UpdateProgressModal 改百分比或勾樓層→儲存。",
+          "expected": "更新成功並寫 progress_history。RLS v15『Assignees or managers can update』允許 assigned_to/delegated_to。若未被指派，按鈕隱藏；直接 update 會被 RLS 拒。"
+        },
+        {
+          "feature": "上載 / 管理圖則 (附在 leaf 進度項目)",
+          "route": "#/project/:id 進度 tab → 展開 leaf 項目 → 圖則區『新增圖則』/『上載新版本』",
+          "steps": "展開一個 leaf(無子項)→ 圖則區點『新增圖則』→ 揀 PDF/JPG/PNG 上載(>5MB 會警告)→ 提交。亦可對已有圖則『上載新版本』(自動 supersede 舊版)。",
+          "expected": "上載成功，版本歷史顯示『現行』。⚠ 客戶端 canUpload 用 global_role ['admin','pm','main_contractor','general_foreman']（DrawingsSection.tsx:65），但伺服器 can_upload_drawing 只認 *membership* role pm/main_contractor（v8-drawings.sql）。global=main_contractor 而 membership≠main_contractor 時：按鈕出現但 storage/insert 會被 RLS 拒 — 需驗證 membership 一致。"
+        },
+        {
+          "feature": "建立並提交工地指令 SI",
+          "route": "#/project/:id/si → 『新增』(SiSubmitForm)",
+          "steps": "簽核 tab → 工地指令 → 右上『新增』。填標題+描述，必須勾最少一份圖則參照(無圖則無法提交)，可加相片/語音/GPS → 提交。",
+          "expected": "建立草稿→存 version→submit_si 凍結 chain(main_contractor→pm) 並推送俾 step0 holders。SI 入 SiList『待批准/審批中』。RLS『Submitter creates SI』要 can_edit_project_progress(membership role pm/main_contractor/subcontractor)。"
+        },
+        {
+          "feature": "審批工地指令 SI (作為 step-0 main_contractor 審批人)",
+          "route": "#/project/:id/si/:siId → 底部 SiApproverBar",
+          "steps": "開一張別人提交、狀態『審批中』且 current_step 指向 required_role=main_contractor 的 SI。底部出現四個鍵：批准 / 批准並修改 / 退回(≥10字) / 拒絕。點『批准』推進到 PM。",
+          "expected": "submit_approval RPC 驗你係 active_role_holders(project,'main_contractor') 即 *membership* role=main_contractor。⚠ 客戶端 canAct 用 global_role===requiredRole（SiApproverBar.tsx:30）；若你 global=main_contractor 但 membership≠main_contractor，按鈕會顯示但 RPC 報『你冇權批准呢個步驟』。反之亦然(membership 啱但 global 唔啱→按鈕唔出但 RPC 會接受)。此 UI/RLS 不一致必須在售前測試。"
+        },
+        {
+          "feature": "批准並修改 SI (approve_with_edits)",
+          "route": "#/project/:id/si/:siId → SiApproverBar『批准並修改』",
+          "steps": "點『批准並修改』→ 改標題/描述 → 提交。",
+          "expected": "submit_approval 在同一交易內以 SECURITY DEFINER 寫新 si_versions 並推進 chain，杜絕審計缺口(v9-rpc-submit-approval.sql)。"
+        },
+        {
+          "feature": "退回 / 拒絕 SI (需 ≥10 字原因)",
+          "route": "#/project/:id/si/:siId → 退回 / 拒絕",
+          "steps": "點『退回(要求修訂)』或『拒絕』,輸入 ≥10 字原因→提交。",
+          "expected": "退回→提交人可改後再 submit；拒絕→SI 終止。少於10字 RPC 直接報錯。"
+        },
+        {
+          "feature": "審批變更指令 VO (作為 step-0 main_contractor 審批人)",
+          "route": "#/project/:id/vo/:voId → 底部 VoApproverBar",
+          "steps": "開一張『審批中』VO（chain main_contractor→pm→owner）。底部出現批准/批准並修改/退回/拒絕。檢查 line items 與系統核算總額(HKD)後批准→推進到 PM。",
+          "expected": "同 SI，伺服器以 membership role main_contractor 驗(active_role_holders)。⚠ VoApproverBar.tsx:31 客戶端用 global_role===requiredRole — 同樣 UI/RLS 不一致風險。"
+        },
+        {
+          "feature": "建立 VO (由已批准 SI 衍生)",
+          "route": "#/project/:id/vo → 『新增』(VoSubmitForm，選 parent SI)",
+          "steps": "簽核 tab → 變更指令 → 『新增』→ 揀 parent SI → 填描述 + line items(人工/物料/前期/暫定，數量×單價)→ 提交。",
+          "expected": "VoContext.canSubmit = global_role ['admin','pm','main_contractor','general_foreman']（VoContext.tsx:39）。伺服器 insert RLS『Creator inserts draft VO』用 can_edit_project_progress(membership)。總額由 server trigger 核算。"
+        },
+        {
+          "feature": "報告問題 + 處理由判頭上呈的問題",
+          "route": "#/project/:id (問題 tab) / #/project/:id/issue/:issueId",
+          "steps": "問題 tab『報告新問題』可開新 issue(初始 handler 依你 reporter_role)。當判頭(subcontractor)報的問題上呈時 current_handler_role=main_contractor，你開該 issue 會見『標記為已解決』及『上呈到 PM』。",
+          "expected": "canActOnIssue 用 *membership* role(IssuesContext.tsx:248-255)：membership=main_contractor 且 handler=main_contractor 才見按鈕；RLS『Admin or current handler updates issues』用 has_role_in_project 同樣係 membership-based — UI 與 RLS 一致(問題模組無 SI/VO 嗰種 global/membership 不一致)。"
+        },
+        {
+          "feature": "發起 PTW 工作許可證 (PTW 功能須 ptw_enabled 或 admin)",
+          "route": "#/project/:id/ptw → 『新增』(PtwSubmitForm)",
+          "steps": "若 app_config.ptw_enabled=true(或你係 admin)，簽核 tab 會多『工作許可證』入口。新增→揀類型(動火/高空/吊運)→填描述+核對清單+PPE/現場相片+工人→提交。",
+          "expected": "PtwContext.canSubmit=global_role['admin','pm','main_contractor','subcontractor','subcontractor_worker']；insert RLS『Creator inserts draft PTW』用 can_edit_project_progress(membership)。PtwGate 控制整個路由(PtwGate.tsx)。注意 PTW 預設審批鏈未由 seed_default_chain 種(僅 SI/VO)，須 admin 在 #/admin/projects/:id/chains 配置，否則 submit_ptw 報『尚未配置工作許可證審批鏈』。"
+        },
+        {
+          "feature": "PTW 安全簽核 (僅 sub_role=safety 且 membership role=safety_officer)",
+          "route": "#/project/:id/ptw/:ptwId → PtwApproverBar『簽核』(簽名板)",
+          "steps": "用 safety sub_role 帳號,開一張 chain 當前步 required_role=safety_officer 的 PTW→『簽核』畫簽名→提交(approve + record_ptw_signoff)。",
+          "expected": "chain 完成後 activate_ptw 設 active + 當日 23:59 HKT 到期 + 生成 QR。伺服器以 active_role_holders(project,'safety_officer') 驗,即 membership role 必須係 safety_officer。"
+        },
+        {
+          "feature": "掃描 / 驗證 PTW QR",
+          "route": "#/verify/:token (PtwVerify)",
+          "steps": "掃描現場 PTW QR 或開 verify 連結→系統驗 JWT 簽名+到期+你可否睇該項目。",
+          "expected": "verify_ptw_jwt 要求登入且 can_view_project；成功寫 permit_scans 審計列。過期/無效簽名報錯。"
+        },
+        {
+          "feature": "匯出進度報告 / 問題 Excel",
+          "route": "#/project/:id 右上『匯出』選單",
+          "steps": "進度 tab→匯出選單→『匯出進度報告…』(ExportProgressModal, PDF/Excel)。問題 tab→『匯出 Excel』。",
+          "expected": "成功下載檔案。簽核/工具分頁顯示『此頁面冇匯出選項』。"
+        },
+        {
+          "feature": "工地工具：每日日誌 / 物料 / 行事曆 / 聯絡人",
+          "route": "#/project/:id 工具 tab → daily / materials / timetable / contacts",
+          "steps": "工具分頁四個入口,可建立每日日誌、叫料記錄、看行事曆、查行頭通訊錄一鍵打電話。",
+          "expected": "作為已批准成員可使用(各自 context RLS gate 在 can_view_project / membership 上)。"
+        }
+      ],
+      "cannotDo": [
+        {
+          "feature": "新增/刪除進度結構 (大項 大/中/細項) — 結構管理權",
+          "expected": "main_contractor 不應見『加入大項』『加入子項』『刪除』按鈕。canManageStructure 只認 admin / assigned PM / *global_role* pm 或 general_foreman(ProgressContext.tsx:63-75)。即使 membership=main_contractor 甚至被設成該 project 的 PM by membership 都唔得 — 必須 global_role=pm/general_foreman 或在 projects.assigned_pm_ids。驗證:用 main_contractor 入進度 tab,分區下唔應有『加入大項』；若硬發 insert,RLS『Managers can insert』(v15 can_manage_project_progress 用 global role)會拒。⚠ 已知設計:此權限綁 GLOBAL role 而非 membership role。"
+        },
+        {
+          "feature": "重新指派進度項目負責人 (AssignmentModal)",
+          "expected": "指派/委派由結構管理者操作。main_contractor 唔應見『指派』入口；直接 update assigned_to 會被 v15 update RLS 拒(除非佢自己已在 assigned_to/delegated_to,但改別人指派仍需 can_manage)。"
+        },
+        {
+          "feature": "審批不屬於 main_contractor 步驟的 SI/VO (例如 PM 步、Owner 步)",
+          "expected": "當 SI current_step=PM 或 VO step=owner 時,main_contractor 唔應有審批鍵(canAct=false)。即使繞過 UI 呼叫 submit_approval,RPC 驗 active_role_holders 唔包你→報『你冇權批准呢個步驟』。"
+        },
+        {
+          "feature": "管理員介入 (admin_override) SI/VO/PTW",
+          "expected": "只有 admin 見『管理員介入』(isAdmin gate)。main_contractor 點唔到;submit_approval 對 admin_override 額外檢查 global_role=admin,否則『admin_override requires admin role』。"
+        },
+        {
+          "feature": "編輯項目簽核流程 (approval chain)",
+          "expected": "/admin/projects/:id/chains 受 ProtectedRoute requireAdmin 保護,main_contractor 連路由都入唔到(被導去 /home)。save_chain_steps RPC 亦只認 admin 或 assigned PM,否則『只有管理員或本項目項目經理可以編輯簽核流程』。"
+        },
+        {
+          "feature": "建立工地 / 指派 PM / 管理用戶 / 批准成員申請",
+          "expected": "#/admin, #/admin/users 受 requireAdmin 保護。批准 membership 申請屬 admin/PM 流程。main_contractor 應完全冇呢啲入口;後端 RLS 亦拒。"
+        },
+        {
+          "feature": "刪除問題 / 刪除圖則版本(非自己上載) / 刪除 SI/VO/PTW",
+          "expected": "issues delete 只限 admin(v4)。drawing_versions update(撤回)只限 uploaded_by 本人或 admin(canWithdraw, v8『Uploader or admin withdraws』)。SI/VO/PTW 無 delete policy — 任何人(含 main_contractor)都刪唔到,只能走狀態流轉。"
+        },
+        {
+          "feature": "PTW 路由 (當 ptw_enabled=false 且非 admin)",
+          "expected": "PtwGate 在 ptw_enabled=false 時將非 admin 導去 /home;簽核 tab 亦唔顯示『工作許可證』入口(SiVoSwitcher showPtw)。驗證:flag 關閉時 main_contractor 直接打 #/project/:id/ptw 應彈返 /home。"
+        },
+        {
+          "feature": "查看 / 操作非自己所屬工地的任何資料",
+          "expected": "所有表 SELECT 均過 can_view_project(admin / assigned PM / approved member)。未獲批准成員身分前,該工地完全唔可見;跨工地 SI/VO/PTW/issues/drawings 讀寫全被 RLS 拒。"
+        }
+      ],
+      "handoffs": [
+        {
+          "withRole": "subcontractor (判頭)",
+          "flow": "判頭提交 SI / VO → 鏈第一關 required_role=main_contractor 推送俾總承建商;main_contractor 批准/退回/拒絕後先去 PM。判頭報的問題上呈時 current_handler_role 變 main_contractor,由總承建商處理或再上呈 PM。"
+        },
+        {
+          "withRole": "pm (項目經理)",
+          "flow": "main_contractor 批准 SI/VO 後推進到 PM 作下一關(SI: main_contractor→pm;VO: main_contractor→pm→owner)。問題經 main_contractor『上呈到 PM』後交 PM 終審。PM(或 admin)負責批准 main_contractor 的入會申請及指派進度項目。"
+        },
+        {
+          "withRole": "owner (業主)",
+          "flow": "VO 鏈最後一關係 owner;main_contractor 批咗、PM 批咗之後,VO 去業主作費用最終批核。"
+        },
+        {
+          "withRole": "safety_officer / safety sub_role",
+          "flow": "main_contractor(或其他可建者)發起 PTW 後,審批鏈中的 safety_officer 步驟由安全主任畫簽名簽核;簽核完成 PTW 生效並生成 QR 供現場掃描。"
+        },
+        {
+          "withRole": "subcontractor_worker (判頭工人)",
+          "flow": "工人在現場掃 main_contractor 流程產生的 PTW QR 作核實;工人報的問題先去 subcontractor,再上呈至 main_contractor。"
+        },
+        {
+          "withRole": "general_foreman (老總) / admin",
+          "flow": "結構管理(加大項/指派)實際落在 global_role=pm/general_foreman 或 assigned PM/admin 手上;main_contractor 在其搭好的進度結構上做更新、圖則與簽核。admin 配置 PTW 審批鏈及開關 ptw_enabled 後 main_contractor 先用到 PTW。"
+        }
+      ]
+    },
+    {
+      "role": "subcontractor (判頭)",
+      "summary": "判頭 — the trade subcontractor who joins a site, ticks progress on the items delegated to them, orders/receives on-site materials, raises site problems that escalate to the main contractor, files Site Instructions / Variation Orders / Permits-to-Work as the submitter, and approves their own workers' (判頭工人) join requests — but never owns the WBS structure, approval chain, daily log, or contact directory.",
+      "canDo": [
+        {
+          "feature": "登入 (phone+password login)",
+          "route": "#/login",
+          "steps": "Open the live app; enter phone 60001005 (何判頭) and the standard test password; tap 登入.",
+          "expected": "Lands on #/home. Welcome card shows name 何判頭 and role 判頭 (ROLE_ZH.subcontractor). AuthContext synthesises 60001005@phone.local for Supabase Auth (src/lib/phone.ts)."
+        },
+        {
+          "feature": "Discover and apply to join a site (申請加入工地)",
+          "route": "#/projects",
+          "steps": "Tap 申請加入工地 → pick 「油塘灣住宅發展項目 — DC2026」 → choose role 判頭 (subcontractor) → submit.",
+          "expected": "A project_members row inserts with status='pending' (ProjectsContext.applyToProject). RLS 'User can apply to projects' allows insert where user_id=auth.uid() AND status='pending' (v2-schema.sql). The site shows under 我的工地 with 待審核 pill. Discovery list is populated because v26-fix-project-discovery.sql re-added the authenticated 'name discovery' SELECT-true policy on projects. Duplicate apply returns '你已申請過此工地' (23505)."
+        },
+        {
+          "feature": "View own project once approved (進度 tab, contributor-scoped)",
+          "route": "#/project/:id (進度 tab)",
+          "steps": "After a PM/admin approves the membership, open the project from 我的工地. Stay on the 進度 tab.",
+          "expected": "ProgressContext calls RPC get_visible_progress_items (v11-progress-visibility.sql). Subcontractor is treated as a CONTRIBUTOR (not supervisor: supervisor set is admin/pm/main_contractor only) → sees ONLY items where their uid is in assigned_to/delegated_to, plus the ancestor chain to render the tree. Verify: items NOT delegated to them are absent. Non-members get an empty set, never an error."
+        },
+        {
+          "feature": "Update progress on a delegated/assigned leaf item (the daily core job)",
+          "route": "#/project/:id (進度 tab → leaf row → orange 更新 button)",
+          "steps": "Expand a zone → find a leaf item delegated to you → tap the orange pencil 更新 button → set actual % (or tick floors for floors-mode items) + add notes → 儲存.",
+          "expected": "Button renders only because ProgressContext.canUpdateItem(item) is true (item.assigned_to or delegated_to includes profile.id) — ProgressItemCard line 198. updateProgress/updateFloors PATCH progress_items; RLS 'Assignees or managers can update progress items' (v15) permits it via auth.uid()=any(assigned_to/delegated_to). A progress_history row is appended. Status auto-derives (deriveStatus). Verify the % bar moves and 歷史 reflects the change."
+        },
+        {
+          "feature": "Report a site problem (報告新問題) that escalates to the main contractor",
+          "route": "#/project/:id (問題 tab → 報告新問題)",
+          "steps": "Open 問題 tab → 報告新問題 → enter title + description, optionally attach a photo → submit.",
+          "expected": "Button shows because myRoleInProject is truthy (IssuesProvider). createIssue sets reporter_role='subcontractor' and current_handler_role = getInitialHandler('subcontractor') = 'main_contractor' (src/types.ts). So a 判頭-reported issue routes straight to the 總承建商 handler. A 'reported' activity comment is logged. Verify the issue appears under 處理中 with 處理層：總承建商."
+        },
+        {
+          "feature": "Comment on / reopen own issues; resolve issues handled at subcontractor level",
+          "route": "#/project/:id/issue/:issueId",
+          "steps": "Open an issue. Type in the 留言 box → 送出留言. If the issue is one a worker reported (current_handler_role='subcontractor'), tap 標記為已解決 or 上呈到 總承建商. If you reported it and it is resolved, tap 重新開啟.",
+          "expected": "Comment composer is always available to members. canActOnIssue('subcontractor','subcontractor')=true → resolve/escalate buttons appear for issues whose handler is 判頭 (i.e. raised by your 判頭工人). 上呈 sets next handler to main_contractor (getNextHandler). 重新開啟 shows only to the reporter (isReporter) on resolved issues."
+        },
+        {
+          "feature": "Request on-site materials (叫料) and record incoming deliveries (入貨)",
+          "route": "#/project/:id (工具 tab → 物料) or Sidebar 物料 / #/project/:id/materials",
+          "steps": "Open 物料 → create a material request (name, unit, qty_needed, planned arrival, urgent flag) → save. Later record arrived qty via 入貨/receive.",
+          "expected": "MaterialsContext.canManage includes subcontractor by approved-membership role → create form available. RLS materials_insert allows global_role in (admin,pm,main_contractor,subcontractor) with requested_by=auth.uid() (v11-materials-schema.sql). receiveMaterial adds to qty_arrived; the generated status column flips requested→partial→arrived. Verify the status pill updates and the order shows on 行事曆 by planned_arrival_at."
+        },
+        {
+          "feature": "Edit / delete OWN material requests",
+          "route": "#/project/:id/materials",
+          "steps": "Open a material you created → edit fields or delete it.",
+          "expected": "Allowed because v16-materials-rls-fix.sql UPDATE policy = requested_by=auth.uid() OR is_material_supervisor; subcontractor is NOT a material supervisor, so they can only mutate rows where requested_by=auth.uid(). DELETE policy = requester OR supervisor. Verify editing your own row succeeds."
+        },
+        {
+          "feature": "Create / submit a Site Instruction (工地指令 / SI) as the submitter",
+          "route": "#/project/:id (簽核 tab → 工地指令) → #/project/:id/si → 新增",
+          "steps": "Open 簽核 → 工地指令 → 新增 → fill the SI form (title, description, optional drawing version / photos / voice / GPS) → save draft → submit.",
+          "expected": "新增 shows because SiContext.canSubmit includes subcontractor. createDraftSi inserts via RLS 'Submitter creates SI' which gates on can_edit_project_progress (v3 — includes subcontractor by membership role) AND created_by=auth.uid() AND status='draft'. saveVersion inserts si_versions ('Creator inserts versions when draft or revision'). submit_si RPC requires caller = creator → snapshots chain (main_contractor→pm) and pushes step-0 holders. Verify SI shows 待批准/審批中."
+        },
+        {
+          "feature": "Create / submit a Variation Order (變更指令 / VO) against a LOCKED parent SI",
+          "route": "#/project/:id (簽核 tab → 變更指令) → #/project/:id/vo",
+          "steps": "Open 變更指令 → create a VO that references a parent SI which is already 鎖定 (locked) → add HKD line items → save → submit.",
+          "expected": "VO INSERT RLS 'Creator inserts draft VO' requires created_by=auth.uid(), parent SI status='locked', and can_edit_project_progress (subcontractor qualifies). Totals are recomputed server-side (recompute_vo_totals/sync_vo_total triggers) — client total is ignored. submit_vo requires caller=creator and parent SI locked. Verify total_amount_cents matches server arithmetic and you cannot tamper with it."
+        },
+        {
+          "feature": "Add a protest comment on a LOCKED SI (audit trail)",
+          "route": "#/project/:id/si/:siId",
+          "steps": "Open an SI whose status is 已鎖定 (locked) → add a protest/objection comment.",
+          "expected": "RLS 'Insert protest only when locked' allows author_id=auth.uid() when SI.status='locked' and user can_view_project. Verify the comment posts only after lock; attempting before lock is rejected."
+        },
+        {
+          "feature": "Create / submit a Permit-to-Work (PTW) — only when the feature flag is on",
+          "route": "#/project/:id/ptw (visible in 簽核 tab / Sidebar only if ptw_enabled)",
+          "steps": "If the PTW card/link is visible, open 工作許可證 → create a 動火/高空/吊運 permit → fill checklist + PPE/scene photos + add workers → submit.",
+          "expected": "PtwContext.canSubmit includes subcontractor; PTW INSERT RLS 'Creator inserts draft PTW' gates on can_edit_project_progress (subcontractor qualifies) + created_by=auth.uid() + status='draft'. The PtwGate hides the whole feature unless app_config.ptw_enabled=true (admins bypass). Verify: when the flag is OFF, the 工作許可證 card is absent and #/project/:id/ptw redirects to /home."
+        },
+        {
+          "feature": "Approve / reject join requests from own workers (判頭工人)",
+          "route": "#/projects (待審核申請 section)",
+          "steps": "Have a 判頭工人 apply to the same site for role subcontractor_worker. As the approved 判頭 of that site, open 工地 → 待審核申請 → 批准 or 拒絕 the worker.",
+          "expected": "Projects.tsx pendingForMe includes m.role==='subcontractor_worker' when the viewer is an approved subcontractor in the same project. RLS 'Subcontractor approves workers' permits UPDATE only where role='subcontractor_worker' AND is_approved_subcontractor_in_project(auth.uid(), project_id) (v2-schema / v2-fix-rls-recursion). Verify the worker's status flips to approved and they appear in your site roster."
+        },
+        {
+          "feature": "Read site diary, timetable, and contact directory (read-only)",
+          "route": "#/project/:id/daily, #/project/:id/timetable, #/project/:id/contacts",
+          "steps": "Open each from the 工具 tab or Sidebar.",
+          "expected": "All SELECTs are gated on approved project membership (dailies_select, contacts_select, get_timetable). Verify you can READ every member's daily, the merged calendar (material arrivals + progress completions + events), and tap-to-call contacts — but with no create/edit affordances (see cannotDo)."
+        },
+        {
+          "feature": "Export progress / issues reports",
+          "route": "#/project/:id (Download icon in header)",
+          "steps": "On 進度 tab tap the download icon → 匯出進度報告; on 問題 tab → 匯出 Excel.",
+          "expected": "Export uses client-side data already visible to the user (src/lib/export.ts). For a subcontractor the progress export only contains the contributor-scoped items returned by get_visible_progress_items. Verify the file downloads and contains only visible rows."
+        },
+        {
+          "feature": "Manage own profile / delete account (Apple compliance)",
+          "route": "#/profile",
+          "steps": "Open 個人 → edit profile fields / sign out / delete account.",
+          "expected": "Sign-out calls pushLogoutUser() before supabase.auth.signOut(). Account deletion is gated by in_flight_approvals(user_id): if the subcontractor has a submitted/in_review/revision_requested SI or VO they created, deletion is blocked with 你尚有… ; with none, delete_my_account returns ok:true (v6/v9 account-deletion)."
+        }
+      ],
+      "cannotDo": [
+        {
+          "feature": "Add/edit WBS structure (加入大項 / 加細項) or delete progress items",
+          "expected": "PRIVILEGE BOUNDARY. ProgressContext.canManageStructure (=canEdit) is false for subcontractor: it requires global_role admin, OR assigned PM, OR an approved member whose GLOBAL role is pm/general_foreman (ProgressContext.tsx 63-75). So 加入大項 (ZoneSection), 加細項/指派/歷史/刪除 (ProgressItemCard kebab) are all HIDDEN. Server-side, RLS 'Managers can insert/delete progress items' calls can_manage_project_progress (v15) which also excludes subcontractor → any direct REST INSERT/DELETE is rejected. NOTE the known mismatch the brief flagged: this is GLOBAL-role-gated, so even a user who is a project's PM-by-membership but global_role=main_contractor/subcontractor is denied structural edits. Verify the buttons are absent AND a raw REST insert returns RLS denial."
+        },
+        {
+          "feature": "Update progress on items NOT assigned/delegated to them",
+          "expected": "The 更新 button only renders when canUpdateItem(item) is true (uid in assigned_to/delegated_to). For other leaves it is hidden, and those rows are usually not even returned by get_visible_progress_items. A direct PATCH on a non-assigned item is rejected by the v15 UPDATE policy (auth.uid() not in assigned_to/delegated_to and not a manager). Verify no 更新 button on un-delegated rows."
+        },
+        {
+          "feature": "Assign / delegate work to other people",
+          "expected": "The 指派 menu row is gated on canEdit (canManageStructure) → hidden for subcontractor. AssignmentModal is never opened by them. (A subcontractor is on the RECEIVING end — they appear in the modal's 委派判頭 list when a supervisor delegates to them.) Verify 指派 is absent from the kebab menu."
+        },
+        {
+          "feature": "Approve / reject / request-revision / reject SI, VO, or PTW (act as an approver)",
+          "expected": "Subcontractor never appears in any approval chain — default SI chain is main_contractor→pm and VO is main_contractor→pm→owner (v9-default-chain-seed.sql); PTW chain is admin-configured (safety_officer). submit_approval (SECURITY DEFINER RPC) checks the caller is in active_role_holders for the current step; subcontractor is not, so approve/requestRevision/reject/adminOverride all fail. The SI/VO detail action buttons render only for the current step's role-holder. Verify the approve/退回/拒絕 buttons do not appear for the subcontractor on documents others submitted, and an RPC call is rejected."
+        },
+        {
+          "feature": "Write a daily site log (每日日誌)",
+          "expected": "PRIVILEGE BOUNDARY. dailies_insert RLS restricts authoring to global_role='main_contractor' with sub_role in (foreman,engineer) on self only (v11-dailies-schema.sql). DailiesContext.upsertMyDaily mirrors this client-side and returns '只有總承建商管工或工程師可以填寫日誌'. DailyList shows an explicit amber banner to 判頭/工人: 「判頭 / 工人唔可以寫日誌 — 由總承建商管工或工程師代為填寫。」 and hides the 填寫今日日誌 CTA. Verify the banner shows and no author button exists; a raw INSERT is RLS-denied."
+        },
+        {
+          "feature": "Create / edit / delete project contacts (聯絡人)",
+          "expected": "contacts_insert/update/delete RLS all require global_role in (admin,pm) (v11-contacts-schema.sql). ContactsContext.canManage is correspondingly false for subcontractor. The directory is read-only/tap-to-call for them. Verify there is no add/edit/delete affordance and a raw INSERT is denied."
+        },
+        {
+          "feature": "Edit or delete OTHER users' material requests",
+          "expected": "Fixed in v16-materials-rls-fix.sql (regression originally found in persona-sim: subcontractor could PATCH a foreman's material). UPDATE/DELETE now require requested_by=auth.uid() OR is_material_supervisor (admin/assigned-PM/pm/general_foreman). Subcontractor is not a supervisor, so they can only mutate their own rows. Verify a PATCH to a peer's material row returns RLS denial."
+        },
+        {
+          "feature": "Admin areas — create/edit projects, assign PMs, manage users, configure approval chains",
+          "expected": "Routes /admin, /admin/users, /admin/projects/:id/chains are wrapped in ProtectedRoute requireAdmin (global_role==='admin'). Sidebar omits 管理/用戶/簽核流程設定 for non-admins. save_chain_steps RPC additionally rejects non-(admin OR assigned-PM). Verify these nav items are hidden and navigating to the route redirects."
+        },
+        {
+          "feature": "Dashboard (儀表板)",
+          "expected": "Sidebar only renders the 儀表板 link when isAdmin OR isPM (assigned_pm_ids includes the user). A subcontractor sees no dashboard link. (The /dashboard route itself is ProtectedRoute-only, so deep-linking renders it, but it is not surfaced and contains supervisor-oriented roll-ups.) Verify the link is absent for 判頭."
+        },
+        {
+          "feature": "Approve non-worker membership applications (PMs, MC, other subcontractors)",
+          "expected": "Subcontractor's approval right is narrow: pendingForMe only includes role==='subcontractor_worker' in their own project, and RLS 'Subcontractor approves workers' only matches role='subcontractor_worker'. They cannot approve a peer subcontractor, main_contractor, pm, or owner — those rows never show in 待審核申請 and an UPDATE is RLS-denied. Verify only worker applications are actionable."
+        },
+        {
+          "feature": "See the full project WBS / other trades' progress detail",
+          "expected": "get_visible_progress_items returns the supervisor full set ONLY for admin/pm/main_contractor. Subcontractor is a contributor and sees only their assigned/delegated subtree. Verify items belonging to other trades (not delegated to them) are not returned by the list RPC."
+        },
+        {
+          "feature": "Access web-only sales surfaces inside the native app",
+          "expected": "/mission, /sell, /takeaway routes are registered only when !Capacitor.isNativePlatform() (App.tsx). Not a role gate, but on the native iOS/Android build these fall through to /home. On web they are public/unauthenticated marketing tools, unrelated to the subcontractor role."
+        }
+      ],
+      "handoffs": [
+        {
+          "withRole": "main_contractor / pm / general_foreman (supervisor)",
+          "flow": "Supervisor opens the AssignmentModal 委派判頭 tab and delegates a leaf progress item to this 判頭 (writes uid into delegated_to). Only then does get_visible_progress_items surface the item and ProgressItemCard show the 更新 button. The 判頭 ticks progress; supervisors see the roll-up. This is the primary inbound handoff that unlocks the subcontractor's daily work."
+        },
+        {
+          "withRole": "subcontractor_worker (判頭工人)",
+          "flow": "Worker applies to the site as subcontractor_worker → this 判頭 approves the join (待審核申請). Worker then reports a problem → getInitialHandler('subcontractor_worker')='subcontractor' → it lands in this 判頭's queue, who resolves it or 上呈 to 總承建商."
+        },
+        {
+          "withRole": "main_contractor (issue escalation upward)",
+          "flow": "When this 判頭 reports an issue, getInitialHandler routes it directly to current_handler_role='main_contractor'. The MC acts (resolve) or escalates to PM (subcontractor→main_contractor→pm chain). The 判頭 remains the reporter and can 重新開啟 if a resolution is unsatisfactory."
+        },
+        {
+          "withRole": "main_contractor → pm (SI/VO approval chain)",
+          "flow": "This 判頭 SUBMITS the SI/VO as creator; the approval chain (SI: main_contractor→pm; VO: main_contractor→pm→owner) is executed by those roles via submit_approval. The 判頭 cannot approve, but receives the outcome and, once an SI is locked, may file the dependent VO and post protest comments."
+        },
+        {
+          "withRole": "main_contractor (foreman/engineer) — daily log",
+          "flow": "The 判頭 cannot write the 每日日誌; the MC foreman/engineer authors it (often capturing the trades/items the 判頭 worked on). The 判頭 reads the day's diary for the shared dispute audit trail."
+        },
+        {
+          "withRole": "admin / pm",
+          "flow": "Admin/PM approve the 判頭's site-join application (project_members status→approved), assign PMs, and configure the approval chains and contacts directory. The 判頭 depends on this onboarding before any project-scoped action is possible."
+        },
+        {
+          "withRole": "safety_officer (PTW sign-off)",
+          "flow": "When PTW is enabled, the 判頭 submits a permit (動火/高空/吊運) and adds workers; the safety_officer/admin-configured chain signs it off before work goes active. The 判頭 is the applicant, not the approver."
+        }
+      ]
+    },
+    {
+      "role": "subcontractor_worker (判頭工人)",
+      "summary": "A 判頭's frontline labourer: a per-project member who ticks progress only on items their 判頭/工地主任 explicitly assigned to them, reports problems up the chain to their 判頭, and is read-only everywhere else (drawings, SI/VO/PTW, daily logs, materials, contacts).",
+      "canDo": [
+        {
+          "feature": "Log in by phone + password",
+          "route": "#/login",
+          "steps": "Open the live URL, land on #/login. Enter 8-digit HK phone of the worker account + standard test password, tap 登入.",
+          "expected": "Redirects to #/home. Welcome card shows the worker's name and role 判頭工人 (ROLE_ZH['subcontractor_worker'], src/pages/Home.tsx line 88). If no worker test account exists yet, create one via Signup (#/signup) choosing global_role worker, or seed in DB."
+        },
+        {
+          "feature": "Discover and apply to join a site as 判頭工人",
+          "route": "#/projects",
+          "steps": "Bottom nav 工地 → tap 申請加入工地 → pick 「油塘灣住宅發展項目 — DC2026」 → role defaults to 判頭工人 (ApplyToProjectModal pre-selects own global_role) → 提交申請.",
+          "expected": "A pending project_members row (role=subcontractor_worker, status=pending) is created (ProjectsContext.applyToProject). It appears under 我的工地 with 待審核 badge. Discovery works because v26-fix-project-discovery.sql grants authenticated SELECT-all on projects. Verify the application is then approvable by the 判頭/PM (handoff)."
+        },
+        {
+          "feature": "See only sites I've joined / applied to on Home",
+          "route": "#/home",
+          "steps": "After approval, open #/home and read 我的工地.",
+          "expected": "Lists only projects where this worker has an approved membership (Home.tsx myProjects filters memberships by user_id + status==='approved'). Pending shows 申請中 badge; a recent approve/reject in last 24h shows a green/red banner."
+        },
+        {
+          "feature": "View the progress tree — but only my assigned items + their ancestor folders",
+          "route": "#/project/:id (進度 tab)",
+          "steps": "Open the project from Home, stay on default 進度 tab. Expand zones.",
+          "expected": "RPC get_visible_progress_items (v14-supervisor-narrowing.sql) returns ONLY rows where auth.uid() is in assigned_to/delegated_to PLUS the recursive ancestor chain. If the worker has NO assigned items, the tree renders empty (zones show 尚未有進度項目 / — 暫無項目 —). VERIFY: a worker assigned to one 細項 sees that leaf and its parent 中項/大項 only — not sibling items."
+        },
+        {
+          "feature": "Update progress on an item assigned/delegated to me (percentage or floor mode)",
+          "route": "#/project/:id (進度 tab) → 更新 button on an assigned leaf",
+          "steps": "Find a leaf where you are an assignee (orange 更新 pencil button is visible). Tap it → UpdateProgressModal opens → drag the % slider or tap 25/50/75/100 chips (percentage mode) or tap floor chips (floor mode) → add 備註 → 儲存更新.",
+          "expected": "actual_progress/status/floors_completed update; a progress_history row is written; the bar refreshes. Allowed because ProgressItemCard shows 更新 only when canUpdateItem(item) is true (assigned_to/delegated_to includes me) AND server policy 'Assignees or managers can update progress items' (v15) permits it. VERIFY a worker who is NOT on assigned_to has NO 更新 button on that row."
+        },
+        {
+          "feature": "Report a new problem (issue)",
+          "route": "#/project/:id (問題 tab) → 報告新問題",
+          "steps": "Switch to 問題 tab → tap 報告新問題 (shown because myRoleInProject is non-null) → fill 標題/描述, optionally attach a photo → submit.",
+          "expected": "An issues row is created with reporter_role=subcontractor_worker and current_handler_role='subcontractor' (getInitialHandler routes worker→subcontractor, src/types.ts line 228). Allowed by RLS 'Members create issues' (can_view_project + reporter_id=auth.uid()). The issue lands in the 判頭's queue — verify it shows 處理層：判頭."
+        },
+        {
+          "feature": "Comment on any issue in the project",
+          "route": "#/project/:id/issue/:issueId",
+          "steps": "Open any issue card → in 活動記錄 composer type a 留言 → 送出留言.",
+          "expected": "issue_comments row inserted (action='commented'). RLS 'Members add comments' allows any project member who can_view_project. Verify comment appears in the thread for all roles."
+        },
+        {
+          "feature": "Reopen an issue I reported after it was resolved",
+          "route": "#/project/:id/issue/:issueId",
+          "steps": "Open a resolved issue that THIS worker reported → 重新開啟 button shows (IssueDetail gates this on isReporter, not on handler) → confirm.",
+          "expected": "Issue status flips back to open; reopened activity logged. RLS 'Admin or current handler updates issues' permits because reporter_id=auth.uid(). Verify the 重新開啟 button is absent on issues reported by someone else."
+        },
+        {
+          "feature": "Read drawings attached to a visible leaf item",
+          "route": "#/project/:id → expand an assigned leaf → kebab → 圖則 (n)",
+          "steps": "On a visible leaf, open the kebab menu and tap 圖則 → the DrawingsSection expands.",
+          "expected": "Worker can view/open drawing versions for items they can see (read-only). Verify no upload/replace/withdraw controls are usable (those are supervisor-gated in DrawingsSection)."
+        },
+        {
+          "feature": "Read SI / VO documents and their approval history",
+          "route": "#/project/:id/si and #/project/:id/vo (or 簽核 tab / bottom nav 簽核)",
+          "steps": "Tap 簽核 tab → 工地指令 (SI) or 變更指令 (VO). Open any document to see status, versions, approvals, protest comments.",
+          "expected": "Lists load (RLS 'Members view SI'/VO = can_view_project). Worker sees the full audit trail read-only. NOTE the SI 新增 button is ALSO shown to worker (see cannotDo / bug flag) but creation is server-rejected."
+        },
+        {
+          "feature": "Read the per-day site diary, materials list, timetable, and contacts directory",
+          "route": "#/project/:id/daily, /materials, /timetable, /contacts (工具 tab on mobile)",
+          "steps": "From 工具 tab open each: 每日日誌 (read peers' logs), 物料 (read order status), 行事曆 (read calendar), 聯絡人 (tap-to-call).",
+          "expected": "All four lists are readable by any approved member (dailies_select / materials_select / contacts_select RLS, get_timetable). 聯絡人 phone numbers are tappable for call. Verify NO author/create/edit buttons appear (see cannotDo)."
+        },
+        {
+          "feature": "Edit own profile and delete account",
+          "route": "#/profile",
+          "steps": "Bottom nav 個人 → edit name/company; use the account-deletion flow.",
+          "expected": "Profile updates persist; account-deletion path remains intact (Apple-compliance requirement). Worker inherits the standard self-service account deletion."
+        }
+      ],
+      "cannotDo": [
+        {
+          "feature": "Add 大項 / 中項 / 細項, delete items, or assign/delegate (structural edits on progress tree)",
+          "expected": "Button hidden + RLS-denied. canManageStructure (ProgressContext) is false for worker, so 加入大項 / 加細項 / 指派 / 歷史 / 刪除 menu rows never render (ProgressItemCard gates them on canEdit). Server: 'Managers can insert/delete progress items' uses can_manage_project_progress (v15) which excludes worker. Verify the orange 更新 may appear (per-item) but the kebab has no structural actions, and a direct INSERT/DELETE on progress_items returns RLS denial."
+        },
+        {
+          "feature": "Update progress on items NOT assigned to me",
+          "expected": "Read-only / button hidden. 更新 button only renders when canUpdateItem(item) true; for non-assigned rows it is absent. A direct UPDATE is rejected by the 'Assignees or managers can update progress items' policy (auth.uid() not in assigned_to/delegated_to and not a manager). Verify by attempting to update a sibling item the worker doesn't own."
+        },
+        {
+          "feature": "Create a Site Instruction (SI)",
+          "expected": "RLS-DENIED despite the button being visible — THIS IS A UI/RLS MISMATCH BUG. SiContext.canSubmit (line 41) lists 'subcontractor_worker', so SiList shows the 新增 button. But server policy 'Submitter creates SI' (v9-si-schema.sql line 106) requires can_edit_project_progress(), which only allows pm/main_contractor/subcontractor (v3-progress-schema.sql line 51) — NOT worker. Verify: worker taps 新增 → fills form → 提交 → createDraftSi insert fails with a row-level-security error surfaced in the form. FIX: remove 'subcontractor_worker' from SiContext.canSubmit (or grant it server-side intentionally)."
+        },
+        {
+          "feature": "Approve / reject / request-revision / escalate / resolve SI, VO, PTW or issues",
+          "expected": "Button hidden + RPC/RLS-denied. For issues, canActOnIssue(myRole, handler) is false for worker (only matches when myRole===handler in pm/main_contractor/subcontractor) → no 標記為已解決 / 上呈 buttons in IssueDetail. For SI/VO/PTW, approval goes through submit_approval RPC gated on active_role_holders — worker is never a chain holder. Verify worker sees no approve/reject controls and submit_approval errors if forced."
+        },
+        {
+          "feature": "Create / edit a daily site diary (每日日誌)",
+          "expected": "Button hidden + RLS-denied. DailyList computes canAuthor = main_contractor with sub_role foreman/engineer only; for worker it shows the amber banner '判頭 / 工人唔可以寫日誌 — 由總承建商管工或工程師代為填寫。' and no 填寫今日日誌 CTA. Server dailies_insert requires global_role main_contractor + foreman/engineer. Verify banner appears and no edit button."
+        },
+        {
+          "feature": "Create / receive / edit / delete materials (物料)",
+          "expected": "Button hidden + RLS-denied. MaterialsContext.canManage excludes worker, so the 加物料 FAB and per-row 入貨/編輯/刪除 buttons never render (MaterialCard canMutate=false). Server materials_insert/update require global_role in admin/pm/main_contractor/subcontractor. The MaterialItemsPanel on a progress leaf is explicitly read-only. Verify no write affordances on #/materials."
+        },
+        {
+          "feature": "Add / edit / delete project contacts (聯絡人)",
+          "expected": "RLS-denied (write locked to admin/pm). contacts_insert/update/delete require global_role in (admin,pm). Worker can read and tap-to-call only. Verify no create/edit controls."
+        },
+        {
+          "feature": "Approve other users' membership applications",
+          "expected": "Section hidden. Projects.tsx pendingForMe only returns rows for admin, assigned PM, or a 判頭 (subcontractor) approving their own workers. A worker never matches → 待審核申請 section never appears. Verify it is absent for the worker."
+        },
+        {
+          "feature": "Access Admin area (manage users / projects / chains)",
+          "expected": "Route-guarded. #/admin, #/admin/users, #/admin/projects/:id/chains require requireAdmin; ProtectedRoute redirects non-admin to #/home. BottomNav 管理 tab is hidden (isAdmin false). Verify manually navigating to #/admin bounces to #/home."
+        },
+        {
+          "feature": "See other members' progress items or full project tree",
+          "expected": "Read-scoped by RPC. get_visible_progress_items returns only assigned+ancestors for worker — they cannot enumerate the whole tree even via the realtime/refetch path. Verify a worker assigned to one item cannot see unrelated zones' leaf items."
+        }
+      ],
+      "handoffs": [
+        {
+          "withRole": "subcontractor (判頭) / PM / admin",
+          "flow": "Worker applies to a project as 判頭工人 (status=pending). Their 判頭 (approved subcontractor in the same project) — or the project PM/admin — sees it in 待審核申請 (Projects.tsx pendingForMe) and approves. Only after approval does the worker get can_view_project and a progress tree."
+        },
+        {
+          "withRole": "工地主任 / PM / general_foreman / main_contractor (supervisor who controls assignments)",
+          "flow": "A supervisor must put the worker on a progress item's assigned_to/delegated_to before the worker can update anything. CRITICAL GAP: the AssignmentModal candidate list only offers main_contractor (負責人) and subcontractor (委派判頭) — there is NO UI option to assign a subcontractor_worker. So in practice a worker's only update right today comes from a DB-level assignment, not from any in-app supervisor action. Flag as a P0 functional gap for the role's stated job."
+        },
+        {
+          "withRole": "subcontractor (判頭) — issue handler",
+          "flow": "Worker reports a problem → getInitialHandler routes it to current_handler_role='subcontractor'. The worker's own 判頭 receives it (push + 問題 queue showing 處理層：判頭), then resolves or escalates up the chain (subcontractor → main_contractor → pm). Worker can keep commenting and can reopen if they reported it."
+        },
+        {
+          "withRole": "main_contractor foreman/engineer (daily diary author)",
+          "flow": "Worker cannot write the 每日日誌; the 總承建商 管工/工程師 records the worker's on-site activity on their behalf. Worker only reads the shared diary."
+        },
+        {
+          "withRole": "subcontractor / main_contractor / PM (SI/VO/material originators)",
+          "flow": "Worker is a read-only audience for SI/VO documents and material orders raised by their 判頭 / 總承建商 / PM — they consume the instructions and delivery status but never originate or approve them."
+        }
+      ]
+    },
+    {
+      "role": "owner (業主)",
+      "summary": "業主 — read-only project oversight: views progress/issues/SI/VO/PTW, can report issues to PM, is the FINAL approver in the VO chain (主判→PM→業主), and pulls the 業主版一頁紙 progress one-pager. Cannot edit progress, cannot create SI/VO, cannot act on issues, no admin.",
+      "canDo": [
+        {
+          "feature": "登入 (phone+password)",
+          "route": "#/login",
+          "steps": "Open the live app → it lands on #/login. Enter the owner's 8-digit HK phone (e.g. an 業主 account, create one if none exists via Signup #/signup choosing 業主) and the standard test password → tap 登入.",
+          "expected": "Lands on #/home. Welcome card shows the owner's name and role label 業主 (ROLE_ZH.owner). AuthContext loads profile.global_role='owner'."
+        },
+        {
+          "feature": "申請加入工地 as 業主 (project membership)",
+          "route": "#/projects → 申請加入工地 modal",
+          "steps": "Bottom nav/sidebar → 工地 (#/projects). Tap 申請加入工地. Select 「油塘灣住宅發展項目 — DC2026」. In 申請角色 select 業主 (the modal default role pre-fills to the user's global_role 'owner' per ApplyToProjectModal line 18-19; 業主 is in the selectable list line 93). Tap 提交申請.",
+          "expected": "A project_members row is created status='pending', role='owner'. Card under 我的工地 shows 待審核. Approval is done by admin OR the project's assigned PM (Projects.tsx pendingForMe gate, lines 49-52) — NOT by the owner. After approval the project appears on #/home under 我的工地 with role label 業主."
+        },
+        {
+          "feature": "查看工地進度 (read-only progress tree)",
+          "route": "#/project/:id (進度 tab)",
+          "steps": "From #/home tap the project card → opens #/project/:id on the 進度 tab. Expand zones (分區) and 大項/中項/細項. Observe rollup % bars and the 已完成/進行中/落後/未開始 stat tiles.",
+          "expected": "All zones and progress items render (RLS 'Members can view progress items' via can_view_project — owner is an approved member). NO 加入大項 button (canEdit=canManageStructure=false for owner, ProjectDetail line 433). NO 更新/指派/刪除 actions on item cards (canUpdateItem=false unless owner is on assigned_to/delegated_to). Verify it is pure read."
+        },
+        {
+          "feature": "匯出業主版進度一頁紙 (owner one-pager PDF/Excel)",
+          "route": "#/project/:id 進度 tab → top-bar 匯出 (Download) icon → 匯出進度報告…",
+          "steps": "On the 進度 tab tap the Download icon in the header → 匯出進度報告… opens ExportProgressModal. The audience preset 業主版（一頁紙）is selectable (ExportProgressModal PRESET_META.owner). Pick it, then tap the PDF (or Excel) button.",
+          "expected": "A glance-level one-pager renders (export.ts audience 'owner' → onePager only, no internal appendix; exportPreset('owner') hides 未開始 via NO_NOTSTARTED, depth 2, every zone rollup bar shown). Verify the PDF is a single overview page with per-zone % bars, no detailed leaf appendix."
+        },
+        {
+          "feature": "查看 / 批准變更指令 VO — FINAL approver (業主) ",
+          "route": "#/project/:id 簽核 tab → 變更指令 → #/project/:id/vo → open a VO → #/project/:id/vo/:voId",
+          "steps": "Project → 簽核 tab → tap 變更指令 card (or sidebar 變更指令). VO list loads (RLS 'Members view VO' via can_view_project). Open a VO that has advanced through 主判 and PM and now sits at the 業主 step with status 審批中 (in_review) and chain_snapshot[current_step].required_role='owner'. The sticky VoApproverBar shows 批准 / 批准並修訂 / 退回 / 拒絕. Tap 批准 (or 退回/拒絕 with a ≥10-char reason).",
+          "expected": "VoApproverBar.canAct is true (profile.global_role==='owner' === requiredRole 'owner' AND vo.status==='in_review', lines 27-32). 批准 calls submit_approval RPC; server active_role_holders for 'owner' includes this user (approved member role='owner'), so the approval row is written and the chain advances to terminal → VO becomes 已批准 then 已鎖定 (locked). On locked, the 匯出 PDF button appears. Verify the 簽核紀錄 tab shows the owner's 批准 entry."
+        },
+        {
+          "feature": "報告新問題 (report an issue → routes to PM)",
+          "route": "#/project/:id 問題 tab → 報告新問題",
+          "steps": "Project → 問題 tab. Because owner is an approved member, myRoleInProject='owner' is truthy so the 報告新問題 button shows (IssuesTab canReport=!!myRoleInProject). Tap it, fill title + description (optionally upload a photo), submit.",
+          "expected": "createIssue writes reporter_role='owner', current_handler_role = getInitialHandler('owner') = 'pm' (types.ts line 231). The issue appears under 處理中. Verify the issue's handler badge shows PM — the owner's complaint is routed straight to the PM."
+        },
+        {
+          "feature": "查看問題進度 + 留言 (view issues, add comments)",
+          "route": "#/project/:id 問題 tab → open an issue → #/project/:id/issue/:issueId",
+          "steps": "Open any issue. Read the activity timeline. Add a comment in the comment box and submit.",
+          "expected": "Issue + comments load (RLS member-scoped). addComment succeeds (any member can comment). BUT the owner sees NO 上呈/標記解決/重開 action buttons because canActOnIssue('owner', handler) is false (IssuesContext line 248-254) — verify only commenting is available, no status changes."
+        },
+        {
+          "feature": "查看工地指令 SI (read-only)",
+          "route": "#/project/:id 簽核 tab → 工地指令 → #/project/:id/si and detail",
+          "steps": "簽核 tab → 工地指令 card → SI list. Open any SI.",
+          "expected": "SI list + detail render (member-scoped read). NO 新增 button (SiContext canSubmit excludes owner). The SI approver bar shows no action buttons for owner (SI chain is 主判→PM; owner is not a required_role). Verify read-only."
+        },
+        {
+          "feature": "查看工地工具 (每日日誌 / 物料 / 行事曆 / 聯絡人)",
+          "route": "#/project/:id 工具 tab (mobile) or sidebar (desktop)",
+          "steps": "Project → 工具 tab → tap 每日日誌 / 物料 / 行事曆 / 聯絡人 (or use sidebar links). Browse each list.",
+          "expected": "Each list loads in read mode for the owner. Verify the owner can view the site diary, material order status, calendar, and contacts but has no create/edit affordance for these (write rights belong to supervisor/contributor tiers, not owner)."
+        },
+        {
+          "feature": "個人檔案 + 刪除帳戶 (Apple-required account deletion)",
+          "route": "#/profile",
+          "steps": "Sidebar/bottom-nav → 個人 (#/profile). View profile. Use the 刪除帳戶 / sign-out controls.",
+          "expected": "Profile shows owner name/phone/role. Account-deletion path works for owner exactly as other roles (delete_my_account is role-agnostic, gates only on in_flight_approvals). Sign-out clears OneSignal then session (push.ts logout-before-signOut). Verify deletion is not blocked unless the owner has an in-flight VO awaiting their approval."
+        }
+      ],
+      "cannotDo": [
+        {
+          "feature": "加入/編輯/刪除進度項目 (add/edit/delete 大項/中項/細項)",
+          "expected": "Button hidden: ProjectDetail gates 加入大項 and item update/assign/delete on canEdit=canManageStructure, which is false for owner (ProgressContext lines 63-75 exclude owner). RLS backstop: progress_items INSERT/DELETE require can_manage_project_progress (v15) which excludes owner; UPDATE requires can_update_progress_item (manager OR assigned_to/delegated_to). Verify no edit buttons render, and a direct API insert/update by an owner session is RLS-denied. NOTE: if a PM ever adds the owner to a progress item's assigned_to/delegated_to, the owner WOULD gain UPDATE on that single row (per-row gate) — owners should never be assigned items; flag if seen."
+        },
+        {
+          "feature": "新增工地指令 SI (create SI)",
+          "expected": "Button hidden: SiContext.canSubmit excludes owner (allows admin/pm/main_contractor/subcontractor/subcontractor_worker only). Owner is also not a required_role in the SI default chain (主判→PM), so the SI approver bar shows no actions. Verify no 新增 on the SI list and no approve/return/reject buttons on SI detail."
+        },
+        {
+          "feature": "新增變更指令 VO (create/raise VO)",
+          "expected": "Button hidden: VoList 新增 gated on VoContext.canSubmit = ['admin','pm','main_contractor','general_foreman'] (VoContext line 37-40) — owner excluded. RLS backstop: 'Creator inserts draft VO' requires created_by=auth.uid()+draft, and submit_vo would reject. Verify the owner only ever APPROVES a VO (final step), never raises one."
+        },
+        {
+          "feature": "在 VO 鏈中提前批准 / 越權批准 (approve a VO before it reaches the owner step)",
+          "expected": "Read-only/no-op: VoApproverBar.canAct also requires vo.status==='in_review' AND chain_snapshot[current_step].required_role==='owner'. While the VO sits at 主判 or PM steps, the owner sees NO action bar. Even if forced, submit_approval validates active_role_holders for the CURRENT step's role — an owner is rejected with 你冇權批准呢個步驟. Verify the owner cannot approve out of turn."
+        },
+        {
+          "feature": "處理問題：上呈 / 標記解決 / 重開 (escalate/resolve/reopen issues)",
+          "expected": "Buttons hidden: canActOnIssue('owner', handler) returns false for every handler (IssuesContext lines 248-254 — owner is not pm/main_contractor/subcontractor/admin). Verify on an open issue the owner sees only 留言, never 上呈/標記解決/重開. (Owner CAN report and comment — that is intended.)"
+        },
+        {
+          "feature": "管理頁面 (admin: projects / users / chain config)",
+          "expected": "Route-blocked: ProtectedRoute requireAdmin redirects non-admins to #/home (ProtectedRoute line 10). Verify navigating to #/admin, #/admin/users, or #/admin/projects/:id/chains as owner bounces to #/home. Sidebar 管理/用戶/簽核流程設定 links are also hidden (isAdmin only)."
+        },
+        {
+          "feature": "儀表板 (cross-project dashboard)",
+          "expected": "Link hidden: Sidebar showDashboard = admin OR assigned PM only (Sidebar line 20) — owner has no 儀表板 nav link. The #/dashboard route is NOT requireAdmin, so a manual hash to #/dashboard loads the page, but Dashboard.visibleProjects = projects where assigned_pm_ids includes me = EMPTY for an owner (Dashboard lines 39-43), so it renders no project data and no leak. Verify owner sees an empty dashboard with no other project's data."
+        },
+        {
+          "feature": "編輯簽核流程 (edit approval chains)",
+          "expected": "RLS-denied: save_chain_steps RPC raises 只有管理員或本項目項目經理可以編輯簽核流程 for non-admin/non-assigned-PM (v9-default-chain-seed lines 64-72). approval_chain_steps INSERT/UPDATE/DELETE policies require admin or assigned PM. Owner cannot change where they sit in the VO chain. Verify no chain-edit UI is reachable and a direct save_chain_steps call is rejected."
+        },
+        {
+          "feature": "審批其他工地的文件 / 查看未加入的工地 (cross-project visibility)",
+          "expected": "RLS-denied: every SELECT (progress_items, issues, variation_orders, site_instructions, approvals, ptw) is gated by can_view_project, which for owner requires an APPROVED project_members row (v3 lines 43-48). Verify an owner who is only a member of DC2026 cannot list or open data from any other project, and projects they haven't joined don't appear under 我的工地."
+        }
+      ],
+      "handoffs": [
+        {
+          "withRole": "main_contractor (主判 / 總承建商) + pm",
+          "flow": "VO approval chain (default 主判 → PM → 業主). 主判 raises a VO off a locked SI, PM reviews/approves, then it reaches the 業主 step where the OWNER gives the final approval (or 退回/拒絕). The owner's 批准 advances the VO to 已批准 → 已鎖定 and unlocks the PDF export. This is the owner's single most important write action."
+        },
+        {
+          "withRole": "pm",
+          "flow": "Issue escalation INTO the PM. When the owner taps 報告新問題, getInitialHandler('owner')='pm' routes the issue directly to the PM as current_handler_role. The PM (or admin) then handles/escalates/resolves it; the owner can follow along and comment but cannot change status."
+        },
+        {
+          "withRole": "admin or assigned pm",
+          "flow": "Membership onboarding. The owner applies to a project as role 業主 (#/projects); the application is APPROVED by an admin or the project's assigned PM (Projects.tsx pendingForMe). Only after approval does the owner gain can_view_project access to progress/SI/VO/issues and become eligible as the VO chain's 業主 approver."
+        },
+        {
+          "withRole": "pm / general_foreman / contributors (engineer/foreman/判頭/worker)",
+          "flow": "Progress reporting consumption. Supervisors and assigned contributors tick progress on the tree; the owner consumes that as the read-only 業主版一頁紙 progress one-pager and the live progress view — the shared audit trail the owner relies on for oversight without being able to alter it."
+        }
+      ]
+    }
+  ],
+  "plan": {
+    "permissionMatrix": "PERMISSION MATRIX — INTENDED RIGHTS (Y = full / R = read-only / N = none / per-row = only on items assigned/delegated to them). Roles are GLOBAL roles. \"Assigned PM\" = user listed in projects.assigned_pm_ids regardless of global_role. Grounded in src/contexts/ProgressContext.tsx, src/types.ts, and supabase v3/v9/v11/v14/v15.\n\n============================================================\nA. CORE RBAC GRID (feature × global_role)\n============================================================\nFeature                              | admin | pm  | general_foreman | main_contractor | subcontractor(判頭) | subcontractor_worker | owner\n-------------------------------------|-------|-----|-----------------|-----------------|---------------------|----------------------|------\nLogin / view 我的工地                 |  Y   | Y   | Y               | Y               | Y                   | Y                    | Y\nCreate/delete project + zones        |  Y   | N   | N               | N               | N                   | N                    | N\nAssign/unassign PMs                  |  Y   | N   | N               | N               | N                   | N                    | N\nToggle PTW feature flag              |  Y   | N   | N               | N               | N                   | N                    | N\nManage users / edit global role      |  Y   | N   | N               | N               | N                   | N                    | N\nConfigure SI/VO/PTW approval chains  |  Y   | Y*  | N               | N               | N                   | N                    | N   (*assigned-PM via save_chain_steps RPC; NO PM-facing UI today)\nApprove membership applications      |  Y   | Y(own proj)| N        | N               | Y(own workers only) | N                    | N\nView progress tree (full project)    |  Y   | Y   | Y               | per-row         | per-row             | per-row              | R(full)\nAdd 大項/中項/細項 (structure)         |  Y   | Y   | Y               | N (SEE §B BUG)  | N                   | N                    | N\nDelete progress item                 |  Y   | Y   | Y               | N               | N                   | N                    | N\nAssign/delegate leaf (AssignmentModal)| Y    | Y   | Y               | N               | N                   | N                    | N\nUpdate progress % / floors           |  Y   | Y   | Y               | per-row         | per-row             | per-row              | N (per-row only if wrongly assigned)\nView item history                    |  Y   | Y   | Y               | Y(visible)      | Y(visible)          | Y(visible)           | R\nManage drawings (upload/version)     |  Y   | Y   | (SEE §B)        | Y(membership)   | N                   | N(read)              | R\nReport an issue                      |  Y   | Y   | Y               | Y               | Y                   | Y                    | Y\nComment on issue                     |  Y   | Y   | Y               | Y               | Y                   | Y                    | Y\nAct on issue (resolve/escalate)      |  Y   | Y(handler=pm)| N        | Y(handler=mc)   | Y(handler=判頭)     | N                    | N\nReopen OWN reported issue            |  Y   | Y   | Y               | Y               | Y                   | Y                    | Y\nCreate/submit SI                     |  Y   | Y   | N               | Y               | Y                   | N (SEE §B BUG)       | N\nApprove/return/reject SI step        |  Y(override)| Y(step) | N         | Y(step0)        | N                   | N                    | N\nCreate/submit VO                     |  Y   | Y   | N (SEE §B BUG)  | Y               | Y                   | N                    | N\nApprove VO step                      |  Y(override)| Y(step1)| N        | Y(step0)        | N                   | N                    | Y(final step)\nadmin_override SI/VO                 |  Y   | N   | N               | N               | N                   | N                    | N\nCreate/submit PTW (flag on)          |  Y   | Y   | N (SEE §B BUG)  | Y               | Y                   | Y                    | N\nPTW safety sign-off                  |  Y(NOT via override)| N | N    | only if global_role=safety_officer | N | N        | N\nWrite daily log (每日日誌)            |  Y?  | N   | N               | Y(sub_role foreman/engineer ONLY) | N | N           | N\nRead daily log                       |  Y   | Y   | Y               | Y               | Y                   | Y                    | Y\nCreate/edit/delete materials         |  Y   | Y   | Y(supervisor)   | Y               | Y(own rows only)    | N                    | N(read)\nCreate/edit/delete contacts          |  Y   | Y   | N (SEE §B BUG)  | N               | N                   | N                    | N(read)\nRead materials/timetable/contacts    |  Y   | Y   | Y               | Y               | Y                   | Y                    | Y\nView cross-project dashboard         |  Y   | Y(assigned)| N         | N               | N                   | N                    | N(empty)\nExport progress/issues reports       |  Y   | Y   | Y               | Y               | Y(scoped)           | Y(scoped)            | Y(owner one-pager)\nMutate approvals ledger directly     |  N   | N   | N               | N               | N                   | N                    | N (append-only, check(false))\n\n============================================================\nB. THE 大項/中項/細項 QUESTION — RESOLUTION (global-role vs membership-role)\n============================================================\nCURRENT CODE (the bug):\n  • Server: can_manage_project_progress() (supabase/v15-progress-edit-rights-split.sql) grants structure INSERT/DELETE to:\n      admin  OR  assigned_pm_ids  OR  (approved member AND user_profiles.global_role IN ('pm','general_foreman')).\n  • Client: ProgressContext.canManageStructure (src/contexts/ProgressContext.tsx:63-75) mirrors EXACTLY the same — keys on GLOBAL role, not the per-project membership role.\n  • Meanwhile the OLDER gate can_edit_project_progress() (v3) — which still gates SI/VO/PTW/drawings INSERT — keys on the PER-PROJECT MEMBERSHIP role IN ('pm','main_contractor','subcontractor').\n  ⇒ Two different definitions of \"who can edit the project\" coexist. A user who is a project's PM BY MEMBERSHIP but whose global_role is e.g. main_contractor CANNOT add 大項 (v15 rejects), yet CAN submit SI (v3 accepts). Confusing and inconsistent.\n\nINTENDED RULE (recommended, to state in matrix and TEST):\n  \"Add/delete 大項/中項/細項 and assign/delegate\" should be granted to:\n      admin\n      OR assigned_pm_ids (assigned PM, any global_role)\n      OR an APPROVED project_members row whose PER-PROJECT membership role IN ('pm','general_foreman','main_contractor').\n  Rationale: structure-building is a per-site supervisory act. It must follow the site membership role a user holds on THAT project, not their account-wide global_role. A 總承建商 staff member acting as the site's lead should build the WBS; a global PM with no membership on this site should not.\n\nCODE/RLS CHANGE THIS IMPLIES (flag, do NOT silently ship in this milestone — verify intent first):\n  1. supabase: rewrite can_manage_project_progress(p_user_id, p_project_id) to test project_members.role (the membership role) IN ('pm','general_foreman','main_contractor') for an approved row — NOT user_profiles.global_role. Keep admin + assigned_pm branches.\n  2. src/contexts/ProgressContext.tsx canManageStructure: mirror the new rule — look up the caller's membership row for projectId and test myMembership.role, not profile.global_role.\n  3. Keep get_visible_progress_items (v14) supervisor branch ALIGNED with whatever rule is chosen (today it keys on global_role pm/general_foreman → a membership-PM whose global_role≠pm would build structure but NOT see the full tree → broken). Whichever way it is resolved, the THREE gates (visibility v14, manage v15, client canManageStructure) MUST use the SAME predicate.\n\nALTERNATIVE (if product wants to keep global-role gating): then the matrix must say add-大項 is global_role pm/general_foreman ONLY, the AssignmentModal/admin docs must stop implying main_contractor builds structure, and main_contractor's \"canDo\" brief is wrong. Either way the three gates must be unified. The sim tests BOTH interpretations (Step 6 + bug-watchlist BW-01).\n\n============================================================\nC. KNOWN UI↔RLS PRIVILEGE MISMATCHES TO CERTIFY (button shows, server rejects, or vice-versa)\n============================================================\n  BW-01 大項 manage gate: global_role vs membership role (above). P0.\n  BW-02 SI 新增 shown to subcontractor_worker (SiContext.canSubmit incl. 'subcontractor_worker', src/contexts/SiContext.tsx:41) but SI insert RLS = can_edit_project_progress excludes worker → RLS error. P1.\n  BW-03 VO 新增 shown to general_foreman (VoContext.canSubmit incl. 'general_foreman', VoContext.tsx:39) but VO insert RLS = can_edit_project_progress excludes GF membership role → RLS error. P1.\n  BW-04 PTW create shown to subcontractor_worker (PtwContext.canSubmit incl. 'subcontractor_worker', PtwContext.tsx:50) but PTW insert RLS = can_edit_project_progress excludes worker → RLS error. P1.\n  BW-05 SI/VO approver bar canAct keys on profile.global_role===requiredRole (SiApproverBar:30, VoApproverBar:31) but submit_approval RPC validates active_role_holders which keys on MEMBERSHIP role (+assigned_pm for 'pm', +admin). A user whose global_role matches but membership role doesn't (or vice-versa) gets button-shows/RPC-rejects or button-hidden/RPC-would-accept. P1.\n  BW-06 EditRoleModal role picker (src/pages/AdminUsers.tsx:249) lists only admin/pm/main_contractor/subcontractor/subcontractor_worker/owner — CANNOT set safety_officer or general_foreman, even though active_role_holders(project,'safety_officer') gates PTW sign-off and can_manage_project_progress requires global_role=general_foreman. Admin cannot create the very roles PTW + structure depend on through the UI. NOTE: 'safety' offered there is a main_contractor SUB-role, NOT global_role safety_officer — they are not interchangeable for PTW. P0.\n  BW-07 Contacts: ContactsContext.canManage incl. general_foreman but contacts RLS (v11) restricts write to global_role IN (admin,pm) → GF sees add/edit/delete, server rejects. P1.\n  BW-08 Daily-log: general_foreman read-only per RLS (dailies_insert = global_role main_contractor + sub_role foreman/engineer), but the role brief claims GF \"writes daily logs\" — confirm product intent; today GF correctly sees the amber read-only banner. P2 (doc vs intent).\n  BW-09 WORKER ASSIGNMENT GAP (P0): AssignmentModal (src/components/AssignmentModal.tsx:40-41) only offers candidates with membership role main_contractor (負責人) and subcontractor (委派判頭). There is NO option to assign a subcontractor_worker. So a worker's stated core job — \"update items my 判頭/主任 assigned me\" — is unreachable via any in-app supervisor action; only a DB-level assignment unlocks it. The whole worker happy-path depends on fixing this.\n  BW-10 Admin-approves-blind: PendingApprovalCard fetches applicant name/phone via a direct user_profiles SELECT; under v17 narrowed SELECT policy an admin who shares no project with a brand-new applicant doesn't match → card shows 載入中…/? forever. P1.",
+    "scenarioOrder": [
+      {
+        "step": 1,
+        "actor": "admin (系統管理員)",
+        "action": "Login at #/login with admin phone+password → #/admin → 新增工地項目 → name 「油塘灣住宅發展項目 — DC2026」, default zone A座 + 加分區 B座 → 建立項目.",
+        "expected": "createProject inserts projects row (assigned_pm_ids=[], created_by=admin). Card shows '2 個分區 · 0 位 PM'. Empty-name → '請輸入項目名稱'; dup zone id → '分區編號不可重複'.",
+        "verifyAs": "pm — log in as 60001001 李PM: project is NOT yet on 我的工地 and #/dashboard has no card (no powers until assigned)."
+      },
+      {
+        "step": 2,
+        "actor": "admin",
+        "action": "On the project card 指派 PM → AssignPMModal (admin_list_user_profiles RPC, filtered global_role=pm) → tick 李PM → 儲存.",
+        "expected": "assignPMs writes assigned_pm_ids=[李PM]. Card shows '1 位 PM'.",
+        "verifyAs": "pm — 李PM reloads #/home: project now appears under 我的工地; #/dashboard shows the project card; sidebar 儀表板 link present."
+      },
+      {
+        "step": 3,
+        "actor": "admin",
+        "action": "(Pre-stage roles the UI can't set) Confirm 王老總=general_foreman and create/seed a safety_officer global-role account + an owner + a worker. Because EditRoleModal omits safety_officer/general_foreman (BW-06), set those via DB/RPC, NOT the UI. 簽核流程設定 → for DC2026 add a PTW chain with a safety_officer step (PTW has NO seeded default chain).",
+        "expected": "safety_officer + general_foreman + owner + worker accounts exist with correct global_role. PTW chain saved (approval_chain_steps). BW-06 is logged: admin could NOT do the safety_officer/general_foreman role set via UI.",
+        "verifyAs": "admin — #/admin/users role chips show counts incl 安全主任≥1, 老總≥1, 業主≥1, 判頭工人≥1."
+      },
+      {
+        "step": 4,
+        "actor": "pm (李PM)",
+        "action": "Open DC2026 → 進度 tab → in A座 ZoneSection tap 加入大項 → CreateItemModal code+title (e.g. 結構工程) → save. Expand it → 加細項 中項 then 細項 (set tracking_mode percentage on a leaf).",
+        "expected": "canManageStructure true (assigned PM). New 大項/中項/細項 persist and survive 刷新; parent % auto-rolls-up from leaves.",
+        "verifyAs": "general_foreman (王老總, if approved member) — sees the SAME full tree (v14 GF supervisor branch); confirms structure propagated."
+      },
+      {
+        "step": 5,
+        "actor": "subcontractor 何判頭 / subcontractor_worker / main_contractor / owner / general_foreman",
+        "action": "Each logs in → #/projects → 申請加入工地 → DC2026 → pick their role → 提交.",
+        "expected": "project_members rows status=pending appear; 我的工地 shows 待審核.",
+        "verifyAs": "pm — #/projects 待審核申請 lists ALL these applicants (BUT verify each card shows the applicant name/phone, watch BW-10 載入中… for any brand-new applicant)."
+      },
+      {
+        "step": 6,
+        "actor": "pm (李PM)",
+        "action": "#/projects 待審核申請 → 批准 each applicant (何判頭, worker, 陳工程師/main_contractor, 王老總/GF, owner). Then BUG PROBE: log in as a user who is a project PM BY MEMBERSHIP but global_role=main_contractor and try 加入大項.",
+        "expected": "Memberships flip to approved. BW-01 probe: per the current code that membership-PM CANNOT add 大項 (v15 rejects); per the INTENDED rule they SHOULD. Record which behavior occurs.",
+        "verifyAs": "subcontractor 何判頭 — reloads #/home: DC2026 now openable (no longer 待審核); progress tab renders (empty until assigned)."
+      },
+      {
+        "step": 7,
+        "actor": "pm (李PM)",
+        "action": "On a leaf → AssignmentModal: 負責人 tab tick 陳工程師 (main_contractor); 委派判頭 tab tick 何判頭 → 儲存. THEN attempt to assign the worker.",
+        "expected": "assigned_to/delegated_to written. BW-09 probe: there is NO worker option in AssignmentModal → the worker CANNOT be assigned via UI. Log P0. (Seed worker into delegated_to via DB to continue the worker path.)",
+        "verifyAs": "main_contractor 陳工程師 & subcontractor 何判頭 — each opens the leaf: orange 更新 button now visible on THAT row only; sibling rows have no 更新."
+      },
+      {
+        "step": 8,
+        "actor": "subcontractor 何判頭",
+        "action": "Open the delegated leaf → 更新 → set 60% + 備註 → 儲存. Confirm sees ONLY assigned subtree + ancestors (not other trades).",
+        "expected": "actual_progress=60, progress_history row written, status auto-derives. get_visible_progress_items returns only assigned+ancestor chain (v14 contributor branch).",
+        "verifyAs": "pm — refreshes 進度: leaf shows 60%, parent rollup moved up; 歷史 modal shows 何判頭's entry with timestamp."
+      },
+      {
+        "step": 9,
+        "actor": "subcontractor_worker",
+        "action": "(After DB assignment from step7) Login → open DC2026 → find assigned leaf → 更新 75% → 儲存. Then 問題 tab → 報告新問題.",
+        "expected": "Worker sees ONLY the one leaf + ancestors. Update writes history. Issue created reporter_role=subcontractor_worker, current_handler_role=subcontractor (getInitialHandler). Issue shows 處理層：判頭.",
+        "verifyAs": "subcontractor 何判頭 — issue appears in 何判頭's queue with 處理層：判頭 and action buttons 標記為已解決 / 上呈."
+      },
+      {
+        "step": 10,
+        "actor": "subcontractor 何判頭",
+        "action": "Open the worker's issue → comment → 上呈到 總承建商 (escalate).",
+        "expected": "current_handler_role → main_contractor (getNextHandler). canActOnIssue true while handler=判頭.",
+        "verifyAs": "main_contractor 陳工程師 — issue now shows 處理層：總承建商 with 標記為已解決 / 上呈到 PM buttons; worker (reporter) can still comment, not resolve."
+      },
+      {
+        "step": 11,
+        "actor": "main_contractor 陳工程師",
+        "action": "On the escalated issue tap 上呈到 PM.",
+        "expected": "current_handler_role → pm (terminal; getNextHandler('pm')=null).",
+        "verifyAs": "pm 李PM — issue shows 處理層：PM; PM sees 標記為已解決 (escalate disabled/terminal); worker still cannot act."
+      },
+      {
+        "step": 12,
+        "actor": "main_contractor 陳工程師",
+        "action": "#/project/:id/si → 新增 → SI title+desc, attach ≥1 drawing reference + photo → save draft → submit (submit_si snapshots chain main_contractor→pm).",
+        "expected": "SI status 審批中, sitting at step0 required_role=main_contractor. RLS 'Submitter creates SI' passes (membership role main_contractor). BW-02 probe in parallel: log in as worker, confirm SI 新增 button SHOWS but submit is RLS-denied.",
+        "verifyAs": "pm 李PM — SI is visible in list as 審批中 at the main_contractor step; PM sees NO approve bar yet (not their step)."
+      },
+      {
+        "step": 13,
+        "actor": "main_contractor 陳工程師",
+        "action": "Open the SI → SiApproverBar 批准 (advance step0→pm). BW-05 probe: confirm the canAct gate (global_role) matched the RPC active_role_holders (membership) for this user.",
+        "expected": "submit_approval advances to PM step; approvals audit row appended. If user's global_role=main_contractor but membership≠main_contractor → button shows but RPC errors 你冇權批准呢個步驟 (record BW-05).",
+        "verifyAs": "pm 李PM — opens SI: now SiApproverBar shows 批准/批准並修改/退回/拒絕 (their step)."
+      },
+      {
+        "step": 14,
+        "actor": "pm (李PM)",
+        "action": "Open SI → 批准 (final step). SI locks.",
+        "expected": "SI status → 已鎖定; 簽核紀錄 shows full immutable audit; 抗議 tab now available; si_lock_guard rejects new versions.",
+        "verifyAs": "subcontractor 何判頭 — opens locked SI: read-only, can add 抗議 comment (RLS allows protest only when locked); 提出變更指令 button now available."
+      },
+      {
+        "step": 15,
+        "actor": "main_contractor 陳工程師",
+        "action": "On the locked SI → 提出變更指令 → VO with HKD line items (人工/物料) → submit (chain main_contractor→pm→owner). BW-03 probe: as general_foreman confirm VO 新增 shows but insert RLS-denied.",
+        "expected": "VO created; total_amount_cents server-recomputed (recompute_vo_totals) — client cannot tamper. VO at step0 main_contractor.",
+        "verifyAs": "pm 李PM — VO visible 審批中; verify server total matches line items."
+      },
+      {
+        "step": 16,
+        "actor": "main_contractor → pm → owner",
+        "action": "陳工程師 批准 VO (→pm). 李PM 批准 (→owner). owner logs in → #/project/:id/vo/:id → VoApproverBar 批准 (final).",
+        "expected": "Each step advances via submit_approval (active_role_holders incl owner membership at owner step). After owner 批准 → VO 已批准 → 已鎖定; PDF export button appears.",
+        "verifyAs": "admin — InFlightApprovalsModal for the relevant users no longer lists this VO (chain complete); 簽核紀錄 shows owner's 批准 entry."
+      },
+      {
+        "step": 17,
+        "actor": "main_contractor 陳工程師",
+        "action": "(PTW flag ON from step3) #/project/:id/ptw → 新增 → 動火 type + checklist + PPE photo + workers → submit (submit_ptw uses the admin-configured chain).",
+        "expected": "PTW submitted, routes to the safety_officer step. If no PTW chain configured → 尚未配置工作許可證審批鏈 (would be a finding; step3 configured it).",
+        "verifyAs": "safety_officer — sees the PTW at their sign-off step with a 簽核 (signature) action."
+      },
+      {
+        "step": 18,
+        "actor": "safety_officer",
+        "action": "Open PTW → PtwApproverBar 簽核 → draw signature → submit (approve + record_ptw_signoff).",
+        "expected": "Chain completes → activate_ptw sets active + expiry 23:59 HKT + QR generated. Server validates active_role_holders(project,'safety_officer') = MEMBERSHIP role safety_officer.",
+        "verifyAs": "admin — CRITICAL NEGATIVE CHECK: open InFlightApprovalsModal / 重新分派 → confirm NO PTW rows appear (admin_override must NOT be able to discharge a safety_officer PTW step; modal loads SI+VO only). main_contractor — scans/open #/verify/:token → permit_scans audit row written."
+      },
+      {
+        "step": 19,
+        "actor": "main_contractor (sub_role foreman/engineer)",
+        "action": "#/project/:id/daily → 填寫今日日誌 → fill the day's work → save. BW-08 probe: log in as general_foreman and confirm read-only amber banner + no author CTA.",
+        "expected": "daily row written (dailies_insert allows global_role main_contractor + sub_role foreman/engineer self only). GF/判頭/worker see amber 唔可以寫每日日誌 banner.",
+        "verifyAs": "general_foreman & subcontractor — open 每日日誌: can READ the foreman's entry; no edit affordance."
+      },
+      {
+        "step": 20,
+        "actor": "subcontractor 何判頭",
+        "action": "#/project/:id/materials → 加物料 (FAB) → name/unit/qty + tick urgent + planned arrival → save. Then edit own row; attempt to edit a PEER's row.",
+        "expected": "Own row create/edit OK (materials_insert global_role incl subcontractor; v16 update = requested_by self OR supervisor). Editing a peer's row → RLS-denied (judŋ is not a material supervisor).",
+        "verifyAs": "general_foreman — opens 物料 as material supervisor (is_material_supervisor v16 incl general_foreman): can edit/receive 何判頭's urgent request; 行事曆 shows the order by planned_arrival_at."
+      },
+      {
+        "step": 21,
+        "actor": "pm (李PM)",
+        "action": "進度 tab → Download → 匯出進度報告 → pick 業主版（一頁紙）→ PDF; also export internal report; 問題 tab → 匯出 Excel.",
+        "expected": "Owner one-pager = single overview page, per-zone % bars, NO 未開始, no leaf appendix (export.ts audience 'owner'). Internal report includes detail. Issues .xlsx downloads.",
+        "verifyAs": "owner — opens 進度 read-only AND independently runs the 業主版一頁紙 export: sees the same glance-level rollup, cannot edit any item (no 加入大項 / 更新)."
+      },
+      {
+        "step": 22,
+        "actor": "owner (業主)",
+        "action": "Login → DC2026 → review 進度 (read-only), 簽核 (SI/VO read + the VO they approved), 問題 (報告新問題 routes to PM; comment only, no resolve), 工具 read-only. Confirm #/admin and #/dashboard give no data.",
+        "expected": "All reads gated by approved membership; owner sees no structural/approval buttons except the VO owner-step they already used. #/admin bounces to /home; #/dashboard renders empty (visibleProjects=[]).",
+        "verifyAs": "pm 李PM — any new issue the owner reported shows 處理層：PM in the PM's queue, closing the full from-zero loop."
+      }
+    ],
+    "planMarkdown": "# SIMULATION-PLAN.md — CK工程 Pre-Sale Bug-Free Certification\n\n**App:** CK工程 — HK construction-site management (React 19 + Capacitor 8 + Supabase).\n**Target (live web):** https://construction-app-lime-six.vercel.app\n**Goal:** Run ONE collaborative, from-ZERO lifecycle on the live web app, every role doing its real work and handing off to the next, to catch every RBAC, data-propagation, and flow bug before customers do.\n**Execution:** Manual tester OR automation agent (Chrome MCP / Playwright). HashRouter routes are `#/...`. Mobile target 390px, tablet 1600x900 — spot-check both. Use the `simulate` skill for browser automation.\n\n---\n\n## 1. Test Accounts & Roles\n\n| Phone | Name | global_role | sub_role | Notes |\n|-------|------|-------------|----------|-------|\n| (admin) | 系統管理員 | admin | — | system owner; create if absent |\n| 60001001 | 李PM | pm | — | assigned PM for DC2026 |\n| 60001002 | 王老總 | general_foreman | — | supervisor tier; structure + materials supervisor |\n| 60001003 | 陳工程師 | main_contractor | engineer | SI/VO step-0 approver, daily-log author |\n| 60001004 | 黃管工 | main_contractor | foreman | daily-log author |\n| 60001005 | 何判頭 | subcontractor | — | delegated work, materials, approves own workers |\n| (create) | 工人A | subcontractor_worker | — | **must be seeded** |\n| (create) | 業主A | owner | — | VO final approver; create via Signup |\n| (create) | 安全主任A | safety_officer | — | **must be seeded via DB/RPC — UI cannot set this role (BW-06)** |\n\nPassword = the operator's standard test password; login is phone-based (synthetic email `<digits>@phone.local`).\n\n> **Seeding caveat (P0 / BW-06):** `src/pages/AdminUsers.tsx:249` EditRole picker only offers `admin/pm/main_contractor/subcontractor/subcontractor_worker/owner`. It **cannot** set `safety_officer` or `general_foreman`. The `safety` button there is a *main_contractor sub_role*, NOT `global_role='safety_officer'` (PTW sign-off needs the global role via `active_role_holders(project,'safety_officer')`). So safety_officer + general_foreman accounts must be created at the DB/RPC layer for this sim. **Log this as a bug to fix before sale.**\n\n**Demo project:** 「油塘灣住宅發展項目 — DC2026」, zones A座 + B座.\n\n---\n\n## 2. The 大項/中項/細項 Permission Question — Resolved\n\nTwo conflicting \"who can edit this project\" definitions exist in code:\n\n- `can_edit_project_progress()` (`supabase/v3-progress-schema.sql`) — gates SI/VO/PTW/drawings INSERT on the **per-project membership role** ∈ `('pm','main_contractor','subcontractor')`.\n- `can_manage_project_progress()` (`supabase/v15-progress-edit-rights-split.sql`) — gates 大項/中項/細項 INSERT/DELETE on the **account global_role** ∈ `('pm','general_foreman')` (plus admin / assigned_pm). The client mirror `ProgressContext.canManageStructure` (`src/contexts/ProgressContext.tsx:63-75`) does the same.\n\n**Consequence:** a user who is a project's PM *by membership* but whose `global_role` is `main_contractor` **cannot add 大項** (v15 rejects) even though they *can* submit an SI (v3 accepts). Inconsistent.\n\n**INTENDED RULE (recommended, what the matrix states and the sim tests):**\nAdd/delete 大項/中項/細項 + assign/delegate = `admin` OR `assigned_pm_ids` OR an **approved member whose per-project membership role ∈ ('pm','general_foreman','main_contractor')`.\n\n**Code/RLS change implied (flag — confirm intent, don't silently ship this milestone):**\n1. `can_manage_project_progress()` → test `project_members.role` (membership) not `user_profiles.global_role`.\n2. `ProgressContext.canManageStructure` → mirror via the caller's membership row for `projectId`.\n3. `get_visible_progress_items()` (`v14`) supervisor branch MUST use the SAME predicate, else a membership-PM builds structure they can't see. **All three gates must be unified.**\n\n---\n\n## 3. Permission Matrix (intended rights)\n\nSee the full feature × global_role grid in the accompanying `permissionMatrix` artifact (sections A core grid, B 大項 resolution, C UI↔RLS mismatch list). Y = full, R = read-only, N = none, per-row = only assigned/delegated rows. Roles are global; \"assigned PM\" overrides via `assigned_pm_ids`.\n\n---\n\n## 4. Per-Role Condensed Checklists\n\n**admin** — login shows 管理/用戶/簽核流程設定; create project+zones (validation: empty name, zero zones, dup zone id); 指派 PM gate; delete project (verify cascade); toggle PTW flag (non-admin loses 工作許可證 nav); 用戶 browse/search/filter; EditRole **(verify safety_officer/general_foreman ABSENT — BW-06)**; 編輯角色 disabled on own row; 重新分派 SI/VO (≥10-char reason; **NO PTW rows — BW negative check**); chain editor per project; approve ANY membership **(watch 載入中… BW-10)**; export roster; cannot mutate approvals ledger / app_config / notification tables.\n\n**pm (李PM)** — only gains powers after `assigned_pm_ids`; dashboard (assigned projects only); full tree; add/delete 大項/中項/細項; assign/delegate; supervisor update + history; approve memberships (own project); SI step-1 approve/批准並修改/退回/拒絕; VO step-1; create SI; submit VO off locked SI; issue terminal handler; export progress/issues; cannot reach /admin; cannot approve non-PM-step SI; cannot admin_override.\n\n**general_foreman (王老總)** — full tree (v14 GF supervisor); add/delete structure; assign; update+history; manage materials (supervisor); read daily (amber banner, **no author CTA — BW-08**); read timetable/contacts; **VO 新增 shows but RLS-denied — BW-03**; **contacts write buttons show but RLS-denied — BW-07**; SI 新增 hidden; not in approval chains; not an issue handler; no dashboard/admin.\n\n**main_contractor (陳工程師/黃管工)** — apply+approved as main_contractor; read tree; update assigned rows; upload drawings (membership-gated); create SI; SI step-0 approve (**watch global vs membership BW-05**); 批准並修改/退回/拒絕; VO step-0 approve + create VO; issue handler when handler=main_contractor; raise PTW; **safety sign-off only if global_role=safety_officer**; daily-log author (sub_role foreman/engineer); cannot add 大項; cannot admin_override.\n\n**subcontractor (何判頭)** — apply+approved; contributor tree (assigned subtree only); update delegated leaf; report issue (→main_contractor); resolve/escalate when handler=判頭; create SI/VO/PTW; materials own rows only (**cannot edit peers — v16**); approve OWN workers; read daily/timetable/contacts; cannot add structure/assign; cannot author daily; cannot write contacts.\n\n**subcontractor_worker (工人A)** — apply+approved; sees ONLY assigned leaf + ancestors; update assigned leaf; report issue (→判頭); comment/reopen own; **SI 新增 shows but RLS-denied — BW-02**; **PTW create shows but RLS-denied — BW-04**; everything else read-only; **CANNOT be assigned via UI — BW-09 (AssignmentModal has no worker option)**.\n\n**owner (業主A)** — apply+approved as owner; read-only tree; owner one-pager export; report issue (→PM, comment only); VO FINAL approver (owner step only, not out of turn); read SI/tools; #/admin bounces; #/dashboard empty.\n\n---\n\n## 5. Ordered Collaborative Scenario (from ZERO)\n\nExecute steps 1→22 in order. Each step: actor, action, expected, and the OTHER role that logs in to verify the handoff propagated. Full click-level detail is in the accompanying `scenarioOrder` artifact. Summary:\n\n1. **admin** creates DC2026 + zones → *pm verifies no powers yet*.\n2. **admin** assigns 李PM → *pm verifies dashboard/我的工地 appear*.\n3. **admin** seeds safety_officer/general_foreman/owner/worker (DB), configures PTW chain → logs BW-06.\n4. **pm** builds 大項/中項/細項 → *general_foreman verifies same full tree*.\n5. **all roles** apply to join → *pm verifies 待審核申請 (watch BW-10)*.\n6. **pm** approves all; **BW-01 probe** (membership-PM vs global add-大項) → *subcontractor verifies project openable*.\n7. **pm** assigns 陳工程師(負責人)+何判頭(委派); **BW-09 probe** (no worker option) → *main_contractor & 判頭 verify 更新 button on that row only*.\n8. **判頭** updates leaf 60% → *pm verifies rollup + history*.\n9. **worker** (DB-assigned) updates 75% + reports issue → *判頭 verifies issue in queue 處理層：判頭*.\n10. **判頭** escalates issue → *main_contractor verifies 處理層：總承建商*.\n11. **main_contractor** escalates to PM → *pm verifies terminal handler*.\n12. **main_contractor** creates+submits SI; **BW-02 probe** → *pm verifies SI at MC step, no PM bar yet*.\n13. **main_contractor** approves SI step-0; **BW-05 probe** → *pm verifies approver bar now shows*.\n14. **pm** approves → SI locks → *判頭 verifies read-only + 抗議 + 提出變更指令*.\n15. **main_contractor** spawns VO off locked SI; **BW-03 probe** → *pm verifies server-computed total*.\n16. **main_contractor→pm→owner** approve VO chain → *admin verifies chain complete + owner audit entry*.\n17. **main_contractor** raises PTW → *safety_officer verifies sign-off step*.\n18. **safety_officer** signs PTW → active+QR → *admin NEGATIVE-verifies admin_override cannot touch PTW; main_contractor verifies QR scan audit*.\n19. **main_contractor(foreman)** writes daily log; **BW-08 probe** → *general_foreman & 判頭 verify read-only*.\n20. **判頭** requests urgent material; edits own, fails on peer → *general_foreman verifies supervisor edit + timetable marker*.\n21. **pm** exports owner one-pager + internal report + issues Excel → *owner verifies same one-pager, no edit*.\n22. **owner** reviews read-only, reports issue, confirms no admin/dashboard data → *pm verifies owner's issue lands 處理層：PM (loop closed)*.\n\n---\n\n## 6. Bug Watchlist (test these explicitly)\n\n| ID | Severity | Symptom | Where | Verify via live web |\n|----|----------|---------|-------|---------------------|\n| BW-01 | P0 | 大項 manage gated on global_role not membership role; membership-PM (global=main_contractor) can't add 大項; gates v14/v15/client diverge | v15, v3, ProgressContext.tsx:63-75 | Step 6 probe: membership-PM tries 加入大項; check button + raw insert |\n| BW-09 | P0 | AssignmentModal has NO worker option → worker's core job unreachable in-app | AssignmentModal.tsx:40-41 | Step 7: confirm only 負責人/委派判頭 tabs, no worker |\n| BW-06 | P0 | Admin UI cannot set safety_officer / general_foreman; PTW + structure depend on them | AdminUsers.tsx:249 | Step 3: open EditRole, confirm both roles absent |\n| BW-02 | P1 | SI 新增 shown to worker, insert RLS-denied | SiContext.tsx:41 vs v9-si-schema.sql:106 (can_edit_project_progress) | Step 12: worker submits SI → expect RLS error surfaced |\n| BW-03 | P1 | VO 新增 shown to general_foreman, insert RLS-denied | VoContext.tsx:39 vs can_edit_project_progress | Step 15: GF submits VO → expect RLS error |\n| BW-04 | P1 | PTW create shown to worker, insert RLS-denied | PtwContext.tsx:50 vs can_edit_project_progress | Step 17: worker creates PTW → expect RLS error |\n| BW-05 | P1 | SI/VO approver canAct keys on global_role; RPC keys on membership (active_role_holders) → button/RPC mismatch | SiApproverBar:30, VoApproverBar:31 vs v9-rls-helpers.sql | Steps 13/16: user with mismatched global vs membership role |\n| BW-07 | P1 | Contacts write buttons show for GF, RLS write = admin/pm only | ContactsContext.canManage vs v11-contacts-schema.sql | GF taps 加聯絡人 → expect RLS error |\n| BW-10 | P1 | Admin/PM approves blind: applicant card stuck 載入中… (v17 narrowed SELECT) | Projects.tsx PendingApprovalCard | Step 5/6: brand-new applicant sharing no project |\n| BW-08 | P2 | GF daily-log: brief says \"writes\", code is read-only — confirm intent | v11-dailies-schema.sql:71-72 | Step 19: GF sees amber read-only banner |\n| BW-NEG | P0 (must HOLD) | admin_override must NOT discharge a safety_officer PTW step | InFlightApprovalsModal loads SI+VO only | Step 18: confirm NO PTW rows in 重新分派 |\n\n**Negative gates that MUST hold (regression checks):** non-admin cannot reach /admin (ProtectedRoute requireAdmin); approvals ledger append-only (`check(false)`, no update/delete); subcontractor cannot edit peer materials (v16); worker/owner cannot act on issues; locked SI rejects new versions (si_lock_guard); cross-project reads blocked by can_view_project; on NATIVE build /sell /mission /takeaway fall through to /home.\n\n---\n\n## 7. Pass/Fail & Reporting\n\n- A step PASSES only when both the actor's action AND the named verifier's cross-role confirmation succeed.\n- Capture: route, role, screenshot, console errors, network 4xx/RLS messages.\n- Any BW item reproducing = a sale-blocking defect (P0/P1) or tracked item (P2). P0/P1 must be fixed and the affected step re-run before sale.\n- Run the full 1→22 chain on phone (390px) and tablet (1600x900) at least once."
+  }
+}

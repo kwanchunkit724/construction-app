@@ -1,0 +1,15 @@
+{
+  "case_key": "timetable-morning",
+  "passed": true,
+  "summary": "早會行事曆 read/write verified end-to-end on live Supabase. Supervisors (PM pm, 老總 general_foreman, and BOTH main_contractor staff engineer+foreman) correctly see all 8 in-range completion markers + 7 materials + 4 events with nothing lost; the genuine contributor 何判頭 (subcontractor) sees 0 of the 8 unassigned completions, proving the v34 per-item narrowing closes the leak without dropping project-wide materials/events. PM created 週會 [sim-0611] at 2026-06-11 14:00 HKT; 管工 re-read the timetable and the event appeared (4->5 events), while 判頭's own event-create attempt was correctly RLS-denied (42501).",
+  "bugs": [
+    {
+      "title": "Stale spec assumption: 管工 (main_contractor foreman) is a timetable SUPERVISOR, not an assigned-only contributor — completion narrowing only applies to subcontractor/worker",
+      "severity": "P3",
+      "repro": "Sign in as 黃管工 60001004 (global+membership role main_contractor). Open 行事曆 for project cccc2026. get_timetable returns all 8 completion markers for unassigned items 02/03, identical to PM. The case premise expected 管工 to see only assigned items.",
+      "evidence": "Live can_manage_project_progress(60001004, project) = true. supabase/v27-progress-rights-by-membership.sql redefines supervisor = membership role in (pm, general_foreman, main_contractor); v34 completion branch grants full visibility to any can_manage user. Committed v15 source still lists only (pm, general_foreman) which mismatches the live function — anyone reading v15 to reason about timetable visibility would mis-predict main_contractor behavior. No security impact (main_contractor is an authorized project supervisor); pure documentation/expectation drift between v15 and the live v27 definition.",
+      "layer": "db"
+    }
+  ],
+  "notes": "v34 narrowing VERIFIED working for the real contributor path: 何判頭 (subcontractor) saw 0 of 8 unassigned completions while every supervisor saw all 8 — no leak, no supervisor loss. Materials+events stay project-wide for all approved members (correct). Created test row left tagged per convention: events.id=6b3c236c-3dda-41af-bff2-476f55d88040 '週會 [sim-0611]' starts 2026-06-11T06:00:00Z. Denial direction also passed: subcontractor event-insert -> 42501. Material count fluctuated 10<->11 between reads due to concurrent sims creating/arriving materials — environmental noise, consistent across roles, not a finding. Range used = HKT week Mon 2026-06-08..Mon 2026-06-15 (2026-06-07T16:00:00Z..2026-06-14T16:00:00Z), matching defaultHktWeekRange() in TimetableContext.tsx."
+}

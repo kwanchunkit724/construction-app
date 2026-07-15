@@ -4,15 +4,20 @@ import { Camera, X, ImagePlus } from 'lucide-react'
 import { Modal } from './Modal'
 import { Spinner } from './Spinner'
 import { useIssues } from '../contexts/IssuesContext'
-import { ISSUE_HANDLER_ZH, getInitialHandler } from '../types'
+import { useProgress } from '../contexts/ProgressContext'
+import { useAuth } from '../contexts/AuthContext'
+import { capturePhotoGeo, recordPhotoMeta, PhotoGeo } from '../lib/photoMeta'
+import { issuePhotoPath } from '../lib/issuePhotos'
+import { ISSUE_HANDLER_ZH, getInitialHandler, isLeaf } from '../types'
 
 interface PhotoSlot {
   localId: string
   preview: string  // object URL for preview
-  url: string | null  // public URL after upload
+  url: string | null  // storage path after upload (private bucket; rendered via signed URL)
   uploading: boolean
   error: string | null
   file: File
+  capturedAt: string  // ISO 8601 — moment the photo was picked (DWSS §3.3.3)
 }
 
 const MAX_PHOTOS = 6
@@ -26,21 +31,32 @@ export function CreateIssueModal({
 }) {
   const navigate = useNavigate()
   const { createIssue, uploadPhoto, myRoleInProject } = useIssues()
+  const { items } = useProgress()
+  const { profile } = useAuth()
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState('')
+  const [location, setLocation] = useState('')
+  const [progressItemId, setProgressItemId] = useState('')  // '' = none
   const [description, setDescription] = useState('')
   const [photos, setPhotos] = useState<PhotoSlot[]>([])
+  const [photoGeo, setPhotoGeo] = useState<PhotoGeo | null>(null)  // captured once on first photo pick
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   const targetHandler = myRoleInProject ? getInitialHandler(myRoleInProject) : null
 
+  // Optional 工序 link: only leaf progress items can be picked (they carry the work).
+  const leafItems = items.filter(i => isLeaf(i, items))
+
   function reset() {
     photos.forEach(p => URL.revokeObjectURL(p.preview))
     setTitle('')
+    setLocation('')
+    setProgressItemId('')
     setDescription('')
     setPhotos([])
+    setPhotoGeo(null)
     setError('')
   }
 
@@ -57,6 +73,7 @@ export function CreateIssueModal({
     const remainingSlots = MAX_PHOTOS - photos.length
     const accepted = files.slice(0, remainingSlots)
 
+    const capturedAt = new Date().toISOString()
     const newSlots: PhotoSlot[] = accepted.map(f => ({
       localId: `${Date.now()}-${Math.random()}`,
       preview: URL.createObjectURL(f),
@@ -64,8 +81,15 @@ export function CreateIssueModal({
       uploading: true,
       error: null,
       file: f,
+      capturedAt,
     }))
     setPhotos(prev => [...prev, ...newSlots])
+
+    // DWSS §3.3.3: capture coarse GPS once, at the moment photos are first added
+    // (non-blocking — null if denied). Reused for every photo on this issue.
+    if (photos.length === 0) {
+      capturePhotoGeo().then(setPhotoGeo)
+    }
 
     // Upload each
     for (const slot of newSlots) {
@@ -97,11 +121,27 @@ export function CreateIssueModal({
 
     const urls = photos.map(p => p.url!)
     setSubmitting(true)
-    const { error, id } = await createIssue(title, description, urls)
+    const { error, id } = await createIssue(title, description, urls, location, progressItemId || null)
     setSubmitting(false)
     if (error) {
       setError(error)
     } else {
+      // DWSS §3.3.3: record capture timestamp + GPS for each photo (best-effort,
+      // append-only; never blocks navigation).
+      if (profile) {
+        void Promise.all(photos.map(p =>
+          p.url
+            ? recordPhotoMeta({
+                projectId,
+                bucket: 'issue-photos',
+                photoPath: issuePhotoPath(p.url),
+                capturedAt: p.capturedAt,
+                geo: photoGeo,
+                uploadedBy: profile.id,
+              })
+            : Promise.resolve()
+        ))
+      }
       close()
       if (id) navigate(`/project/${projectId}/issue/${id}`)
     }
@@ -135,6 +175,35 @@ export function CreateIssueModal({
             autoFocus
           />
         </div>
+
+        <div>
+          <label className="label">位置</label>
+          <input
+            value={location}
+            onChange={e => setLocation(e.target.value)}
+            placeholder="例如：3樓 A室 / 天台"
+            maxLength={60}
+            className="input"
+          />
+        </div>
+
+        {leafItems.length > 0 && (
+          <div>
+            <label className="label">相關工序（可選）</label>
+            <select
+              value={progressItemId}
+              onChange={e => setProgressItemId(e.target.value)}
+              className="input"
+            >
+              <option value="">— 無 —</option>
+              {leafItems.map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.code} {item.title}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Photos — required */}
         <div>

@@ -1,0 +1,17 @@
+What's new in 1.2 — smoother day-to-day use:
+
+Easier-to-read progress table
+• Tighter rows so you see more items per screen with less scrolling
+• One-tap Update on each item; everything else tucked into a "⋯" menu for a cleaner view
+• Fixed the sticky header covering the list and the menu getting clipped on phones
+
+Upgraded report export
+• Split into an Owner one-pager and an Internal detailed version: the owner view fits on a single page with big headline numbers and a progress bar per zone; the internal view adds a full per-zone breakdown
+• New "this period" change shows how much progress moved since last time (green up, red down) — a progress report, not just a static snapshot
+• A plain-language summary line leads the report (e.g. "Overall 6% · 6% ahead") so it reads clearly when shared over WhatsApp
+• Fixed PDF page breaks slicing through text and table rows; smaller, faster files
+
+Site Instructions, Variation Orders & Permits to Work
+• Fixed a loading issue — instruction titles, variation line items, and permit sign-off checklists now all display correctly
+
+Thanks to the foremen and site agents for your feedback. More improvements to come.

@@ -1,0 +1,19 @@
+version: 2
+updates:
+  # ISO 27001 A.5.7 (threat intelligence) + A.8.8 (technical vulnerabilities):
+  # weekly dependency-vulnerability surface for the web/app npm tree.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "security"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "ci"
+      - "security"

@@ -1,0 +1,392 @@
+[
+  {
+    "feature": "每日日誌",
+    "seq": 1,
+    "actor": "62000002",
+    "action": "寫今日日誌",
+    "expected": "allow",
+    "actual": "allow (http 409) duplicate key value violates unique constraint \"dailies_project_id_user_id_date_key\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 2,
+    "actor": "62000002",
+    "action": "補 1 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 3,
+    "actor": "62000002",
+    "action": "補 2 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 4,
+    "actor": "62000002",
+    "action": "補 3 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 5,
+    "actor": "62010001",
+    "action": "寫今日日誌",
+    "expected": "allow",
+    "actual": "allow (http 409) duplicate key value violates unique constraint \"dailies_project_id_user_id_date_key\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 6,
+    "actor": "62010001",
+    "action": "補 1 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 7,
+    "actor": "62010001",
+    "action": "補 2 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 8,
+    "actor": "62010001",
+    "action": "補 3 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 9,
+    "actor": "62010002",
+    "action": "寫今日日誌",
+    "expected": "allow",
+    "actual": "allow (http 409) duplicate key value violates unique constraint \"dailies_project_id_user_id_date_key\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 10,
+    "actor": "62010002",
+    "action": "補 1 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 11,
+    "actor": "62010002",
+    "action": "補 2 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 12,
+    "actor": "62010002",
+    "action": "補 3 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 13,
+    "actor": "62020001",
+    "action": "寫今日日誌",
+    "expected": "allow",
+    "actual": "allow (http 409) duplicate key value violates unique constraint \"dailies_project_id_user_id_date_key\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 14,
+    "actor": "62020001",
+    "action": "補 1 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 15,
+    "actor": "62020001",
+    "action": "補 2 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 16,
+    "actor": "62020001",
+    "action": "補 3 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 17,
+    "actor": "62020002",
+    "action": "寫今日日誌",
+    "expected": "allow",
+    "actual": "allow (http 409) duplicate key value violates unique constraint \"dailies_project_id_user_id_date_key\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 18,
+    "actor": "62020002",
+    "action": "補 1 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 19,
+    "actor": "62020002",
+    "action": "補 2 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 20,
+    "actor": "62020002",
+    "action": "補 3 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 21,
+    "actor": "62030001",
+    "action": "寫今日日誌",
+    "expected": "allow",
+    "actual": "allow (http 409) duplicate key value violates unique constraint \"dailies_project_id_user_id_date_key\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 22,
+    "actor": "62030001",
+    "action": "補 1 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 23,
+    "actor": "62030001",
+    "action": "補 2 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 24,
+    "actor": "62030001",
+    "action": "補 3 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 25,
+    "actor": "62030002",
+    "action": "寫今日日誌",
+    "expected": "allow",
+    "actual": "allow (http 409) duplicate key value violates unique constraint \"dailies_project_id_user_id_date_key\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 26,
+    "actor": "62030002",
+    "action": "補 1 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 27,
+    "actor": "62030002",
+    "action": "補 2 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 28,
+    "actor": "62030002",
+    "action": "補 3 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 29,
+    "actor": "62040001",
+    "action": "寫今日日誌",
+    "expected": "allow",
+    "actual": "allow (http 409) duplicate key value violates unique constraint \"dailies_project_id_user_id_date_key\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 30,
+    "actor": "62040001",
+    "action": "補 1 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 31,
+    "actor": "62040001",
+    "action": "補 2 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 32,
+    "actor": "62040001",
+    "action": "補 3 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 33,
+    "actor": "62040002",
+    "action": "寫今日日誌",
+    "expected": "allow",
+    "actual": "allow (http 409) duplicate key value violates unique constraint \"dailies_project_id_user_id_date_key\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 34,
+    "actor": "62040002",
+    "action": "補 1 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 35,
+    "actor": "62040002",
+    "action": "補 2 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 36,
+    "actor": "62040002",
+    "action": "補 3 日前日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": "當日鎖 R2"
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 37,
+    "actor": "62010003",
+    "action": "判頭寫日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 38,
+    "actor": "62010004",
+    "action": "工人寫日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "每日日誌",
+    "seq": 39,
+    "actor": "62000001",
+    "action": "PM 補尋日日誌",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"dailies\"",
+    "pass": true,
+    "note": ""
+  }
+]

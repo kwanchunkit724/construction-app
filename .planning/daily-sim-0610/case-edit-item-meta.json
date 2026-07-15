@@ -1,0 +1,52 @@
+{
+  "case_key": "edit-item-meta",
+  "date": "2026-06-11",
+  "project": "cccc2026-2026-2026-2026-000026202620",
+  "passed": true,
+  "summary": "PM(60001001) edited a 4座(D) leaf via the updateItemMeta payload (title + planned_start 10d ago / planned_end 10d ahead): PATCH succeeded (1 row), title and dates persisted. plannedProgressOf(2026-06-01..2026-06-21, today 2026-06-11) = 52% (~50% as expected). updateItemMeta does NOT recompute the stored status column, but ProjectDetail.effStatus / ProgressItemCard recompute status live from actual_progress + plannedProgressOf, so the frozen status='not-started' never reaches the UI as a contradiction. Denial direction held: 判頭(60001005, subcontractor, item not assigned to him) PATCH returned HTTP 200 with empty body [] = 0 rows updated (RLS using-clause filtered the row) and the item is not even visible to him via get_visible_progress_items. 老總(60001002, general_foreman, approved) edited a different item title successfully (1 row, last_updated_by = his id), confirming v27 membership-role supervisor rights.",
+  "assertions": [
+    {
+      "name": "PM updateItemMeta persists title + planned dates",
+      "expect": "1 row, title='[sim-0611] 外牆批盪（修訂）', planned_start=2026-06-01, planned_end=2026-06-21",
+      "result": "PASS - PATCH returned 1 row with exactly those values; raw UTF-8 bytes decode to clean Chinese (verified by hex==expected)",
+      "item": "aaaa0004-0004-0004-0004-000000000001"
+    },
+    {
+      "name": "plannedProgressOf ~50%",
+      "expect": "round(11/21*100)=52%",
+      "result": "PASS - inclusive-day math: span 2026-06-01..2026-06-21 = 21 days, elapsed = 11 days, planned = 52% (within ~50%)"
+    },
+    {
+      "name": "stored status staleness handled per effStatus",
+      "expect": "stored status not recomputed by updateItemMeta, but UI derives live status",
+      "result": "PASS (by design) - updateItemMeta omits status; ProjectDetail.effStatus (line 134) and ProgressItemCard (line 126) call deriveStatus(actual_progress, plannedProgressOf(item)) so the frozen status column never surfaces. With actual=0 the live effStatus = not-started, matching the stale stored value, so no contradiction in this case."
+    },
+    {
+      "name": "判頭 PATCH on item NOT his -> denied",
+      "expect": "0 rows / RLS denial",
+      "result": "PASS - HTTP 200 with empty body []; row not updated (PM item title/last_by unchanged after attempt). Item also not visible to 判頭 via get_visible_progress_items (visible count 5, target absent).",
+      "item": "aaaa0004-0004-0004-0004-000000000001"
+    },
+    {
+      "name": "老總 edits another item title -> success",
+      "expect": "1 row updated",
+      "result": "PASS - HTTP 200, 1 row, title='[sim-0611] 鋁窗安裝（老總改）' (clean UTF-8, codepoints 鋁窗安裝（老總改）), last_updated_by=aaaa1002-...; v27 grants general_foreman membership supervisor edit rights.",
+      "item": "aaaa0004-0004-0004-0004-000000000004"
+    }
+  ],
+  "code_refs": {
+    "updateItemMeta": "src/contexts/ProgressContext.tsx:189-205 (PATCH progress_items; sets title/planned_start/planned_end/last_updated_by/last_updated_at; does NOT set status)",
+    "EditItemModal": "src/components/EditItemModal.tsx (validates title non-empty + end>=start; preview = plannedProgressOf)",
+    "plannedProgressOf": "src/types.ts:131-147 (inclusive-day linear schedule)",
+    "deriveStatus": "src/types.ts:162-168",
+    "effStatus": "src/pages/ProjectDetail.tsx:134",
+    "RLS_update_policy": "supabase/v15-progress-edit-rights-split.sql 'Assignees or managers can update progress items' (using/check: can_manage_project_progress OR auth.uid() in assigned_to/delegated_to)",
+    "supervisor_fn": "supabase/v27-progress-rights-by-membership.sql can_manage_project_progress (admin OR assigned_pm OR approved member role in pm/general_foreman/main_contractor)"
+  },
+  "harness_notes": "Bash/curl path hit a transient HTTP 000 connectivity outage mid-run; completed the denial + 老總 assertions via PowerShell Invoke-WebRequest. Windows PowerShell 5.1 ConvertTo-Json|-Body encodes body as system code page, which mojibake'd the first 老總 write; re-PATCHed with explicit [Encoding]::UTF8 bytes to store clean Chinese. This is a TEST-HARNESS artifact, NOT an app bug (the real app posts UTF-8 via fetch/supabase-js). PM write used curl --data-binary @file (clean UTF-8) and verified byte-exact.",
+  "bugs": [],
+  "data_written": [
+    "progress_items aaaa0004-...0001 title -> [sim-0611] 外牆批盪（修訂）, planned 2026-06-01..2026-06-21 (PM)",
+    "progress_items aaaa0004-...0004 title -> [sim-0611] 鋁窗安裝（老總改）（老總) "
+  ]
+}

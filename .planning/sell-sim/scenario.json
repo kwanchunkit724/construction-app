@@ -1,0 +1,156 @@
+[
+  {
+    "step": 1,
+    "actor": "admin (系統管理員)",
+    "action": "Login at #/login with admin phone+password → #/admin → 新增工地項目 → name 「油塘灣住宅發展項目 — DC2026」, default zone A座 + 加分區 B座 → 建立項目.",
+    "expected": "createProject inserts projects row (assigned_pm_ids=[], created_by=admin). Card shows '2 個分區 · 0 位 PM'. Empty-name → '請輸入項目名稱'; dup zone id → '分區編號不可重複'.",
+    "verifyAs": "pm — log in as 60001001 李PM: project is NOT yet on 我的工地 and #/dashboard has no card (no powers until assigned)."
+  },
+  {
+    "step": 2,
+    "actor": "admin",
+    "action": "On the project card 指派 PM → AssignPMModal (admin_list_user_profiles RPC, filtered global_role=pm) → tick 李PM → 儲存.",
+    "expected": "assignPMs writes assigned_pm_ids=[李PM]. Card shows '1 位 PM'.",
+    "verifyAs": "pm — 李PM reloads #/home: project now appears under 我的工地; #/dashboard shows the project card; sidebar 儀表板 link present."
+  },
+  {
+    "step": 3,
+    "actor": "admin",
+    "action": "(Pre-stage roles the UI can't set) Confirm 王老總=general_foreman and create/seed a safety_officer global-role account + an owner + a worker. Because EditRoleModal omits safety_officer/general_foreman (BW-06), set those via DB/RPC, NOT the UI. 簽核流程設定 → for DC2026 add a PTW chain with a safety_officer step (PTW has NO seeded default chain).",
+    "expected": "safety_officer + general_foreman + owner + worker accounts exist with correct global_role. PTW chain saved (approval_chain_steps). BW-06 is logged: admin could NOT do the safety_officer/general_foreman role set via UI.",
+    "verifyAs": "admin — #/admin/users role chips show counts incl 安全主任≥1, 老總≥1, 業主≥1, 判頭工人≥1."
+  },
+  {
+    "step": 4,
+    "actor": "pm (李PM)",
+    "action": "Open DC2026 → 進度 tab → in A座 ZoneSection tap 加入大項 → CreateItemModal code+title (e.g. 結構工程) → save. Expand it → 加細項 中項 then 細項 (set tracking_mode percentage on a leaf).",
+    "expected": "canManageStructure true (assigned PM). New 大項/中項/細項 persist and survive 刷新; parent % auto-rolls-up from leaves.",
+    "verifyAs": "general_foreman (王老總, if approved member) — sees the SAME full tree (v14 GF supervisor branch); confirms structure propagated."
+  },
+  {
+    "step": 5,
+    "actor": "subcontractor 何判頭 / subcontractor_worker / main_contractor / owner / general_foreman",
+    "action": "Each logs in → #/projects → 申請加入工地 → DC2026 → pick their role → 提交.",
+    "expected": "project_members rows status=pending appear; 我的工地 shows 待審核.",
+    "verifyAs": "pm — #/projects 待審核申請 lists ALL these applicants (BUT verify each card shows the applicant name/phone, watch BW-10 載入中… for any brand-new applicant)."
+  },
+  {
+    "step": 6,
+    "actor": "pm (李PM)",
+    "action": "#/projects 待審核申請 → 批准 each applicant (何判頭, worker, 陳工程師/main_contractor, 王老總/GF, owner). Then BUG PROBE: log in as a user who is a project PM BY MEMBERSHIP but global_role=main_contractor and try 加入大項.",
+    "expected": "Memberships flip to approved. BW-01 probe: per the current code that membership-PM CANNOT add 大項 (v15 rejects); per the INTENDED rule they SHOULD. Record which behavior occurs.",
+    "verifyAs": "subcontractor 何判頭 — reloads #/home: DC2026 now openable (no longer 待審核); progress tab renders (empty until assigned)."
+  },
+  {
+    "step": 7,
+    "actor": "pm (李PM)",
+    "action": "On a leaf → AssignmentModal: 負責人 tab tick 陳工程師 (main_contractor); 委派判頭 tab tick 何判頭 → 儲存. THEN attempt to assign the worker.",
+    "expected": "assigned_to/delegated_to written. BW-09 probe: there is NO worker option in AssignmentModal → the worker CANNOT be assigned via UI. Log P0. (Seed worker into delegated_to via DB to continue the worker path.)",
+    "verifyAs": "main_contractor 陳工程師 & subcontractor 何判頭 — each opens the leaf: orange 更新 button now visible on THAT row only; sibling rows have no 更新."
+  },
+  {
+    "step": 8,
+    "actor": "subcontractor 何判頭",
+    "action": "Open the delegated leaf → 更新 → set 60% + 備註 → 儲存. Confirm sees ONLY assigned subtree + ancestors (not other trades).",
+    "expected": "actual_progress=60, progress_history row written, status auto-derives. get_visible_progress_items returns only assigned+ancestor chain (v14 contributor branch).",
+    "verifyAs": "pm — refreshes 進度: leaf shows 60%, parent rollup moved up; 歷史 modal shows 何判頭's entry with timestamp."
+  },
+  {
+    "step": 9,
+    "actor": "subcontractor_worker",
+    "action": "(After DB assignment from step7) Login → open DC2026 → find assigned leaf → 更新 75% → 儲存. Then 問題 tab → 報告新問題.",
+    "expected": "Worker sees ONLY the one leaf + ancestors. Update writes history. Issue created reporter_role=subcontractor_worker, current_handler_role=subcontractor (getInitialHandler). Issue shows 處理層：判頭.",
+    "verifyAs": "subcontractor 何判頭 — issue appears in 何判頭's queue with 處理層：判頭 and action buttons 標記為已解決 / 上呈."
+  },
+  {
+    "step": 10,
+    "actor": "subcontractor 何判頭",
+    "action": "Open the worker's issue → comment → 上呈到 總承建商 (escalate).",
+    "expected": "current_handler_role → main_contractor (getNextHandler). canActOnIssue true while handler=判頭.",
+    "verifyAs": "main_contractor 陳工程師 — issue now shows 處理層：總承建商 with 標記為已解決 / 上呈到 PM buttons; worker (reporter) can still comment, not resolve."
+  },
+  {
+    "step": 11,
+    "actor": "main_contractor 陳工程師",
+    "action": "On the escalated issue tap 上呈到 PM.",
+    "expected": "current_handler_role → pm (terminal; getNextHandler('pm')=null).",
+    "verifyAs": "pm 李PM — issue shows 處理層：PM; PM sees 標記為已解決 (escalate disabled/terminal); worker still cannot act."
+  },
+  {
+    "step": 12,
+    "actor": "main_contractor 陳工程師",
+    "action": "#/project/:id/si → 新增 → SI title+desc, attach ≥1 drawing reference + photo → save draft → submit (submit_si snapshots chain main_contractor→pm).",
+    "expected": "SI status 審批中, sitting at step0 required_role=main_contractor. RLS 'Submitter creates SI' passes (membership role main_contractor). BW-02 probe in parallel: log in as worker, confirm SI 新增 button SHOWS but submit is RLS-denied.",
+    "verifyAs": "pm 李PM — SI is visible in list as 審批中 at the main_contractor step; PM sees NO approve bar yet (not their step)."
+  },
+  {
+    "step": 13,
+    "actor": "main_contractor 陳工程師",
+    "action": "Open the SI → SiApproverBar 批准 (advance step0→pm). BW-05 probe: confirm the canAct gate (global_role) matched the RPC active_role_holders (membership) for this user.",
+    "expected": "submit_approval advances to PM step; approvals audit row appended. If user's global_role=main_contractor but membership≠main_contractor → button shows but RPC errors 你冇權批准呢個步驟 (record BW-05).",
+    "verifyAs": "pm 李PM — opens SI: now SiApproverBar shows 批准/批准並修改/退回/拒絕 (their step)."
+  },
+  {
+    "step": 14,
+    "actor": "pm (李PM)",
+    "action": "Open SI → 批准 (final step). SI locks.",
+    "expected": "SI status → 已鎖定; 簽核紀錄 shows full immutable audit; 抗議 tab now available; si_lock_guard rejects new versions.",
+    "verifyAs": "subcontractor 何判頭 — opens locked SI: read-only, can add 抗議 comment (RLS allows protest only when locked); 提出變更指令 button now available."
+  },
+  {
+    "step": 15,
+    "actor": "main_contractor 陳工程師",
+    "action": "On the locked SI → 提出變更指令 → VO with HKD line items (人工/物料) → submit (chain main_contractor→pm→owner). BW-03 probe: as general_foreman confirm VO 新增 shows but insert RLS-denied.",
+    "expected": "VO created; total_amount_cents server-recomputed (recompute_vo_totals) — client cannot tamper. VO at step0 main_contractor.",
+    "verifyAs": "pm 李PM — VO visible 審批中; verify server total matches line items."
+  },
+  {
+    "step": 16,
+    "actor": "main_contractor → pm → owner",
+    "action": "陳工程師 批准 VO (→pm). 李PM 批准 (→owner). owner logs in → #/project/:id/vo/:id → VoApproverBar 批准 (final).",
+    "expected": "Each step advances via submit_approval (active_role_holders incl owner membership at owner step). After owner 批准 → VO 已批准 → 已鎖定; PDF export button appears.",
+    "verifyAs": "admin — InFlightApprovalsModal for the relevant users no longer lists this VO (chain complete); 簽核紀錄 shows owner's 批准 entry."
+  },
+  {
+    "step": 17,
+    "actor": "main_contractor 陳工程師",
+    "action": "(PTW flag ON from step3) #/project/:id/ptw → 新增 → 動火 type + checklist + PPE photo + workers → submit (submit_ptw uses the admin-configured chain).",
+    "expected": "PTW submitted, routes to the safety_officer step. If no PTW chain configured → 尚未配置工作許可證審批鏈 (would be a finding; step3 configured it).",
+    "verifyAs": "safety_officer — sees the PTW at their sign-off step with a 簽核 (signature) action."
+  },
+  {
+    "step": 18,
+    "actor": "safety_officer",
+    "action": "Open PTW → PtwApproverBar 簽核 → draw signature → submit (approve + record_ptw_signoff).",
+    "expected": "Chain completes → activate_ptw sets active + expiry 23:59 HKT + QR generated. Server validates active_role_holders(project,'safety_officer') = MEMBERSHIP role safety_officer.",
+    "verifyAs": "admin — CRITICAL NEGATIVE CHECK: open InFlightApprovalsModal / 重新分派 → confirm NO PTW rows appear (admin_override must NOT be able to discharge a safety_officer PTW step; modal loads SI+VO only). main_contractor — scans/open #/verify/:token → permit_scans audit row written."
+  },
+  {
+    "step": 19,
+    "actor": "main_contractor (sub_role foreman/engineer)",
+    "action": "#/project/:id/daily → 填寫今日日誌 → fill the day's work → save. BW-08 probe: log in as general_foreman and confirm read-only amber banner + no author CTA.",
+    "expected": "daily row written (dailies_insert allows global_role main_contractor + sub_role foreman/engineer self only). GF/判頭/worker see amber 唔可以寫每日日誌 banner.",
+    "verifyAs": "general_foreman & subcontractor — open 每日日誌: can READ the foreman's entry; no edit affordance."
+  },
+  {
+    "step": 20,
+    "actor": "subcontractor 何判頭",
+    "action": "#/project/:id/materials → 加物料 (FAB) → name/unit/qty + tick urgent + planned arrival → save. Then edit own row; attempt to edit a PEER's row.",
+    "expected": "Own row create/edit OK (materials_insert global_role incl subcontractor; v16 update = requested_by self OR supervisor). Editing a peer's row → RLS-denied (judŋ is not a material supervisor).",
+    "verifyAs": "general_foreman — opens 物料 as material supervisor (is_material_supervisor v16 incl general_foreman): can edit/receive 何判頭's urgent request; 行事曆 shows the order by planned_arrival_at."
+  },
+  {
+    "step": 21,
+    "actor": "pm (李PM)",
+    "action": "進度 tab → Download → 匯出進度報告 → pick 業主版（一頁紙）→ PDF; also export internal report; 問題 tab → 匯出 Excel.",
+    "expected": "Owner one-pager = single overview page, per-zone % bars, NO 未開始, no leaf appendix (export.ts audience 'owner'). Internal report includes detail. Issues .xlsx downloads.",
+    "verifyAs": "owner — opens 進度 read-only AND independently runs the 業主版一頁紙 export: sees the same glance-level rollup, cannot edit any item (no 加入大項 / 更新)."
+  },
+  {
+    "step": 22,
+    "actor": "owner (業主)",
+    "action": "Login → DC2026 → review 進度 (read-only), 簽核 (SI/VO read + the VO they approved), 問題 (報告新問題 routes to PM; comment only, no resolve), 工具 read-only. Confirm #/admin and #/dashboard give no data.",
+    "expected": "All reads gated by approved membership; owner sees no structural/approval buttons except the VO owner-step they already used. #/admin bounces to /home; #/dashboard renders empty (visibleProjects=[]).",
+    "verifyAs": "pm 李PM — any new issue the owner reported shows 處理層：PM in the PM's queue, closing the full from-zero loop."
+  }
+]

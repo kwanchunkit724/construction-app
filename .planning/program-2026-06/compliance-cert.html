@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 14mm 13mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Microsoft JhengHei","PingFang HK","Noto Sans CJK HK",Inter,sans-serif; color:#1e293b; font-size:10.5px; line-height:1.5; margin:0; }
+  .head { border-bottom:3px solid #ea580c; padding-bottom:10px; margin-bottom:14px; }
+  .head h1 { font-size:19px; margin:0 0 2px; color:#0f172a; }
+  .head h2 { font-size:11px; margin:0; color:#475569; font-weight:600; letter-spacing:.3px; }
+  .meta { font-size:8.5px; color:#64748b; margin-top:6px; }
+  .pos { background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:9px 11px; margin:12px 0; }
+  .pos b { color:#c2410c; }
+  h3 { font-size:12.5px; color:#0f172a; margin:16px 0 6px; padding-left:8px; border-left:4px solid #ea580c; }
+  table { width:100%; border-collapse:collapse; margin:6px 0 4px; }
+  th,td { border:1px solid #e2e8f0; padding:4px 6px; text-align:left; vertical-align:top; }
+  th { background:#f1f5f9; font-size:9px; color:#334155; }
+  td { font-size:9px; }
+  td.c { white-space:nowrap; font-weight:700; }
+  .g{color:#15803d}.gg{color:#15803d;font-weight:800}.y{color:#b45309}.r{color:#b91c1c}.n{color:#64748b}
+  .clause { font-weight:700; color:#0f172a; white-space:nowrap; }
+  .note { background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:8px 10px; font-size:9px; margin:8px 0; }
+  .sum { background:#0f172a; color:#f8fafc; border-radius:8px; padding:11px 13px; font-size:10px; margin-top:10px; }
+  .sum b{ color:#fb923c; }
+  ol{ margin:4px 0; padding-left:18px; } li{ margin:2px 0; font-size:9px; }
+  .foot{ font-size:7.5px; color:#94a3b8; margin-top:10px; border-top:1px solid #e2e8f0; padding-top:6px; }
+  .pb { page-break-before: always; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <h1>CK工程 數碼工地監督合規聲明</h1>
+    <h2>CK Construction × DEVB TC(W) No. 2/2023 (DWSS) — Compliance Statement</h2>
+    <div class="meta">自我評估合規聲明 · 對標《數碼工程監督系統 DWSS》Annex A 功能規格 · 用途：投標 / 客戶盡職審查 / 創新獎項 / 政府基金 · v1 · 2026-06-17</div>
+  </div>
+
+  <div class="pos">
+    <b>定位：</b>CK工程<b>並非</b>政府 DWSS（DWSS 係承建商按每張 &gt;$3,000萬合約自費採購、政府擁有）。CK 係<b>對齊 Construction 2.0、以 DWSS Annex A 為質量框架</b>嘅<b>私營／中小判頭數碼工地管理平台</b>，服務政府 mandate 覆蓋唔到嘅市場（sub-$3,000萬、私營項目、判頭層）。本聲明證明 CK 嘅數碼監督能力<b>達到甚至超出</b>該級別政府標準。
+  </div>
+
+  <h3>一、✅ 已達到 / 超出 DWSS 規格</h3>
+  <table>
+    <tr><th>DWSS 條款</th><th>政府要求</th><th>CK 實現（證據）</th><th>評</th></tr>
+    <tr><td class="clause">§2.5 審計軌跡</td><td>記錄增/改/刪，防篡改</td><td><b>防篡改 hash 鏈審計帳本</b>（sha256 串連、13 表 trigger、append-only、verify_integrity + export_ledger_proof）— 連 service-role 改動都偵測到</td><td class="c gg">超出</td></tr>
+    <tr><td class="clause">§2.2.3 / §3.1.7</td><td>提交/批核前重認證</td><td><b>簽名證本人</b>：簽 PTW／表格前密碼重認證（永不記錄密碼）+ 簽名證書</td><td class="c g">達到</td></tr>
+    <tr><td class="clause">§3.1.11</td><td>提交後鎖定</td><td>進度/問題/SI/VO/PTW/文件 鎖定，改靠拒絕→重交</td><td class="c g">達到</td></tr>
+    <tr><td class="clause">§3.1.12</td><td>時間戳 + 操作人</td><td>所有記錄 created/submitted/reviewed/signed _by+_at；審批鏈逐步記</td><td class="c g">達到</td></tr>
+    <tr><td class="clause">§3.1.8-9</td><td>唯一識別碼 + 修訂</td><td>每項目自動序號 + 版本表管修訂</td><td class="c g">達到</td></tr>
+    <tr><td class="clause">§3.1.10</td><td>草稿可改</td><td>draft 可改，鎖定僅提交後</td><td class="c g">達到</td></tr>
+    <tr><td class="clause">§3.1.3</td><td>選擇清單減自由文字</td><td>PTW類型/機械/天氣/優先級 多用列舉</td><td class="c g">達到</td></tr>
+    <tr><td class="clause">§7.1.2 / §7.1.10</td><td>工地日誌 G.F.536</td><td><b>每日施工日誌</b>：出勤/機械/上下晝天氣/天文台警告/進度/備註；當日鎖定</td><td class="c g">達到</td></tr>
+    <tr><td class="clause">§2.1.4</td><td>256-SSL、傳輸+靜態加密</td><td>Supabase TLS 1.2+ + 靜態 AES-256</td><td class="c g">達到</td></tr>
+    <tr><td class="clause">§1.2.1</td><td>原生 iOS/Android App</td><td>Capacitor 8，iOS App Store 上架 + Android</td><td class="c g">達到</td></tr>
+    <tr><td class="clause">§4.3</td><td>報告 PDF/XLS + 篩選</td><td>Excel+PDF（進度/問題/日誌/VO），按日期/位置/工種/用戶篩選</td><td class="c g">達到</td></tr>
+    <tr><td class="clause">§4.4</td><td>搜尋</td><td>文件/問題/用戶 多條件搜尋</td><td class="c g">達到</td></tr>
+    <tr><td class="clause">§1.1.6 / §3.1.2</td><td>英文 DB 儲存</td><td>DB 列舉/欄名英文，顯示層中文映射</td><td class="c g">達到</td></tr>
+    <tr><td class="clause">§1.2.3</td><td>離線快取</td><td>離線唯讀快取 + 偵測 + 重連同步</td><td class="c g">達到</td></tr>
+    <tr><td class="clause">§3.4</td><td>角色權限管理</td><td>8 角色 RBAC + 每項目成員 + <b>後端 RLS 強制</b>（client+DB 雙重）</td><td class="c g">達到</td></tr>
+    <tr><td class="clause">§2.1.3</td><td>ISO 27001 / Tier-3 機房</td><td>託管於 <b>Supabase（ISO 27001 + SOC 2 認證基建）</b></td><td class="c n">繼承</td></tr>
+  </table>
+  <div class="note"><b>重點：</b>DWSS §2.5 + §2.2.3/§3.1.7 + §3.1.11 + §3.1.12 = 政府要嘅「<b>爭議下站得住嘅證據鏈</b>」。CK 喺呢組要求上<b>達到並超出</b>（防篡改 hash 鏈 vs 一般 log）— 中小判頭市場罕有嘅信任武器。</div>
+
+  <h3>二、🟡 部分達到（roadmap 中）</h3>
+  <table>
+    <tr><th>條款</th><th>要求</th><th>CK 現狀 → 路線</th></tr>
+    <tr><td class="clause">§2.2.2</td><td>登入雙因素</td><td>已有 TOTP MFA + AAL2 step-up 基建（現 flag OFF，僅高危操作）→ 開 login 2FA path + enforcement</td></tr>
+    <tr><td class="clause">§3.3</td><td>相片 GPS/HK80</td><td>已壓縮 + 相機；未捕捉 GPS/時間元數據 → 加相片元數據管道</td></tr>
+    <tr><td class="clause">§7.1.1</td><td>RISC + ITP</td><td>通用表格+問題+圖則送審（近似）→ 加 RISC 表型 + ITP 連動</td></tr>
+    <tr><td class="clause">§7.1.3</td><td>安全巡查/表現</td><td>PTW+安全主任簽核+問題；未有週/月巡查表+意外統計 → 加安全巡查表</td></tr>
+    <tr><td class="clause">§1.1.2/§3.2</td><td>智慧工地（IoT/AI）</td><td><b>AI 站長</b>+實時天氣；未整合 IoT/感應器 → AI 起步，IoT 待硬件夥伴</td></tr>
+    <tr><td class="clause">§4.2/§7.3</td><td>跨模組 dashboard</td><td>各模組 KPI；未有綜合 dashboard → 加綜合 dashboard</td></tr>
+  </table>
+
+  <h3>三、🔴 規劃中（DWSS 有、CK 暫缺）</h3>
+  <table>
+    <tr><th>條款</th><th>要求</th><th>備註</th></tr>
+    <tr><td class="clause">§7.1.4</td><td>清潔檢查清單</td><td>私營判頭需求較低，可按客戶加</td></tr>
+    <tr><td class="clause">§7.1.5</td><td>勞工申報 G.F.527</td><td>日誌已有出勤，缺 G.F.527 + 工資率</td></tr>
+    <tr><td class="clause">§7.1.6</td><td>NEC 合約管理</td><td>SI/VO 最接近（指令+變更），缺 NEC 全套</td></tr>
+    <tr><td class="clause">§1.1.7/§5.3</td><td>API → iCWP</td><td>開 REST/標準化匯出 = iCWP-ready 賣點</td></tr>
+    <tr><td class="clause">§5.2</td><td>BIM 相容</td><td>待 BIM 需求</td></tr>
+    <tr><td class="clause">§2.3</td><td>MDM 流動裝置管理</td><td>企業版功能，中小客非必須</td></tr>
+  </table>
+
+  <h3>四、證據附件（可隨本聲明提交）</h3>
+  <ol>
+    <li><b>審計完整性報告</b> — verify_integrity() 證明指定期間關鍵記錄 hash 鏈完整、未被篡改。</li>
+    <li><b>簽名證書</b> — get_signature_proof() 列簽署人姓名/電話/角色、對象、時間、即時鏈狀態、中文聲明句；可逐張 PTW／表格出證。</li>
+    <li><b>審計帳本匯出</b> — export_ledger_proof()（序號+hash，不含內容），供第三方離線覆核。</li>
+    <li><b>角色權限矩陣</b> — 8 角色 × 各模組 RLS（client+DB 雙重把關）。</li>
+  </ol>
+
+  <div class="sum">
+    <b>合規定位：</b>CK工程喺發展局 DWSS 嘅「證據鏈」核心要求（審計、重認證、鎖定、時間戳）上<b>達到並超出</b>政府標準，並覆蓋 G.F.536 工地日誌、原生 App、加密、RBAC、PDF/XLS 報告等多項 DWSS 功能。作為私營/中小判頭平台，CK 以 DWSS 規格為持續對齊嘅質量框架，為政府 mandate 覆蓋唔到嘅工程提供同級嘅數碼監督與爭議存證能力。
+  </div>
+
+  <div class="foot">本聲明為自我評估。CK 不聲稱「DWSS 認證」或「ISO 27001 認證」— 第三方認證須由認可認證機構審核發出。© CK工程 / 關進杰 · 2026-06-17</div>
+</body>
+</html>

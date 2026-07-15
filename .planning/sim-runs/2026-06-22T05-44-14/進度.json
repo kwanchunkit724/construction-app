@@ -1,0 +1,362 @@
+[
+  {
+    "feature": "進度",
+    "seq": 1,
+    "actor": "62010001",
+    "action": "更新進度 0003 → 59% (一座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 2,
+    "actor": "62010002",
+    "action": "更新進度 0003 → 72% (一座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 3,
+    "actor": "62010003",
+    "action": "更新進度 0004 → 72% (一座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 4,
+    "actor": "62010004",
+    "action": "更新進度 0004 → 85% (一座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 5,
+    "actor": "62010003",
+    "action": "更新進度 0007 → 41% (一座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 6,
+    "actor": "62010001",
+    "action": "更新進度 0008 → 54% (一座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 7,
+    "actor": "62000001",
+    "action": "PM 加中項 (一座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "進度",
+    "seq": 8,
+    "actor": "62010003",
+    "action": "判頭加大項 (一座)",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"progress_items\"",
+    "pass": true,
+    "note": "非 manager"
+  },
+  {
+    "feature": "進度",
+    "seq": 9,
+    "actor": "62010004",
+    "action": "工人改未派 leaf (一座)",
+    "expected": "deny",
+    "actual": "deny (http 200) 0 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "進度",
+    "seq": 10,
+    "actor": "62020001",
+    "action": "更新進度 0011 → 23% (二座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 11,
+    "actor": "62020002",
+    "action": "更新進度 0011 → 36% (二座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 12,
+    "actor": "62020003",
+    "action": "更新進度 0012 → 36% (二座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 13,
+    "actor": "62020004",
+    "action": "更新進度 0012 → 49% (二座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 14,
+    "actor": "62020003",
+    "action": "更新進度 0015 → 75% (二座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 15,
+    "actor": "62020001",
+    "action": "更新進度 0016 → 88% (二座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 16,
+    "actor": "62000001",
+    "action": "PM 加中項 (二座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "進度",
+    "seq": 17,
+    "actor": "62020003",
+    "action": "判頭加大項 (二座)",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"progress_items\"",
+    "pass": true,
+    "note": "非 manager"
+  },
+  {
+    "feature": "進度",
+    "seq": 18,
+    "actor": "62020004",
+    "action": "工人改未派 leaf (二座)",
+    "expected": "deny",
+    "actual": "deny (http 200) 0 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "進度",
+    "seq": 19,
+    "actor": "62030001",
+    "action": "更新進度 0019 → 57% (三座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 20,
+    "actor": "62030002",
+    "action": "更新進度 0019 → 70% (三座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 21,
+    "actor": "62030003",
+    "action": "更新進度 0020 → 70% (三座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 22,
+    "actor": "62030004",
+    "action": "更新進度 0020 → 83% (三座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 23,
+    "actor": "62030003",
+    "action": "更新進度 0023 → 39% (三座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 24,
+    "actor": "62030001",
+    "action": "更新進度 0024 → 52% (三座)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 25,
+    "actor": "62000001",
+    "action": "PM 加中項 (三座)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "進度",
+    "seq": 26,
+    "actor": "62030003",
+    "action": "判頭加大項 (三座)",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"progress_items\"",
+    "pass": true,
+    "note": "非 manager"
+  },
+  {
+    "feature": "進度",
+    "seq": 27,
+    "actor": "62030004",
+    "action": "工人改未派 leaf (三座)",
+    "expected": "deny",
+    "actual": "deny (http 200) 0 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "進度",
+    "seq": 28,
+    "actor": "62040001",
+    "action": "更新進度 0027 → 21% (外圍)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 29,
+    "actor": "62040002",
+    "action": "更新進度 0027 → 34% (外圍)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 30,
+    "actor": "62040003",
+    "action": "更新進度 0028 → 34% (外圍)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 31,
+    "actor": "62040004",
+    "action": "更新進度 0028 → 47% (外圍)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 32,
+    "actor": "62040003",
+    "action": "更新進度 0031 → 73% (外圍)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 33,
+    "actor": "62040001",
+    "action": "更新進度 0032 → 86% (外圍)",
+    "expected": "allow",
+    "actual": "allow (http 200) 1 row",
+    "pass": true,
+    "note": "被派 leaf"
+  },
+  {
+    "feature": "進度",
+    "seq": 34,
+    "actor": "62000001",
+    "action": "PM 加中項 (外圍)",
+    "expected": "allow",
+    "actual": "allow (http 201) 1 row",
+    "pass": true,
+    "note": ""
+  },
+  {
+    "feature": "進度",
+    "seq": 35,
+    "actor": "62040003",
+    "action": "判頭加大項 (外圍)",
+    "expected": "deny",
+    "actual": "deny (http 403) new row violates row-level security policy for table \"progress_items\"",
+    "pass": true,
+    "note": "非 manager"
+  },
+  {
+    "feature": "進度",
+    "seq": 36,
+    "actor": "62040004",
+    "action": "工人改未派 leaf (外圍)",
+    "expected": "deny",
+    "actual": "deny (http 200) 0 row",
+    "pass": true,
+    "note": ""
+  }
+]

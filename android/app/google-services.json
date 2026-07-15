@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1006404694750",
+    "project_id": "ck-construction-59713",
+    "storage_bucket": "ck-construction-59713.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1006404694750:android:d6ce8c23b219bd097fc84f",
+        "android_client_info": {
+          "package_name": "com.kwanchunkit.constructionapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDXVIudD7kPRCK0UWjj9lq7eqx0n8fMZ3o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

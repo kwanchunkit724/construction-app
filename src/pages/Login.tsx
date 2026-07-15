@@ -5,6 +5,19 @@ import { useAuth } from '../contexts/AuthContext'
 import { isValidHKPhone, normalizePhone } from '../lib/phone'
 import { Spinner } from '../components/Spinner'
 
+// Parse `next` from the hash query (HashRouter — query lives after `?` in the
+// hash, e.g. #/login?next=%2Fverify%2Fabc). Only honor same-app relative
+// paths (must start with a single '/') to avoid open-redirect to other origins.
+function getSafeNext() {
+  const hash = window.location.hash // e.g. '#/login?next=%2Fverify%2Fabc'
+  const qIndex = hash.indexOf('?')
+  if (qIndex === -1) return '/home'
+  const next = new URLSearchParams(hash.slice(qIndex + 1)).get('next')
+  if (!next) return '/home'
+  if (!next.startsWith('/') || next.startsWith('//')) return '/home'
+  return next
+}
+
 export default function Login() {
   const { session, signIn } = useAuth()
   const [phone, setPhone] = useState('')
@@ -12,7 +25,7 @@ export default function Login() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  if (session) return <Navigate to="/home" replace />
+  if (session) return <Navigate to={getSafeNext()} replace />
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()

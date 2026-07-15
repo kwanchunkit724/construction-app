@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Plus, Building2, UserCog, Trash2, RefreshCw, Download } from 'lucide-react'
+import { Plus, Building2, UserCog, Trash2, RefreshCw, Download, GitBranch, ToggleLeft } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
 import { CreateProjectModal } from '../components/CreateProjectModal'
 import { AssignPMModal } from '../components/AssignPMModal'
 import { useProjects } from '../contexts/ProjectsContext'
-import { exportProjectsToExcel } from '../lib/export'
 import { supabase } from '../lib/supabase'
 import type { Project, UserProfile } from '../types'
 
@@ -29,10 +29,17 @@ export default function AdminProjects() {
     const ids = Array.from(new Set(projects.flatMap(p => p.assigned_pm_ids)))
     const users: Record<string, UserProfile> = {}
     if (ids.length > 0) {
-      const { data } = await supabase.from('user_profiles').select('*').in('id', ids)
-      if (data) for (const u of data as UserProfile[]) users[u.id] = u
+      // v17: admin RPC bypasses narrowed user_profiles SELECT policy.
+      const { data } = await supabase.rpc('admin_list_user_profiles')
+      if (data) {
+        const idSet = new Set(ids)
+        for (const u of data as UserProfile[]) {
+          if (idSet.has(u.id)) users[u.id] = u
+        }
+      }
     }
-    exportProjectsToExcel(projects, users)
+    const { exportProjectsToExcel } = await import('../lib/export')
+    await exportProjectsToExcel(projects, users)
   }
 
   return (
@@ -115,6 +122,20 @@ export default function AdminProjects() {
                 >
                   <UserCog size={16} /> 指派 PM
                 </button>
+                <Link
+                  to={`/admin/projects/${p.id}/chains`}
+                  className="flex-1 flex items-center justify-center gap-1.5 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 py-2 rounded-lg"
+                  title="設定簽核流程"
+                >
+                  <GitBranch size={16} /> 簽核流程
+                </Link>
+                <Link
+                  to={`/admin/projects/${p.id}/modules`}
+                  className="flex-1 flex items-center justify-center gap-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 py-2 rounded-lg"
+                  title="設定模組"
+                >
+                  <ToggleLeft size={16} /> 模組
+                </Link>
                 {confirmDelId === p.id ? (
                   <>
                     <button
