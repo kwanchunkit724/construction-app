@@ -132,10 +132,13 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     // project (every dict is addable in-app afterwards).
     if (guided && data) {
       const pid = (data as { id: string }).id
+      // every row carries `locked` explicitly — a PostgREST bulk insert uses
+      // the UNION of columns, and a row missing one sends NULL (not the
+      // column default), which violates the NOT NULL constraint (23502).
       const rows = [
-        ...GUIDED_DEFAULT_TRADES.map((label, i) => ({ project_id: pid, kind: 'trade', label, sort_order: i })),
+        ...GUIDED_DEFAULT_TRADES.map((label, i) => ({ project_id: pid, kind: 'trade', label, sort_order: i, locked: false })),
         ...GUIDED_LOCKED_DOC_TYPES.map((label, i) => ({ project_id: pid, kind: 'doc_type', label, sort_order: i, locked: true })),
-        ...GUIDED_DEFAULT_DRAWING_TYPES.map((label, i) => ({ project_id: pid, kind: 'drawing_type', label, sort_order: i })),
+        ...GUIDED_DEFAULT_DRAWING_TYPES.map((label, i) => ({ project_id: pid, kind: 'drawing_type', label, sort_order: i, locked: false })),
       ]
       const { error: dictErr } = await supabase.from('project_dicts').insert(rows)
       if (dictErr) console.error('guided dict seed error:', dictErr)

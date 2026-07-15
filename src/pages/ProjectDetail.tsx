@@ -150,12 +150,13 @@ function ProjectDetailInner({ projectId }: { projectId: string }) {
   useEffect(() => {
     const stillVisible =
       tab === 'progress'
+      || (tab === 'files' && project?.progress_mode === 'guided')
       || (tab === 'issues' && showIssuesTab)
       || (tab === 'si-vo' && showSiVoTab)
       || (tab === 'tools' && showToolsTab)
       || (tab === 'assistant' && showAssistantTab)
     if (!stillVisible) setTab('progress')
-  }, [tab, showIssuesTab, showSiVoTab, showToolsTab, showAssistantTab])
+  }, [tab, showIssuesTab, showSiVoTab, showToolsTab, showAssistantTab, project?.progress_mode])
 
   // The 問題 tab badge counts formal open issues only — 即時問題 (snags) are a
   // separate self-handled lane with their own section/count inside the tab.
