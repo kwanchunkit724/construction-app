@@ -359,7 +359,7 @@ function IsoMap({ project, map, items, onPickZone }: {
                 fill="#0f172a" stroke="#ffffff" strokeWidth={3.5} paintOrder="stroke">{zone.name}</text>
               <text x={px} y={topY - 6} textAnchor="middle" fontSize={13} fontWeight={800}
                 stroke="#ffffff" strokeWidth={3.5} paintOrder="stroke"
-                fill={p.pct === null ? '#94a3b8' : p.pct >= 100 ? '#16a34a' : p.pct > 0 ? '#2563eb' : '#94a3b8'}>
+                fill={p.pct === null ? '#94a3b8' : p.pct >= 100 ? '#059669' : p.pct > 0 ? '#ea580c' : '#94a3b8'}>
                 {p.pct === null ? '—' : `${p.pct}%`}
               </text>
             </g>

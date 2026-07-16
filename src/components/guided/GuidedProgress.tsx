@@ -29,10 +29,12 @@ type Page = 'kind' | 'zone' | 'trade' | 'location' | 'process'
 
 const KIND_ZH: Record<ZoneKind, string> = { building: '大樓', external: '外圍' }
 
+// ui-ux-pro-max palette (industrial grey + safety orange): orange =
+// in-progress (brand), emerald = done — matches the PDF report 1:1.
 function pctColor(pct: number | null): string {
   if (pct === null) return 'text-site-300'
-  if (pct >= 100) return 'text-green-600'
-  if (pct > 0) return 'text-blue-600'
+  if (pct >= 100) return 'text-emerald-600'
+  if (pct > 0) return 'text-safety-600'
   return 'text-site-400'
 }
 
@@ -103,9 +105,11 @@ function ProcessRow({ leaf, onClick }: { leaf: ProgressItem; onClick?: () => voi
       </div>
       <div className="flex flex-wrap gap-[3px]">
         {labels.map(f => (
-          <span key={f} className="flex flex-col items-center" style={{ minWidth: 13 }}>
-            <span className="text-[7px] leading-[9px] text-site-400">{abbrevFloor(f)}</span>
-            <span className={`w-[13px] h-[13px] rounded-[3px] border ${done.has(f) ? 'bg-green-500 border-green-600' : 'bg-site-50 border-site-200'}`} />
+          <span
+            key={f}
+            className={`inline-flex items-center justify-center w-[19px] h-[17px] rounded-[4px] border text-[8px] font-bold leading-none ${done.has(f) ? 'bg-emerald-500 border-emerald-600 text-white' : 'bg-site-50 border-site-200 text-site-400'}`}
+          >
+            {abbrevFloor(f)}
           </span>
         ))}
       </div>
@@ -536,7 +540,7 @@ function TickSheet({ leaf, unitZh, canDelete, onClose, onSave, onDelete, onHisto
             <button
               key={f}
               onClick={() => toggle(f)}
-              className={`flex items-center justify-center gap-1 py-2.5 rounded-xl border-2 text-sm font-semibold ${on ? 'border-green-500 bg-green-50 text-green-700' : 'border-site-200 text-site-500'}`}
+              className={`flex items-center justify-center gap-1 py-2.5 rounded-xl border-2 text-sm font-semibold ${on ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-site-200 text-site-500'}`}
             >
               {on && <Check size={13} />} {f}
             </button>
