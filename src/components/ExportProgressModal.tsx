@@ -5,7 +5,9 @@ import { PROGRESS_STATUS_ZH } from '../types'
 import {
   type ExportProgressOptions, type ReportDepth,
   ALL_STATUSES, exportPreset, buildReportModel,
+  exportGuidedProgressToExcel, exportGuidedProgressToPDF,
 } from '../lib/export'
+import { Modal } from './Modal'
 import { useTrades, tradeName } from '../lib/trades'
 import { supabase } from '../lib/supabase'
 
@@ -34,6 +36,91 @@ const PRESET_META: Record<Exclude<PresetName, 'custom'>, { label: string; sub: s
 }
 
 export function ExportProgressModal({ project, items, onClose }: {
+  project: Project
+  items: ProgressItem[]
+  onClose: () => void
+}) {
+  // Guided projects export their own flat-dimension report (分區×工種 matrix +
+  // per-工序 tick detail) — the classic tree presets don't apply.
+  if (project.progress_mode === 'guided') {
+    return <GuidedExportPanel project={project} items={items} onClose={onClose} />
+  }
+  return <ClassicExportModal project={project} items={items} onClose={onClose} />
+}
+
+function GuidedExportPanel({ project, items, onClose }: {
+  project: Project
+  items: ProgressItem[]
+  onClose: () => void
+}) {
+  const [zoneId, setZoneId] = useState('')
+  const [tradeLabel, setTradeLabel] = useState('')
+  const [busy, setBusy] = useState<'xlsx' | 'pdf' | null>(null)
+  const [error, setError] = useState('')
+
+  const tradeOptions = useMemo(() => {
+    const s = new Set<string>()
+    for (const i of items) if (i.trade_label) s.add(i.trade_label)
+    return [...s]
+  }, [items])
+
+  const matchCount = useMemo(() => items.filter(i =>
+    !items.some(c => c.parent_id === i.id)
+    && i.node_kind !== 'floor'
+    && (!zoneId || i.zone_id === zoneId)
+    && (!tradeLabel || i.trade_label === tradeLabel)).length,
+  [items, zoneId, tradeLabel])
+
+  async function run(kind: 'xlsx' | 'pdf') {
+    setBusy(kind); setError('')
+    try {
+      const opts = { zoneId: zoneId || null, tradeLabel: tradeLabel || null }
+      if (kind === 'xlsx') await exportGuidedProgressToExcel(project, items, opts)
+      else await exportGuidedProgressToPDF(project, items, opts)
+      onClose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '匯出失敗')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <Modal open onClose={() => { if (!busy) onClose() }} title="匯出進度表">
+      <div className="space-y-4">
+        <p className="text-xs text-site-400">兩部分：分區 × 工種 進度總覽 + 工序明細（含每層剔格狀態）</p>
+        <div>
+          <label className="label">分區</label>
+          <select className="input" value={zoneId} onChange={e => setZoneId(e.target.value)}>
+            <option value="">全部分區</option>
+            {project.zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label">工種</label>
+          <select className="input" value={tradeLabel} onChange={e => setTradeLabel(e.target.value)}>
+            <option value="">全部工種</option>
+            {tradeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div className={`rounded-xl border px-3 py-2.5 text-sm ${matchCount > 0 ? 'bg-safety-50 border-safety-200 text-safety-800' : 'bg-site-50 border-site-200 text-site-500'}`}>
+          命中 <span className="font-bold">{matchCount}</span> 個工序
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={() => void run('xlsx')} disabled={!!busy || matchCount === 0} className="btn-primary min-h-[44px] disabled:opacity-50">
+            {busy === 'xlsx' ? <Loader2 size={18} className="animate-spin" /> : <><FileSpreadsheet size={16} /> Excel</>}
+          </button>
+          <button onClick={() => void run('pdf')} disabled={!!busy || matchCount === 0} className="btn-ghost min-h-[44px] flex items-center justify-center gap-1.5 disabled:opacity-50">
+            {busy === 'pdf' ? <Loader2 size={18} className="animate-spin" /> : <><FileText size={16} /> PDF</>}
+          </button>
+        </div>
+        {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{error}</div>}
+      </div>
+    </Modal>
+  )
+}
+
+function ClassicExportModal({ project, items, onClose }: {
   project: Project
   items: ProgressItem[]
   onClose: () => void
