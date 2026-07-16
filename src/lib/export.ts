@@ -1448,3 +1448,175 @@ export async function exportEquipmentRegister(
   })
   await shareOrDownloadBlob(blob, `${safeName(project.name)}_機械表格_${dateStr()}.xlsx`, `${project.name} — 機械登記 / 法定表格`)
 }
+
+// ── Guided 進度表 export (v112) — the flat leaf carries every dimension:
+// 類別(大樓/外圍) × 分區 × 工種(trade_label) × 位置 × 工序 × 樓層剔格.
+// Sheet/section 1 is a 分區×工種 % matrix; sheet/section 2 is one row per
+// 工序 with tick counts and the ticked/unticked label lists. done/total are
+// TICK counts, so every % is arithmetic over the same cells the app shows.
+
+export interface GuidedExportOptions {
+  zoneId?: string | null
+  tradeLabel?: string | null
+}
+
+interface GuidedRow {
+  kindZh: string
+  zoneIdx: number
+  zoneName: string
+  trade: string
+  location: string
+  title: string
+  done: number
+  total: number
+  pct: number | null
+  doneLabels: string[]
+  restLabels: string[]
+}
+
+function buildGuidedRows(project: Project, items: ProgressItem[], opts: GuidedExportOptions): GuidedRow[] {
+  const leaves = items.filter(i =>
+    !items.some(c => c.parent_id === i.id)
+    && i.node_kind !== 'floor'
+    && (!opts.zoneId || i.zone_id === opts.zoneId)
+    && (!opts.tradeLabel || i.trade_label === opts.tradeLabel))
+  const rows = leaves.map(l => {
+    const zi = project.zones.findIndex(z => z.id === l.zone_id)
+    const zone = zi >= 0 ? project.zones[zi] : undefined
+    const labels = Array.isArray(l.floor_labels) ? l.floor_labels : []
+    const ticked = new Set(Array.isArray(l.floors_completed) ? l.floors_completed : [])
+    const done = labels.filter(f => ticked.has(f))
+    const rest = labels.filter(f => !ticked.has(f))
+    return {
+      kindZh: zone?.kind === 'external' ? '外圍' : '大樓',
+      zoneIdx: zi >= 0 ? zi : 99,
+      zoneName: zone?.name ?? l.zone_id ?? '—',
+      trade: l.trade_label ?? '未分類',
+      location: l.location ?? (zone?.kind === 'external' ? '—' : '未分類'),
+      title: l.title,
+      done: done.length,
+      total: labels.length,
+      pct: labels.length === 0 ? null : Math.round((done.length / labels.length) * 100),
+      doneLabels: done,
+      restLabels: rest,
+    }
+  })
+  rows.sort((a, b) =>
+    a.kindZh.localeCompare(b.kindZh)
+    || a.zoneIdx - b.zoneIdx
+    || a.trade.localeCompare(b.trade)
+    || a.location.localeCompare(b.location)
+    || a.title.localeCompare(b.title))
+  return rows
+}
+
+function guidedMatrix(project: Project, rows: GuidedRow[]) {
+  const trades = [...new Set(rows.map(r => r.trade))]
+  const zoneNames = project.zones
+    .filter(z => rows.some(r => r.zoneName === z.name))
+    .map(z => z.name)
+  const pctOf = (rs: GuidedRow[]): number | null => {
+    const done = rs.reduce((s, r) => s + r.done, 0)
+    const total = rs.reduce((s, r) => s + r.total, 0)
+    return total === 0 ? null : Math.round((done / total) * 100)
+  }
+  const lines = zoneNames.map(zn => {
+    const zr = rows.filter(r => r.zoneName === zn)
+    return {
+      zone: zn,
+      cells: trades.map(t => pctOf(zr.filter(r => r.trade === t))),
+      overall: pctOf(zr),
+    }
+  })
+  return {
+    trades,
+    lines,
+    overall: trades.map(t => pctOf(rows.filter(r => r.trade === t))),
+    grand: pctOf(rows),
+  }
+}
+
+function guidedFilterLabel(project: Project, opts: GuidedExportOptions): string {
+  const parts: string[] = []
+  if (opts.zoneId) parts.push(`分區：${project.zones.find(z => z.id === opts.zoneId)?.name ?? opts.zoneId}`)
+  if (opts.tradeLabel) parts.push(`工種：${opts.tradeLabel}`)
+  return parts.join(' · ')
+}
+
+const fmtGuidedPct = (p: number | null) => (p === null ? '—' : `${p}%`)
+
+export async function exportGuidedProgressToExcel(project: Project, items: ProgressItem[], opts: GuidedExportOptions = {}) {
+  const rows = buildGuidedRows(project, items, opts)
+  const m = guidedMatrix(project, rows)
+  const filterLabel = guidedFilterLabel(project, opts)
+
+  const aoa1: (string | number | null)[][] = []
+  aoa1.push([`${project.name} — 進度總覽（分區 × 工種）`])
+  aoa1.push([`產生：${new Date().toLocaleString('zh-HK')}${filterLabel ? ` · ${filterLabel}` : ''}`])
+  aoa1.push([])
+  aoa1.push(['分區', ...m.trades, '整體'])
+  for (const line of m.lines) aoa1.push([line.zone, ...line.cells.map(fmtGuidedPct), fmtGuidedPct(line.overall)])
+  aoa1.push(['整體', ...m.overall.map(fmtGuidedPct), fmtGuidedPct(m.grand)])
+  const ws1 = XLSX.utils.aoa_to_sheet(aoa1)
+  ws1['!cols'] = [{ wch: 14 }, ...m.trades.map(() => ({ wch: 12 })), { wch: 10 }]
+
+  const aoa2: (string | number | null)[][] = []
+  aoa2.push([`${project.name} — 工序明細`])
+  aoa2.push([])
+  aoa2.push(['類別', '分區', '工種', '位置', '工序', '完成', '總數', '%', '已完成', '未完成'])
+  for (const r of rows) {
+    aoa2.push([
+      r.kindZh, r.zoneName, r.trade, r.location, r.title,
+      r.done, r.total, fmtGuidedPct(r.pct),
+      r.doneLabels.join('、'), r.restLabels.join('、'),
+    ])
+  }
+  const ws2 = XLSX.utils.aoa_to_sheet(aoa2)
+  ws2['!cols'] = [{ wch: 6 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 6 }, { wch: 6 }, { wch: 7 }, { wch: 42 }, { wch: 42 }]
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws1, '進度總覽')
+  XLSX.utils.book_append_sheet(wb, ws2, '工序明細')
+  const blob = new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+  await shareOrDownloadBlob(blob, `${safeName(project.name)}_進度表_${dateStr()}.xlsx`, `${project.name} — 進度表（${rows.length} 個工序）`)
+}
+
+export async function exportGuidedProgressToPDF(project: Project, items: ProgressItem[], opts: GuidedExportOptions = {}) {
+  // Rendered via html2canvas (system CJK fonts) — see htmlToPdfBlob.
+  const esc = escapeHtml
+  const rows = buildGuidedRows(project, items, opts)
+  const m = guidedMatrix(project, rows)
+  const filterLabel = guidedFilterLabel(project, opts)
+
+  // html2canvas renders the whole body to one canvas; browsers cap canvas
+  // height (~32k px). Cap the detail table and say so — never truncate silently.
+  const CAP = 600
+  const shown = rows.slice(0, CAP)
+  const capNote = rows.length > CAP
+    ? `<div class="pgblk" style="font-size:11px; color:#b45309; margin-top:6px;">⚠ 只顯示首 ${CAP} 個工序（共 ${rows.length} 個）— 完整明細請匯出 Excel 版</div>`
+    : ''
+
+  const matrixRows = [
+    ...m.lines.map(l => [l.zone, ...l.cells.map(fmtGuidedPct), fmtGuidedPct(l.overall)]),
+    ['整體', ...m.overall.map(fmtGuidedPct), fmtGuidedPct(m.grand)],
+  ]
+  const detailRows = shown.map(r => [
+    r.kindZh, r.zoneName, r.trade, r.location, r.title,
+    `${r.done}/${r.total}`, fmtGuidedPct(r.pct), r.restLabels.join('、'),
+  ])
+
+  const body = `
+    <div class="pgblk" style="font-size:20px; font-weight:800;">${esc(project.name)} — 進度表</div>
+    <div class="pgblk" style="font-size:11px; color:#64748b; margin-top:4px;">產生：${esc(new Date().toLocaleString('zh-HK'))}${filterLabel ? ` · ${esc(filterLabel)}` : ''} · 共 ${esc(String(rows.length))} 個工序</div>
+    <div class="pgblk" style="font-size:14px; font-weight:700; margin-top:14px;">進度總覽（分區 × 工種）</div>
+    ${htmlTable(['分區', ...m.trades, '整體'], matrixRows)}
+    <div class="pgblk" style="font-size:14px; font-weight:700; margin-top:14px;">工序明細</div>
+    ${htmlTable(['類別', '分區', '工種', '位置', '工序', '完成', '%', '未完成'], detailRows)}
+    ${capNote}
+    <div class="pgblk" style="font-size:10px; color:#94a3b8; margin-top:20px;">由 CK工程系統產生 — 剔格制：完成/總數 = 已剔樓層(或位置)/全部</div>`
+
+  const blob = await htmlToPdfBlob(body)
+  await shareOrDownloadBlob(blob, `${safeName(project.name)}_進度表_${dateStr()}.pdf`, `${project.name} — 進度表（${rows.length} 個工序）`)
+}
