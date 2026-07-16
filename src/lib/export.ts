@@ -1642,10 +1642,15 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
     ? `<div class="pgblk" style="font-size:11px; color:#b45309; margin-top:6px;">⚠ 只顯示首 ${CAP} 個工序（共 ${rows.length} 個）— 完整明細請匯出 Excel 版</div>`
     : ''
 
-  // 總覽 matrix with real progress bars in every cell
+  // 總覽 matrix with real progress bars in every cell. html2canvas mislays
+  // flex/inline-block baselines — a two-cell table keeps the bar and its %
+  // on one line reliably.
   const bar = (p: number | null): string => p === null
     ? '<span style="color:#94a3b8; font-size:10px;">—</span>'
-    : `<div style="display:flex; align-items:center; gap:6px;"><div style="flex:1; height:7px; background:#e2e8f0; border-radius:4px; overflow:hidden;"><div style="width:${p}%; height:7px; background:${p >= 100 ? '#16a34a' : '#2563eb'};"></div></div><span style="font-size:10px; font-weight:700; white-space:nowrap;">${p}%</span></div>`
+    : `<table style="border-collapse:collapse; width:100%;"><tbody><tr>
+        <td style="padding:0; vertical-align:middle;"><div style="height:7px; background:#e2e8f0; border-radius:4px; overflow:hidden;"><div style="width:${p}%; height:7px; background:${p >= 100 ? '#16a34a' : '#2563eb'};"></div></div></td>
+        <td style="padding:0 0 0 6px; width:34px; font-size:10px; font-weight:700; text-align:right; vertical-align:middle; white-space:nowrap;">${p}%</td>
+      </tr></tbody></table>`
   const tdS = 'border:1px solid #e2e8f0; padding:5px 7px; font-size:11px; vertical-align:middle;'
   const thS = 'border:1px solid #cbd5e1; padding:5px 7px; font-size:11px; text-align:left; color:#ffffff; background:#1d4ed8;'
   const matrixHtml = `<table style="border-collapse:collapse; width:100%; margin:6px 0; table-layout:fixed;">
@@ -1656,9 +1661,19 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
     </tbody></table>`
 
   // 明細 — the sketch layout: 類別 banner, a bordered block per
-  // 分區×工種×位置, each 工序 as a name + 格仔 strip + %.
+  // 分區×工種×位置, each 工序 as a name + 格仔 strip + %. Every aligned
+  // element is a TABLE — the one layout html2canvas gets right: the strip is
+  // a two-row table (labels over boxes stay glued), the title/% pair and the
+  // chips are single-row tables (no baseline drift).
   const abbrev = (l: string) => l.replace('/F', '') || l
-  const chipS = 'display:inline-block; border:1px solid #94a3b8; border-radius:6px; padding:1px 8px; margin-right:6px; font-size:11px; font-weight:700; color:#334155;'
+  const chip = (t: string) => `<td style="border:1px solid #94a3b8; border-radius:8px; padding:2px 9px; font-size:11px; font-weight:700; color:#334155; white-space:nowrap;">${esc(t)}</td><td style="width:6px;"></td>`
+  const strip = (cells: GuidedRow['cells']): string => {
+    const widthPct = Math.min(100, cells.length * 4.4)
+    return `<table style="border-collapse:separate; border-spacing:2px 0; table-layout:fixed; width:${widthPct}%; margin-top:3px;"><tbody>
+      <tr>${cells.map(c => `<td style="padding:0; font-size:6px; line-height:9px; color:#64748b; text-align:center; overflow:hidden; white-space:nowrap;">${esc(abbrev(c.label))}</td>`).join('')}</tr>
+      <tr>${cells.map(c => `<td style="padding:0;"><div style="height:10px; border-radius:2px; background:${c.done ? '#22c55e' : '#f1f5f9'}; border:1px solid ${c.done ? '#16a34a' : '#cbd5e1'};"></div></td>`).join('')}</tr>
+    </tbody></table>`
+  }
   let detailHtml = ''
   let lastKind = ''
   for (const g of groupGuidedRows(shown)) {
@@ -1668,18 +1683,16 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
     }
     const strips = g.rows.map(r => `
       <div class="pgblk" style="margin-top:7px; border-top:1px dashed #e2e8f0; padding-top:6px;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <span style="font-size:12px; font-weight:600;">${esc(r.title)}</span>
-          <span style="font-size:12px; font-weight:800; color:${r.pct === null ? '#94a3b8' : r.pct >= 100 ? '#16a34a' : r.pct > 0 ? '#2563eb' : '#94a3b8'};">${r.pct === null ? '—' : `${r.pct}%`}</span>
-        </div>
-        <div style="display:flex; flex-wrap:wrap; gap:2px; margin-top:3px;">
-          ${r.cells.map(c => `<span style="width:26px;"><span style="display:block; font-size:6px; line-height:8px; color:#94a3b8; text-align:center;">${esc(abbrev(c.label))}</span><span style="display:block; height:10px; border-radius:2px; background:${c.done ? '#22c55e' : '#f1f5f9'}; border:1px solid ${c.done ? '#16a34a' : '#cbd5e1'};"></span></span>`).join('')}
-        </div>
+        <table style="border-collapse:collapse; width:100%;"><tbody><tr>
+          <td style="padding:0; font-size:12px; font-weight:600; vertical-align:middle;">${esc(r.title)}</td>
+          <td style="padding:0; font-size:12px; font-weight:800; text-align:right; vertical-align:middle; white-space:nowrap; color:${r.pct === null ? '#94a3b8' : r.pct >= 100 ? '#16a34a' : r.pct > 0 ? '#2563eb' : '#94a3b8'};">${r.pct === null ? '—' : `${r.pct}%`}</td>
+        </tr></tbody></table>
+        ${strip(r.cells)}
       </div>`).join('')
     detailHtml += `
       <div style="border:1px solid #cbd5e1; border-radius:8px; padding:8px 10px; margin-top:8px;">
-        <div class="pgblk" style="font-size:12px;">
-          <span style="${chipS}">${esc(g.zoneName)}</span><span style="${chipS}">${esc(g.trade)}</span>${g.location !== '—' ? `<span style="${chipS}">${esc(g.location)}</span>` : ''}
+        <div class="pgblk">
+          <table style="border-collapse:separate; border-spacing:0;"><tbody><tr>${chip(g.zoneName)}${chip(g.trade)}${g.location !== '—' ? chip(g.location) : ''}</tr></tbody></table>
         </div>
         ${strips}
       </div>`
