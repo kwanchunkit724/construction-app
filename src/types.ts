@@ -72,6 +72,9 @@ export interface SiteMap {
   rows: number
   cells: { zone_id: string; x: number; y: number }[]
   markers?: SiteMapMarker[]
+  // the site FOOTPRINT — which grid cells are 地盤 at all (irregular shapes).
+  // undefined (pre-shape maps) = the full cols×rows rectangle.
+  ground?: { x: number; y: number }[]
 }
 
 export type ProgressMode = 'classic' | 'guided'
