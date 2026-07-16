@@ -1690,11 +1690,15 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
   // clip into the boxes.
   const abbrev = (l: string) => l.replace('/F', '') || l
   const chip = (t: string) => `<td style="width:1%; border:1px solid #64748b; border-radius:8px; padding:3px 10px; font-size:12px; font-weight:700; color:#1e293b; white-space:nowrap;">${esc(t)}</td><td style="width:6px;"></td>`
+  // one row, label INSIDE the box — no second row to drift out of alignment.
+  // html2canvas paints small inline text ~5px below where the browser does
+  // (verified pixel-by-pixel against its own canvas output); the relative
+  // top:-5px span counter-shifts it to dead centre. Don't "clean this up"
+  // without re-running the canvas A/B harness.
   const strip = (cells: GuidedRow['cells']): string => {
     const widthPct = Math.min(100, cells.length * 4.4)
-    return `<table style="border-collapse:separate; border-spacing:2px 0; table-layout:fixed; width:${widthPct}%; margin-top:4px;"><tbody>
-      <tr>${cells.map(c => `<td style="padding:0; font-size:8px; line-height:12px; height:12px; color:#475569; text-align:center; overflow:hidden; white-space:nowrap; vertical-align:bottom;">${esc(abbrev(c.label))}</td>`).join('')}</tr>
-      <tr>${cells.map(c => `<td style="padding:0;"><div style="height:11px; border-radius:2px; background:${c.done ? '#22c55e' : '#f8fafc'}; border:1px solid ${c.done ? '#16a34a' : '#cbd5e1'};"></div></td>`).join('')}</tr>
+    return `<table style="border-collapse:separate; border-spacing:2px 0; table-layout:fixed; width:${widthPct}%; margin-top:5px;"><tbody>
+      <tr>${cells.map(c => `<td style="padding:0; height:17px; line-height:17px; text-align:center; border-radius:3px; overflow:hidden; font-size:9px; font-weight:700; white-space:nowrap; background:${c.done ? '#22c55e' : '#f8fafc'}; border:1px solid ${c.done ? '#16a34a' : '#cbd5e1'}; color:${c.done ? '#ffffff' : '#64748b'};"><span style="position:relative; top:-5px;">${esc(abbrev(c.label))}</span></td>`).join('')}</tr>
     </tbody></table>`
   }
   const pctColorOf = (p: number | null) => p === null ? '#94a3b8' : p >= 100 ? '#16a34a' : p > 0 ? '#2563eb' : '#94a3b8'
