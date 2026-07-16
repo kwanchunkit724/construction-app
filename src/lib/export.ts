@@ -1472,6 +1472,38 @@ interface GuidedRow {
   pct: number | null
   doneLabels: string[]
   restLabels: string[]
+  // ordered per-floor cells — the app's 格仔 strip, reproduced in the report
+  cells: { label: string; done: boolean }[]
+}
+
+// consecutive 分區×工種×位置 groups (rows arrive sorted) — the sketch layout:
+// 類別 as a big title, one bordered block per group, 工序 strips inside.
+interface GuidedGroup {
+  kindZh: string
+  zoneName: string
+  trade: string
+  location: string
+  rows: GuidedRow[]
+}
+
+function groupGuidedRows(rows: GuidedRow[]): GuidedGroup[] {
+  const out: GuidedGroup[] = []
+  for (const r of rows) {
+    const last = out[out.length - 1]
+    if (last && last.kindZh === r.kindZh && last.zoneName === r.zoneName && last.trade === r.trade && last.location === r.location) {
+      last.rows.push(r)
+    } else {
+      out.push({ kindZh: r.kindZh, zoneName: r.zoneName, trade: r.trade, location: r.location, rows: [r] })
+    }
+  }
+  return out
+}
+
+// text progress bar for Excel cells (no cell styling in community xlsx)
+function textBar(p: number | null): string {
+  if (p === null) return '—'
+  const filled = Math.round(p / 10)
+  return `${'█'.repeat(filled)}${'░'.repeat(10 - filled)} ${p}%`
 }
 
 function buildGuidedRows(project: Project, items: ProgressItem[], opts: GuidedExportOptions): GuidedRow[] {
@@ -1499,6 +1531,7 @@ function buildGuidedRows(project: Project, items: ProgressItem[], opts: GuidedEx
       pct: labels.length === 0 ? null : Math.round((done.length / labels.length) * 100),
       doneLabels: done,
       restLabels: rest,
+      cells: labels.map(f => ({ label: f, done: ticked.has(f) })),
     }
   })
   rows.sort((a, b) =>
@@ -1555,24 +1588,35 @@ export async function exportGuidedProgressToExcel(project: Project, items: Progr
   aoa1.push([`產生：${new Date().toLocaleString('zh-HK')}${filterLabel ? ` · ${filterLabel}` : ''}`])
   aoa1.push([])
   aoa1.push(['分區', ...m.trades, '整體'])
-  for (const line of m.lines) aoa1.push([line.zone, ...line.cells.map(fmtGuidedPct), fmtGuidedPct(line.overall)])
-  aoa1.push(['整體', ...m.overall.map(fmtGuidedPct), fmtGuidedPct(m.grand)])
+  for (const line of m.lines) aoa1.push([line.zone, ...line.cells.map(textBar), textBar(line.overall)])
+  aoa1.push(['整體', ...m.overall.map(textBar), textBar(m.grand)])
   const ws1 = XLSX.utils.aoa_to_sheet(aoa1)
-  ws1['!cols'] = [{ wch: 14 }, ...m.trades.map(() => ({ wch: 12 })), { wch: 10 }]
+  ws1['!cols'] = [{ wch: 14 }, ...m.trades.map(() => ({ wch: 20 })), { wch: 20 }]
 
+  // 工序明細 — the sketch layout: 類別 title, one block per 分區×工種×位置,
+  // then a floor-per-column grid (✓ = done, □ = not yet, blank = excluded).
   const aoa2: (string | number | null)[][] = []
   aoa2.push([`${project.name} — 工序明細`])
   aoa2.push([])
-  aoa2.push(['類別', '分區', '工種', '位置', '工序', '完成', '總數', '%', '已完成', '未完成'])
-  for (const r of rows) {
-    aoa2.push([
-      r.kindZh, r.zoneName, r.trade, r.location, r.title,
-      r.done, r.total, fmtGuidedPct(r.pct),
-      r.doneLabels.join('、'), r.restLabels.join('、'),
-    ])
+  let lastKind = ''
+  for (const g of groupGuidedRows(rows)) {
+    if (g.kindZh !== lastKind) { aoa2.push([`【${g.kindZh}】`]); lastKind = g.kindZh }
+    aoa2.push([`${g.zoneName} · ${g.trade}${g.location !== '—' ? ` · ${g.location}` : ''}`])
+    const cols: string[] = []
+    for (const r of g.rows) for (const c of r.cells) if (!cols.includes(c.label)) cols.push(c.label)
+    aoa2.push(['工序', ...cols, '%'])
+    for (const r of g.rows) {
+      const cellMap = new Map(r.cells.map(c => [c.label, c.done]))
+      aoa2.push([
+        r.title,
+        ...cols.map(cl => !cellMap.has(cl) ? '' : (cellMap.get(cl) ? '✓' : '□')),
+        fmtGuidedPct(r.pct),
+      ])
+    }
+    aoa2.push([])
   }
   const ws2 = XLSX.utils.aoa_to_sheet(aoa2)
-  ws2['!cols'] = [{ wch: 6 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 6 }, { wch: 6 }, { wch: 7 }, { wch: 42 }, { wch: 42 }]
+  ws2['!cols'] = [{ wch: 18 }, ...Array.from({ length: 40 }, () => ({ wch: 4.5 }))]
 
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws1, '進度總覽')
@@ -1591,31 +1635,65 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
   const filterLabel = guidedFilterLabel(project, opts)
 
   // html2canvas renders the whole body to one canvas; browsers cap canvas
-  // height (~32k px). Cap the detail table and say so — never truncate silently.
-  const CAP = 600
+  // height (~32k px). Cap the detail 工序 count and say so — never silently.
+  const CAP = 400
   const shown = rows.slice(0, CAP)
   const capNote = rows.length > CAP
     ? `<div class="pgblk" style="font-size:11px; color:#b45309; margin-top:6px;">⚠ 只顯示首 ${CAP} 個工序（共 ${rows.length} 個）— 完整明細請匯出 Excel 版</div>`
     : ''
 
-  const matrixRows = [
-    ...m.lines.map(l => [l.zone, ...l.cells.map(fmtGuidedPct), fmtGuidedPct(l.overall)]),
-    ['整體', ...m.overall.map(fmtGuidedPct), fmtGuidedPct(m.grand)],
-  ]
-  const detailRows = shown.map(r => [
-    r.kindZh, r.zoneName, r.trade, r.location, r.title,
-    `${r.done}/${r.total}`, fmtGuidedPct(r.pct), r.restLabels.join('、'),
-  ])
+  // 總覽 matrix with real progress bars in every cell
+  const bar = (p: number | null): string => p === null
+    ? '<span style="color:#94a3b8; font-size:10px;">—</span>'
+    : `<div style="display:flex; align-items:center; gap:6px;"><div style="flex:1; height:7px; background:#e2e8f0; border-radius:4px; overflow:hidden;"><div style="width:${p}%; height:7px; background:${p >= 100 ? '#16a34a' : '#2563eb'};"></div></div><span style="font-size:10px; font-weight:700; white-space:nowrap;">${p}%</span></div>`
+  const tdS = 'border:1px solid #e2e8f0; padding:5px 7px; font-size:11px; vertical-align:middle;'
+  const thS = 'border:1px solid #cbd5e1; padding:5px 7px; font-size:11px; text-align:left; color:#ffffff; background:#1d4ed8;'
+  const matrixHtml = `<table style="border-collapse:collapse; width:100%; margin:6px 0; table-layout:fixed;">
+    <thead><tr><th style="${thS} width:70px;">分區</th>${m.trades.map(t => `<th style="${thS}">${esc(t)}</th>`).join('')}<th style="${thS}">整體</th></tr></thead>
+    <tbody>
+      ${m.lines.map(l => `<tr class="pgblk"><td style="${tdS} font-weight:700;">${esc(l.zone)}</td>${l.cells.map(c => `<td style="${tdS}">${bar(c)}</td>`).join('')}<td style="${tdS}">${bar(l.overall)}</td></tr>`).join('')}
+      <tr class="pgblk"><td style="${tdS} font-weight:700; background:#f1f5f9;">整體</td>${m.overall.map(c => `<td style="${tdS} background:#f1f5f9;">${bar(c)}</td>`).join('')}<td style="${tdS} background:#f1f5f9;">${bar(m.grand)}</td></tr>
+    </tbody></table>`
+
+  // 明細 — the sketch layout: 類別 banner, a bordered block per
+  // 分區×工種×位置, each 工序 as a name + 格仔 strip + %.
+  const abbrev = (l: string) => l.replace('/F', '') || l
+  const chipS = 'display:inline-block; border:1px solid #94a3b8; border-radius:6px; padding:1px 8px; margin-right:6px; font-size:11px; font-weight:700; color:#334155;'
+  let detailHtml = ''
+  let lastKind = ''
+  for (const g of groupGuidedRows(shown)) {
+    if (g.kindZh !== lastKind) {
+      detailHtml += `<div class="pgblk" style="font-size:15px; font-weight:800; margin-top:16px; background:#1e293b; color:#ffffff; padding:5px 10px; border-radius:8px; text-align:center;">${esc(g.kindZh)}</div>`
+      lastKind = g.kindZh
+    }
+    const strips = g.rows.map(r => `
+      <div class="pgblk" style="margin-top:7px; border-top:1px dashed #e2e8f0; padding-top:6px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-size:12px; font-weight:600;">${esc(r.title)}</span>
+          <span style="font-size:12px; font-weight:800; color:${r.pct === null ? '#94a3b8' : r.pct >= 100 ? '#16a34a' : r.pct > 0 ? '#2563eb' : '#94a3b8'};">${r.pct === null ? '—' : `${r.pct}%`}</span>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:2px; margin-top:3px;">
+          ${r.cells.map(c => `<span style="width:26px;"><span style="display:block; font-size:6px; line-height:8px; color:#94a3b8; text-align:center;">${esc(abbrev(c.label))}</span><span style="display:block; height:10px; border-radius:2px; background:${c.done ? '#22c55e' : '#f1f5f9'}; border:1px solid ${c.done ? '#16a34a' : '#cbd5e1'};"></span></span>`).join('')}
+        </div>
+      </div>`).join('')
+    detailHtml += `
+      <div style="border:1px solid #cbd5e1; border-radius:8px; padding:8px 10px; margin-top:8px;">
+        <div class="pgblk" style="font-size:12px;">
+          <span style="${chipS}">${esc(g.zoneName)}</span><span style="${chipS}">${esc(g.trade)}</span>${g.location !== '—' ? `<span style="${chipS}">${esc(g.location)}</span>` : ''}
+        </div>
+        ${strips}
+      </div>`
+  }
 
   const body = `
     <div class="pgblk" style="font-size:20px; font-weight:800;">${esc(project.name)} — 進度表</div>
     <div class="pgblk" style="font-size:11px; color:#64748b; margin-top:4px;">產生：${esc(new Date().toLocaleString('zh-HK'))}${filterLabel ? ` · ${esc(filterLabel)}` : ''} · 共 ${esc(String(rows.length))} 個工序</div>
     <div class="pgblk" style="font-size:14px; font-weight:700; margin-top:14px;">進度總覽（分區 × 工種）</div>
-    ${htmlTable(['分區', ...m.trades, '整體'], matrixRows)}
+    ${matrixHtml}
     <div class="pgblk" style="font-size:14px; font-weight:700; margin-top:14px;">工序明細</div>
-    ${htmlTable(['類別', '分區', '工種', '位置', '工序', '完成', '%', '未完成'], detailRows)}
+    ${detailHtml}
     ${capNote}
-    <div class="pgblk" style="font-size:10px; color:#94a3b8; margin-top:20px;">由 CK工程系統產生 — 剔格制：完成/總數 = 已剔樓層(或位置)/全部</div>`
+    <div class="pgblk" style="font-size:10px; color:#94a3b8; margin-top:20px;">由 CK工程系統產生 — 剔格制：完成/總數 = 已剔樓層(或位置)/全部 · 綠格 = 該層完成</div>`
 
   const blob = await htmlToPdfBlob(body)
   await shareOrDownloadBlob(blob, `${safeName(project.name)}_進度表_${dateStr()}.pdf`, `${project.name} — 進度表（${rows.length} 個工序）`)
