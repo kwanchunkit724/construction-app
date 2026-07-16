@@ -91,6 +91,9 @@ interface AddItemInput {
   // v112 (guided): 位置 + per-project 工種 label dimensions on the flat leaf.
   location?: string | null
   trade_label?: string | null
+  // v112 (guided 分區指派): new leaves inherit the zone's assignees so a
+  // 判頭 assigned to 一座 can tick 工序 created after the assignment.
+  assigned_to?: string[]
 }
 
 const ProgressContext = createContext<ProgressContextType | null>(null)
@@ -244,7 +247,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
       trade: input.trade ?? null,
       location: input.location ?? null,
       trade_label: input.trade_label ?? null,
-      assigned_to: [],
+      assigned_to: input.assigned_to ?? [],
       delegated_to: [],
       last_updated_by: profile.id,
       last_updated_at: new Date().toISOString(),
