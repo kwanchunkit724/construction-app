@@ -61,10 +61,17 @@ export const PROJECT_TYPE_ZH: Record<ProjectType, string> = {
 
 // Guided 進度表: the site map is a simple grid — zones placed on cells, the
 // rest of the grid renders as 外圍 ground. No rotation, no free canvas.
+// markers are user-placed site labels (閘口 / 人閘 / 吊機…) on ground cells.
+export interface SiteMapMarker {
+  label: string
+  x: number
+  y: number
+}
 export interface SiteMap {
   cols: number
   rows: number
   cells: { zone_id: string; x: number; y: number }[]
+  markers?: SiteMapMarker[]
 }
 
 export type ProgressMode = 'classic' | 'guided'

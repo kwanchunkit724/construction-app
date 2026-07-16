@@ -1,30 +1,30 @@
-import { useMemo, useState } from 'react'
-import { ArrowLeft, Plus, Trash2, Eye, Edit3, Map as MapIcon, Check } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ArrowLeft, Plus, Trash2, Map as MapIcon, Check, Users, History as HistoryIcon, PackagePlus } from 'lucide-react'
 import { Modal } from '../Modal'
 import { Spinner } from '../Spinner'
 import { SiteMapView } from './SiteMap'
+import { AssignmentModal } from '../AssignmentModal'
+import { HistoryModal } from '../HistoryModal'
 import { useProgress } from '../../contexts/ProgressContext'
 import { useDicts, guidedLeaves, guidedPct, guidedPctOf, distinctValues, unionOrdered } from '../../lib/guided'
 import { supabase } from '../../lib/supabase'
-import type { Project, ProgressItem, Zone, ZoneKind } from '../../types'
+import type { ProgressTemplate, Project, ProgressItem, Zone, ZoneKind } from '../../types'
 
-// Guided 進度表 (v112) — button-drill navigation over flat leaves.
-//   只看:  大樓/外圍 → 分區 → 工種 → 樓層 → 位置 → 工序   (每頁純 %)
-//   更新:  大樓/外圍 → 分區 → 工種 → 位置 → 工序 → 剔樓層
-// 外圍 zones have no floors: their processes tick 位置 labels instead, and
-// both flows skip the 位置 page (the ticks ARE the 位置).
-
-type Mode = 'view' | 'update'
+// Guided 進度表 (v112, v2 after user feedback) — ONE drill for everyone:
+//   大樓/外圍 → 分區 → 工種 → 位置 → 工序
+// (外圍 skips 位置 — its ticks ARE the 位置.) Every 工序 row wears a per-floor
+// cell strip (the paper-sketch look: labels over boxes, filled = done) plus
+// its %, so a read-only user sees floor-level truth without a separate
+// "只看" mode. Tap a row (with update rights) → tick sheet.
 
 interface Sel {
   kind?: ZoneKind
   zoneId?: string
   tradeLabel?: string
-  floor?: string
   location?: string
 }
 
-type Page = 'kind' | 'zone' | 'trade' | 'floor' | 'location' | 'process'
+type Page = 'kind' | 'zone' | 'trade' | 'location' | 'process'
 
 const KIND_ZH: Record<ZoneKind, string> = { building: '大樓', external: '外圍' }
 
@@ -33,6 +33,11 @@ function pctColor(pct: number | null): string {
   if (pct >= 100) return 'text-green-600'
   if (pct > 0) return 'text-blue-600'
   return 'text-site-400'
+}
+
+// B2 → B2, G/F → G, 12/F → 12, R/F → R, R2/F → R2 — cell labels must fit 12px.
+function abbrevFloor(label: string): string {
+  return label.replace('/F', '') || label
 }
 
 function PctRow({ label, pct, sub, onClick, onDelete }: {
@@ -66,34 +71,66 @@ function PctRow({ label, pct, sub, onClick, onDelete }: {
   )
 }
 
+// The sketch row: 工序 name · label-over-box strip · big %.
+function ProcessRow({ leaf, onClick }: { leaf: ProgressItem; onClick?: () => void }) {
+  const labels = leaf.floor_labels ?? []
+  const done = new Set(leaf.floors_completed ?? [])
+  const p = guidedPctOf([leaf])
+  return (
+    <button
+      onClick={onClick}
+      disabled={!onClick}
+      className="w-full bg-white border border-site-200 rounded-xl px-3.5 py-3 text-left hover:border-safety-300 active:bg-safety-50 disabled:active:bg-white"
+    >
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className="font-semibold text-[15px] text-site-900 truncate">{leaf.title}</span>
+        <span className={`flex-shrink-0 text-lg font-bold ${pctColor(p.pct)}`}>
+          {p.pct === null ? '—' : `${p.pct}%`}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-[3px]">
+        {labels.map(f => (
+          <span key={f} className="flex flex-col items-center" style={{ minWidth: 13 }}>
+            <span className="text-[7px] leading-[9px] text-site-400">{abbrevFloor(f)}</span>
+            <span className={`w-[13px] h-[13px] rounded-[3px] border ${done.has(f) ? 'bg-green-500 border-green-600' : 'bg-site-50 border-site-200'}`} />
+          </span>
+        ))}
+      </div>
+      <p className="text-[10px] text-site-400 mt-1.5">{done.size}/{labels.length} 完成</p>
+    </button>
+  )
+}
+
 export function GuidedProgress({ project }: {
   project: Project
 }) {
-  const { items, canEdit, canUpdateItem, addItem, updateFloors, deleteItem } = useProgress()
+  const {
+    items, canEdit, canUpdateItem, addItem, updateFloors, deleteItem,
+    fetchTemplates, saveTemplate, deleteTemplate,
+  } = useProgress()
   const { byKind, add: addDict, remove: removeDict } = useDicts(project.id)
 
-  const [mode, setMode] = useState<Mode>('view')
   const [sel, setSel] = useState<Sel>({})
   const [showMap, setShowMap] = useState(false)
   const [ticking, setTicking] = useState<ProgressItem | null>(null)
   const [addingProcess, setAddingProcess] = useState(false)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
+  const [assigning, setAssigning] = useState<ProgressItem | null>(null)
+  const [historyItem, setHistoryItem] = useState<ProgressItem | null>(null)
   const [err, setErr] = useState('')
 
   const zones = project.zones
   const zone: Zone | undefined = sel.zoneId ? zones.find(z => z.id === sel.zoneId) : undefined
   const isExternal = zone?.kind === 'external'
 
-  // Page = first unset dimension in the mode's drill order. 外圍 skips
-  // floor AND location (its ticks are the 位置). 更新 skips floor.
   const page: Page = useMemo(() => {
     if (!sel.kind) return 'kind'
     if (!sel.zoneId) return 'zone'
     if (!sel.tradeLabel) return 'trade'
     if (isExternal) return 'process'
-    if (mode === 'view' && !sel.floor) return 'floor'
     if (!sel.location) return 'location'
     return 'process'
-  }, [sel, mode, isExternal])
+  }, [sel, isExternal])
 
   function back() {
     setErr('')
@@ -104,27 +141,17 @@ export function GuidedProgress({ project }: {
         delete n.location
         return n
       }
-      if (page === 'location') { mode === 'view' ? delete n.floor : delete n.tradeLabel; return n }
-      if (page === 'floor') { delete n.tradeLabel; return n }
+      if (page === 'location') { delete n.tradeLabel; return n }
       if (page === 'trade') { delete n.zoneId; return n }
       if (page === 'zone') { delete n.kind; return n }
       return n
     })
   }
 
-  function switchMode(m: Mode) {
-    setMode(m)
-    setErr('')
-    // floor is a view-only dimension — drop it so update-mode drilling never
-    // filters by a floor the user can't see selected.
-    setSel(prev => { const n = { ...prev }; delete n.floor; return n })
-  }
-
   const crumbs = [
     sel.kind && KIND_ZH[sel.kind],
     zone?.name,
     sel.tradeLabel,
-    sel.floor,
     sel.location,
   ].filter(Boolean).join(' › ')
 
@@ -148,25 +175,13 @@ export function GuidedProgress({ project }: {
 
   const tradeRows = useMemo(() => {
     if (page !== 'trade') return []
-    const dictLabels = byKind('trade').map(d => d.label)
-    return unionOrdered(dictLabels, distinctValues(zoneLeaves, 'trade_label'))
+    return unionOrdered(byKind('trade').map(d => d.label), distinctValues(zoneLeaves, 'trade_label'))
   }, [page, byKind, zoneLeaves])
-
-  const floorRows = useMemo(() => {
-    if (page !== 'floor' || !zone) return []
-    if (zone.floors && zone.floors.length > 0) return zone.floors
-    const s = new Set<string>()
-    for (const l of guidedLeaves(zoneLeaves, { tradeLabel: sel.tradeLabel })) {
-      for (const f of l.floor_labels ?? []) s.add(f)
-    }
-    return [...s]
-  }, [page, zone, zoneLeaves, sel.tradeLabel])
 
   const locationRows = useMemo(() => {
     if (page !== 'location') return []
-    const dictLabels = byKind('location').map(d => d.label)
     const data = distinctValues(guidedLeaves(zoneLeaves, { tradeLabel: sel.tradeLabel }), 'location')
-    return unionOrdered(dictLabels, data)
+    return unionOrdered(byKind('location').map(d => d.label), data)
   }, [page, byKind, zoneLeaves, sel.tradeLabel])
 
   const processLeaves = useMemo(() => {
@@ -177,7 +192,7 @@ export function GuidedProgress({ project }: {
     })
   }, [page, zoneLeaves, sel.tradeLabel, sel.location, isExternal])
 
-  // ── dictionary add inputs (工種 / 位置 pages, update mode) ──
+  // ── dictionary add inputs ───────────────────────────────────
   const [newLabel, setNewLabel] = useState('')
   async function onAddDict(kind: 'trade' | 'location') {
     const r = await addDict(kind, newLabel)
@@ -188,10 +203,28 @@ export function GuidedProgress({ project }: {
   const dictIdOf = (kind: 'trade' | 'location', label: string) =>
     byKind(kind).find(d => d.label === label)?.id
 
-  // ── render ──────────────────────────────────────────────────
+  // create one guided leaf (shared by 新增工序 + 範本 apply)
+  async function createLeaf(title: string, labels: string[]): Promise<string | null> {
+    if (!zone || !sel.tradeLabel) return '未揀工種'
+    const { data: code, error: codeErr } = await supabase.rpc('next_progress_code', {
+      p_project_id: project.id, p_zone_id: zone.id, p_parent_id: null,
+    })
+    if (codeErr) return codeErr.message
+    const r = await addItem({
+      parent_id: null,
+      code: (code as string) ?? '',
+      title,
+      zone_id: zone.id,
+      tracking_mode: 'floors',
+      floor_labels: labels,
+      trade_label: sel.tradeLabel,
+      location: isExternal ? null : (sel.location ?? null),
+    })
+    return r.error
+  }
+
   const titleByPage: Record<Page, string> = {
-    kind: '揀範圍', zone: '揀分區', trade: '揀工種',
-    floor: '揀樓層', location: '揀位置', process: mode === 'view' ? '工序進度' : '更新工序',
+    kind: '揀範圍', zone: '揀分區', trade: '揀工種', location: '揀位置', process: '工序',
   }
 
   if (showMap) {
@@ -211,35 +244,17 @@ export function GuidedProgress({ project }: {
 
   return (
     <div className="space-y-3">
-      {/* mode switch + map */}
-      <div className="flex gap-2">
-        <div className="flex-1 grid grid-cols-2 bg-site-100 rounded-xl p-1">
-          <button
-            onClick={() => switchMode('view')}
-            className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold ${mode === 'view' ? 'bg-white shadow-card text-site-900' : 'text-site-500'}`}
-          >
-            <Eye size={15} /> 只看進度
-          </button>
-          <button
-            onClick={() => switchMode('update')}
-            className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold ${mode === 'update' ? 'bg-white shadow-card text-safety-700' : 'text-site-500'}`}
-          >
-            <Edit3 size={15} /> 更新進度
-          </button>
-        </div>
-        <button onClick={() => setShowMap(true)} className="flex-shrink-0 w-11 grid place-items-center bg-white border border-site-200 rounded-xl text-site-600 hover:text-safety-600" aria-label="地盤地圖">
-          <MapIcon size={18} />
-        </button>
-      </div>
-
-      {/* back + breadcrumb */}
-      <div className="flex items-center gap-2 min-h-[36px]">
+      {/* back + breadcrumb + map */}
+      <div className="flex items-center gap-2 min-h-[40px]">
         {page !== 'kind' && (
           <button onClick={back} className="flex-shrink-0 flex items-center gap-1 text-sm font-semibold text-site-600 bg-white border border-site-200 rounded-lg px-3 py-1.5 hover:bg-site-50 min-h-0">
             <ArrowLeft size={15} /> 返上一頁
           </button>
         )}
-        <span className="text-xs text-site-400 truncate">{crumbs}</span>
+        <span className="text-xs text-site-400 truncate flex-1">{crumbs}</span>
+        <button onClick={() => setShowMap(true)} className="flex-shrink-0 w-10 h-10 grid place-items-center bg-white border border-site-200 rounded-xl text-site-600 hover:text-safety-600" aria-label="地盤地圖">
+          <MapIcon size={18} />
+        </button>
       </div>
 
       <h3 className="text-sm font-bold text-site-700">{titleByPage[page]}</h3>
@@ -278,11 +293,11 @@ export function GuidedProgress({ project }: {
               <PctRow
                 key={t} label={t} pct={p.pct}
                 onClick={() => setSel({ ...sel, tradeLabel: t })}
-                onDelete={mode === 'update' && canEdit && dictId ? async () => { const r = await removeDict(dictId); if (r.error) setErr(r.error) } : undefined}
+                onDelete={canEdit && dictId ? async () => { const r = await removeDict(dictId); if (r.error) setErr(r.error) } : undefined}
               />
             )
           })}
-          {mode === 'update' && canEdit && (
+          {canEdit && (
             <div className="flex gap-2">
               <input className="input flex-1" placeholder="新增工種（例：消防）" value={newLabel} onChange={e => setNewLabel(e.target.value)} />
               <button onClick={() => void onAddDict('trade')} disabled={!newLabel.trim()} className="btn-ghost px-3 flex items-center gap-1 disabled:opacity-40"><Plus size={14} /> 加</button>
@@ -291,64 +306,51 @@ export function GuidedProgress({ project }: {
         </div>
       )}
 
-      {/* ── floor page (view, building) ── */}
-      {page === 'floor' && (
-        <div className="grid grid-cols-2 gap-2">
-          {floorRows.map(f => {
-            const p = guidedPctOf(guidedLeaves(zoneLeaves, { tradeLabel: sel.tradeLabel }), f)
-            return <PctRow key={f} label={f} pct={p.pct} onClick={() => setSel({ ...sel, floor: f })} />
-          })}
-          {floorRows.length === 0 && <p className="text-sm text-site-400 text-center py-6 col-span-2">未有樓層資料</p>}
-        </div>
-      )}
-
       {/* ── location page ── */}
       {page === 'location' && (
         <div className="space-y-2">
           {locationRows.map(loc => {
             const leaves = guidedLeaves(zoneLeaves, { tradeLabel: sel.tradeLabel, location: loc })
-            const p = guidedPctOf(leaves, mode === 'view' ? sel.floor : undefined)
+            const p = guidedPctOf(leaves)
             const dictId = dictIdOf('location', loc)
             return (
               <PctRow
                 key={loc} label={loc} pct={p.pct}
                 onClick={() => setSel({ ...sel, location: loc })}
-                onDelete={mode === 'update' && canEdit && dictId ? async () => { const r = await removeDict(dictId); if (r.error) setErr(r.error) } : undefined}
+                onDelete={canEdit && dictId ? async () => { const r = await removeDict(dictId); if (r.error) setErr(r.error) } : undefined}
               />
             )
           })}
-          {mode === 'update' && canEdit && (
+          {canEdit && (
             <div className="flex gap-2">
               <input className="input flex-1" placeholder="新增位置（例：走廊）" value={newLabel} onChange={e => setNewLabel(e.target.value)} />
               <button onClick={() => void onAddDict('location')} disabled={!newLabel.trim()} className="btn-ghost px-3 flex items-center gap-1 disabled:opacity-40"><Plus size={14} /> 加</button>
             </div>
           )}
-          {locationRows.length === 0 && mode === 'view' && <p className="text-sm text-site-400 text-center py-6">未有位置資料</p>}
+          {locationRows.length === 0 && !canEdit && <p className="text-sm text-site-400 text-center py-6">未有位置資料</p>}
         </div>
       )}
 
-      {/* ── process page ── */}
+      {/* ── process page — sketch rows ── */}
       {page === 'process' && (
         <div className="space-y-2">
-          {processLeaves.map(l => {
-            const p = guidedPctOf([l], mode === 'view' ? sel.floor : undefined)
-            const done = (l.floors_completed ?? []).length
-            const total = (l.floor_labels ?? []).length
-            return (
-              <PctRow
-                key={l.id}
-                label={l.title}
-                sub={mode === 'view' && sel.floor ? undefined : `${done}/${total} ${isExternal ? '個位置' : '層'}`}
-                pct={p.pct}
-                onClick={mode === 'update' && canUpdateItem(l) ? () => setTicking(l) : undefined}
-              />
-            )
-          })}
+          {processLeaves.map(l => (
+            <ProcessRow
+              key={l.id}
+              leaf={l}
+              onClick={canUpdateItem(l) ? () => setTicking(l) : undefined}
+            />
+          ))}
           {processLeaves.length === 0 && <p className="text-sm text-site-400 text-center py-6">未有工序</p>}
-          {mode === 'update' && canEdit && (
-            <button onClick={() => setAddingProcess(true)} className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-safety-700 bg-safety-50 border border-safety-200 hover:bg-safety-100 py-2.5 rounded-xl">
-              <Plus size={16} /> 新增工序
-            </button>
+          {canEdit && (
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => setAddingProcess(true)} className="flex items-center justify-center gap-1.5 text-sm font-semibold text-safety-700 bg-safety-50 border border-safety-200 hover:bg-safety-100 py-2.5 rounded-xl">
+                <Plus size={16} /> 新增工序
+              </button>
+              <button onClick={() => setTemplatesOpen(true)} className="flex items-center justify-center gap-1.5 text-sm font-semibold text-site-600 bg-white border border-site-200 hover:bg-site-50 py-2.5 rounded-xl">
+                <PackagePlus size={16} /> 工序範本
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -358,6 +360,7 @@ export function GuidedProgress({ project }: {
           leaf={ticking}
           unitZh={isExternal ? '位置' : '樓層'}
           canDelete={canEdit}
+          canManage={canEdit}
           onClose={() => setTicking(null)}
           onSave={async picked => {
             const r = await updateFloors(ticking.id, picked, '')
@@ -370,12 +373,13 @@ export function GuidedProgress({ project }: {
             if (r.error) setErr(r.error)
             setTicking(null)
           }}
+          onAssign={() => { setAssigning(ticking); setTicking(null) }}
+          onHistory={() => { setHistoryItem(ticking); setTicking(null) }}
         />
       )}
 
       {addingProcess && zone && sel.tradeLabel && (
         <AddProcessSheet
-          project={project}
           zone={zone}
           tradeLabel={sel.tradeLabel}
           location={isExternal ? null : (sel.location ?? null)}
@@ -383,37 +387,58 @@ export function GuidedProgress({ project }: {
           locationDict={byKind('location').map(d => d.label)}
           onAddDict={addDict}
           onClose={() => setAddingProcess(false)}
-          onCreate={async (title, labels) => {
-            const { data: code, error: codeErr } = await supabase.rpc('next_progress_code', {
-              p_project_id: project.id, p_zone_id: zone.id, p_parent_id: null,
-            })
-            if (codeErr) return codeErr.message
-            const r = await addItem({
-              parent_id: null,
-              code: (code as string) ?? '',
-              title,
-              zone_id: zone.id,
-              tracking_mode: 'floors',
-              floor_labels: labels,
-              trade_label: sel.tradeLabel,
-              location: isExternal ? null : (sel.location ?? null),
-            })
-            return r.error
+          onCreate={createLeaf}
+        />
+      )}
+
+      {templatesOpen && zone && sel.tradeLabel && (
+        <GuidedTemplateSheet
+          contextLabel={`${zone.name} · ${sel.tradeLabel}${sel.location ? ` · ${sel.location}` : ''}`}
+          defaultLabels={isExternal ? byKind('location').map(d => d.label) : (zone.floors ?? [])}
+          currentTitles={processLeaves.map(l => l.title)}
+          fetchTemplates={fetchTemplates}
+          saveTemplate={saveTemplate}
+          deleteTemplate={deleteTemplate}
+          canEdit={canEdit}
+          onClose={() => setTemplatesOpen(false)}
+          onApply={async (tpl, labels) => {
+            let added = 0
+            for (const it of tpl.items) {
+              if (processLeaves.some(l => l.title === it.title)) continue
+              const e = await createLeaf(it.title, labels)
+              if (e) return { error: `${it.title}：${e}（已加入 ${added} 項）`, added }
+              added++
+            }
+            return { error: null, added }
           }}
         />
       )}
+
+      <AssignmentModal
+        open={!!assigning}
+        onClose={() => setAssigning(null)}
+        item={assigning}
+      />
+      <HistoryModal
+        open={!!historyItem}
+        onClose={() => setHistoryItem(null)}
+        item={historyItem}
+      />
     </div>
   )
 }
 
-// ── 剔格 sheet: tick completed 樓層 (or 位置 for 外圍) ─────────
-function TickSheet({ leaf, unitZh, canDelete, onClose, onSave, onDelete }: {
+// ── 剔格 sheet ───────────────────────────────────────────────
+function TickSheet({ leaf, unitZh, canDelete, canManage, onClose, onSave, onDelete, onAssign, onHistory }: {
   leaf: ProgressItem
   unitZh: string
   canDelete: boolean
+  canManage: boolean
   onClose: () => void
   onSave: (picked: string[]) => Promise<boolean>
   onDelete: () => Promise<void>
+  onAssign: () => void
+  onHistory: () => void
 }) {
   const labels = leaf.floor_labels ?? []
   const [picked, setPicked] = useState<string[]>(leaf.floors_completed ?? [])
@@ -454,8 +479,21 @@ function TickSheet({ leaf, unitZh, canDelete, onClose, onSave, onDelete }: {
           )
         })}
       </div>
+
+      {/* 指派 / 歷史 — the classic per-item tools, back in guided mode */}
+      <div className="grid grid-cols-2 gap-2 mt-4">
+        {canManage && (
+          <button onClick={onAssign} className="flex items-center justify-center gap-1.5 text-sm font-semibold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 py-2.5 rounded-xl min-h-0">
+            <Users size={15} /> 指派
+          </button>
+        )}
+        <button onClick={onHistory} className={`flex items-center justify-center gap-1.5 text-sm font-semibold text-site-600 bg-white border border-site-200 hover:bg-site-50 py-2.5 rounded-xl min-h-0 ${canManage ? '' : 'col-span-2'}`}>
+          <HistoryIcon size={15} /> 更新歷史
+        </button>
+      </div>
+
       {canDelete && (
-        <div className="mt-4 pt-3 border-t border-site-100 flex items-center justify-between">
+        <div className="mt-3 pt-3 border-t border-site-100 flex items-center justify-between">
           {confirmDel ? (
             <>
               <span className="text-xs text-red-600 font-semibold">確認刪除呢個工序？</span>
@@ -476,8 +514,7 @@ function TickSheet({ leaf, unitZh, canDelete, onClose, onSave, onDelete }: {
 }
 
 // ── 新增工序 sheet ───────────────────────────────────────────
-function AddProcessSheet({ project: _project, zone, tradeLabel, location, processDict, locationDict, onAddDict, onClose, onCreate }: {
-  project: Project
+function AddProcessSheet({ zone, tradeLabel, location, processDict, locationDict, onAddDict, onClose, onCreate }: {
   zone: Zone
   tradeLabel: string
   location: string | null
@@ -489,8 +526,6 @@ function AddProcessSheet({ project: _project, zone, tradeLabel, location, proces
 }) {
   const isExternal = zone.kind === 'external'
   const [title, setTitle] = useState('')
-  // building: labels = the zone's immutable floors. external: user picks which
-  // 位置 this process covers (they become the tick list).
   const [extLabels, setExtLabels] = useState<string[]>(locationDict)
   const [newLoc, setNewLoc] = useState('')
   const [busy, setBusy] = useState(false)
@@ -504,7 +539,6 @@ function AddProcessSheet({ project: _project, zone, tradeLabel, location, proces
     if (!clean) return setError('請輸入工序名稱')
     if (labels.length === 0) return setError(isExternal ? '請至少揀一個位置' : '呢個分區未設定樓層')
     setBusy(true)
-    // remember the 工序 name in the dictionary for next time (best-effort)
     if (!processDict.includes(clean)) await onAddDict('process', clean)
     const err = await onCreate(clean, labels)
     setBusy(false)
@@ -580,6 +614,104 @@ function AddProcessSheet({ project: _project, zone, tradeLabel, location, proces
           </p>
         )}
 
+        {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{error}</div>}
+      </div>
+    </Modal>
+  )
+}
+
+// ── 工序範本 sheet (guided) — apply stamps leaves at the CURRENT
+//    分區×工種×位置; 存範本 captures this page's 工序 names. ──
+function GuidedTemplateSheet({ contextLabel, defaultLabels, currentTitles, fetchTemplates, saveTemplate, deleteTemplate, canEdit, onClose, onApply }: {
+  contextLabel: string
+  defaultLabels: string[]
+  currentTitles: string[]
+  fetchTemplates: () => Promise<ProgressTemplate[]>
+  saveTemplate: (name: string, items: { title: string }[]) => Promise<{ error: string | null }>
+  deleteTemplate: (id: string) => Promise<{ error: string | null }>
+  canEdit: boolean
+  onClose: () => void
+  onApply: (tpl: ProgressTemplate, labels: string[]) => Promise<{ error: string | null; added: number }>
+}) {
+  const [templates, setTemplates] = useState<ProgressTemplate[] | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [saveName, setSaveName] = useState('')
+  const [msg, setMsg] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    fetchTemplates().then(t => { if (alive) setTemplates(t) })
+    return () => { alive = false }
+  }, [fetchTemplates])
+
+  return (
+    <Modal open onClose={() => { if (!busyId) onClose() }} title="工序範本">
+      <div className="space-y-4">
+        <p className="text-xs text-site-400">套用到：{contextLabel}</p>
+
+        {templates === null ? (
+          <div className="py-6 flex justify-center"><Spinner size={22} /></div>
+        ) : templates.length === 0 ? (
+          <p className="text-sm text-site-400 text-center py-4">未有範本 — 喺下面將呢頁工序存做範本</p>
+        ) : (
+          <div className="space-y-2">
+            {templates.map(t => (
+              <div key={t.id} className="flex items-center gap-2 bg-site-50 border border-site-100 rounded-xl px-3 py-2.5">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-site-900 truncate">{t.name}</p>
+                  <p className="text-[11px] text-site-400 truncate">{t.items.map(i => i.title).join('、')}</p>
+                </div>
+                <button
+                  disabled={!!busyId}
+                  onClick={async () => {
+                    setBusyId(t.id); setError(''); setMsg('')
+                    const r = await onApply(t, defaultLabels)
+                    setBusyId(null)
+                    if (r.error) setError(r.error)
+                    else setMsg(`已加入 ${r.added} 個工序`)
+                  }}
+                  className="flex-shrink-0 text-xs font-semibold bg-safety-500 hover:bg-safety-600 text-white rounded-lg px-3 py-1.5 min-h-0 disabled:opacity-50"
+                >
+                  {busyId === t.id ? <Spinner size={13} className="text-white" /> : '套用'}
+                </button>
+                {canEdit && (
+                  <button
+                    disabled={!!busyId}
+                    onClick={async () => {
+                      const r = await deleteTemplate(t.id)
+                      if (r.error) setError(r.error)
+                      else setTemplates(ts => (ts ?? []).filter(x => x.id !== t.id))
+                    }}
+                    className="flex-shrink-0 text-site-300 hover:text-red-600 p-1.5 min-h-0"
+                    aria-label="刪除範本"
+                  ><Trash2 size={14} /></button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {canEdit && currentTitles.length > 0 && (
+          <div className="pt-3 border-t border-site-100">
+            <label className="label">將呢頁 {currentTitles.length} 個工序存做範本</label>
+            <div className="flex gap-2">
+              <input className="input flex-1" placeholder="範本名（例：垃圾房標準工序）" value={saveName} onChange={e => setSaveName(e.target.value)} />
+              <button
+                onClick={async () => {
+                  setError(''); setMsg('')
+                  const r = await saveTemplate(saveName.trim(), currentTitles.map(title => ({ title })))
+                  if (r.error) setError(r.error)
+                  else { setMsg('已儲存範本'); setSaveName(''); setTemplates(await fetchTemplates()) }
+                }}
+                disabled={!saveName.trim()}
+                className="btn-ghost px-3 disabled:opacity-40"
+              >存</button>
+            </div>
+          </div>
+        )}
+
+        {msg && <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-xl px-3 py-2">✓ {msg}</div>}
         {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{error}</div>}
       </div>
     </Modal>
