@@ -3,7 +3,6 @@ import { ArrowLeft, Plus, Trash2, Map as MapIcon, Check, Users, History as Histo
 import { Modal } from '../Modal'
 import { Spinner } from '../Spinner'
 import { SiteMapView } from './SiteMap'
-import { AssignmentModal } from '../AssignmentModal'
 import { HistoryModal } from '../HistoryModal'
 import { useProgress } from '../../contexts/ProgressContext'
 import { useDicts, guidedLeaves, guidedPct, guidedPctOf, distinctValues, unionOrdered } from '../../lib/guided'
@@ -40,12 +39,13 @@ function abbrevFloor(label: string): string {
   return label.replace('/F', '') || label
 }
 
-function PctRow({ label, pct, sub, onClick, onDelete }: {
+function PctRow({ label, pct, sub, onClick, onDelete, onAssign }: {
   label: string
   pct: number | null
   sub?: string
   onClick?: () => void
   onDelete?: () => void
+  onAssign?: () => void
 }) {
   return (
     <div className="flex items-center gap-1">
@@ -62,6 +62,11 @@ function PctRow({ label, pct, sub, onClick, onDelete }: {
           {pct === null ? '—' : `${pct}%`}
         </span>
       </button>
+      {onAssign && (
+        <button onClick={onAssign} className="flex-shrink-0 w-10 h-10 grid place-items-center text-site-400 hover:text-blue-600" aria-label="指派分區">
+          <Users size={16} />
+        </button>
+      )}
       {onDelete && (
         <button onClick={onDelete} className="flex-shrink-0 w-10 h-10 grid place-items-center text-site-300 hover:text-red-600" aria-label="刪除">
           <Trash2 size={16} />
@@ -115,7 +120,7 @@ export function GuidedProgress({ project }: {
   const [ticking, setTicking] = useState<ProgressItem | null>(null)
   const [addingProcess, setAddingProcess] = useState(false)
   const [templatesOpen, setTemplatesOpen] = useState(false)
-  const [assigning, setAssigning] = useState<ProgressItem | null>(null)
+  const [assigningZone, setAssigningZone] = useState<Zone | null>(null)
   const [historyItem, setHistoryItem] = useState<ProgressItem | null>(null)
   const [err, setErr] = useState('')
 
@@ -203,7 +208,18 @@ export function GuidedProgress({ project }: {
   const dictIdOf = (kind: 'trade' | 'location', label: string) =>
     byKind(kind).find(d => d.label === label)?.id
 
-  // create one guided leaf (shared by 新增工序 + 範本 apply)
+  // the zone's assignees = the union of its leaves' assigned_to. Leaves are
+  // the single source of truth (RLS reads them) — no separate storage.
+  const zoneAssignees = (z: Zone): string[] => {
+    const s = new Set<string>()
+    for (const l of guidedLeaves(items, { zoneIds: [z.id] })) {
+      for (const u of l.assigned_to ?? []) s.add(u)
+    }
+    return [...s]
+  }
+
+  // create one guided leaf (shared by 新增工序 + 範本 apply). New leaves
+  // inherit the zone's assignees so 分區指派 covers later-added 工序 too.
   async function createLeaf(title: string, labels: string[]): Promise<string | null> {
     if (!zone || !sel.tradeLabel) return '未揀工種'
     const { data: code, error: codeErr } = await supabase.rpc('next_progress_code', {
@@ -219,6 +235,7 @@ export function GuidedProgress({ project }: {
       floor_labels: labels,
       trade_label: sel.tradeLabel,
       location: isExternal ? null : (sel.location ?? null),
+      assigned_to: zoneAssignees(zone),
     })
     return r.error
   }
@@ -278,7 +295,21 @@ export function GuidedProgress({ project }: {
         <div className="space-y-2">
           {zonesOfKind.map(z => {
             const p = guidedPct(items, { zoneIds: [z.id] })
-            return <PctRow key={z.id} label={z.name} sub={z.kind === 'external' ? undefined : `${(z.floors ?? []).length} 層`} pct={p.pct} onClick={() => setSel({ ...sel, zoneId: z.id })} />
+            const nAssigned = zoneAssignees(z).length
+            const subParts = [
+              z.kind === 'external' ? null : `${(z.floors ?? []).length} 層`,
+              nAssigned > 0 ? `已指派 ${nAssigned} 人` : null,
+            ].filter(Boolean)
+            return (
+              <PctRow
+                key={z.id}
+                label={z.name}
+                sub={subParts.join(' · ') || undefined}
+                pct={p.pct}
+                onClick={() => setSel({ ...sel, zoneId: z.id })}
+                onAssign={canEdit ? () => setAssigningZone(z) : undefined}
+              />
+            )
           })}
         </div>
       )}
@@ -360,7 +391,6 @@ export function GuidedProgress({ project }: {
           leaf={ticking}
           unitZh={isExternal ? '位置' : '樓層'}
           canDelete={canEdit}
-          canManage={canEdit}
           onClose={() => setTicking(null)}
           onSave={async picked => {
             const r = await updateFloors(ticking.id, picked, '')
@@ -373,7 +403,6 @@ export function GuidedProgress({ project }: {
             if (r.error) setErr(r.error)
             setTicking(null)
           }}
-          onAssign={() => { setAssigning(ticking); setTicking(null) }}
           onHistory={() => { setHistoryItem(ticking); setTicking(null) }}
         />
       )}
@@ -414,11 +443,14 @@ export function GuidedProgress({ project }: {
         />
       )}
 
-      <AssignmentModal
-        open={!!assigning}
-        onClose={() => setAssigning(null)}
-        item={assigning}
-      />
+      {assigningZone && (
+        <ZoneAssignSheet
+          projectId={project.id}
+          zone={assigningZone}
+          leaves={guidedLeaves(items, { zoneIds: [assigningZone.id] })}
+          onClose={() => setAssigningZone(null)}
+        />
+      )}
       <HistoryModal
         open={!!historyItem}
         onClose={() => setHistoryItem(null)}
@@ -429,15 +461,13 @@ export function GuidedProgress({ project }: {
 }
 
 // ── 剔格 sheet ───────────────────────────────────────────────
-function TickSheet({ leaf, unitZh, canDelete, canManage, onClose, onSave, onDelete, onAssign, onHistory }: {
+function TickSheet({ leaf, unitZh, canDelete, onClose, onSave, onDelete, onHistory }: {
   leaf: ProgressItem
   unitZh: string
   canDelete: boolean
-  canManage: boolean
   onClose: () => void
   onSave: (picked: string[]) => Promise<boolean>
   onDelete: () => Promise<void>
-  onAssign: () => void
   onHistory: () => void
 }) {
   const labels = leaf.floor_labels ?? []
@@ -480,17 +510,10 @@ function TickSheet({ leaf, unitZh, canDelete, canManage, onClose, onSave, onDele
         })}
       </div>
 
-      {/* 指派 / 歷史 — the classic per-item tools, back in guided mode */}
-      <div className="grid grid-cols-2 gap-2 mt-4">
-        {canManage && (
-          <button onClick={onAssign} className="flex items-center justify-center gap-1.5 text-sm font-semibold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 py-2.5 rounded-xl min-h-0">
-            <Users size={15} /> 指派
-          </button>
-        )}
-        <button onClick={onHistory} className={`flex items-center justify-center gap-1.5 text-sm font-semibold text-site-600 bg-white border border-site-200 hover:bg-site-50 py-2.5 rounded-xl min-h-0 ${canManage ? '' : 'col-span-2'}`}>
-          <HistoryIcon size={15} /> 更新歷史
-        </button>
-      </div>
+      {/* 歷史 — 指派 now lives on the 分區 row (zone-level, replace semantics) */}
+      <button onClick={onHistory} className="mt-4 w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-site-600 bg-white border border-site-200 hover:bg-site-50 py-2.5 rounded-xl min-h-0">
+        <HistoryIcon size={15} /> 更新歷史
+      </button>
 
       {canDelete && (
         <div className="mt-3 pt-3 border-t border-site-100 flex items-center justify-between">
@@ -714,6 +737,87 @@ function GuidedTemplateSheet({ contextLabel, defaultLabels, currentTitles, fetch
         {msg && <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-xl px-3 py-2">✓ {msg}</div>}
         {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{error}</div>}
       </div>
+    </Modal>
+  )
+}
+
+// ── 分區指派 sheet — ONE simple list: who works this zone. Saving REPLACES
+//    assigned_to on every leaf in the zone (leaves are the truth RLS reads);
+//    later-added 工序 inherit via createLeaf. ──
+function ZoneAssignSheet({ projectId, zone, leaves, onClose }: {
+  projectId: string
+  zone: Zone
+  leaves: ProgressItem[]
+  onClose: () => void
+}) {
+  const { refetch } = useProgress()
+  const [handlers, setHandlers] = useState<Array<{ user_id: string; name: string; role: string }> | null>(null)
+  const [picked, setPicked] = useState<string[]>(() => {
+    const s = new Set<string>()
+    for (const l of leaves) for (const u of l.assigned_to ?? []) s.add(u)
+    return [...s]
+  })
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    supabase.rpc('get_project_handlers', { p_project_id: projectId })
+      .then(({ data }) => { if (alive) setHandlers((data ?? []) as Array<{ user_id: string; name: string; role: string }>) })
+    return () => { alive = false }
+  }, [projectId])
+
+  function toggle(id: string) {
+    setPicked(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
+  }
+
+  async function save() {
+    setBusy(true); setError('')
+    for (const leaf of leaves) {
+      const { error: e } = await supabase.from('progress_items').update({
+        assigned_to: picked,
+        last_updated_at: new Date().toISOString(),
+      }).eq('id', leaf.id)
+      if (e) { setError(`${leaf.title}：${e.message}`); setBusy(false); return }
+    }
+    await refetch()
+    setBusy(false)
+    onClose()
+  }
+
+  return (
+    <Modal
+      open
+      onClose={() => { if (!busy) onClose() }}
+      title={`指派分區 · ${zone.name}`}
+      footer={
+        <button onClick={() => void save()} disabled={busy || handlers === null || leaves.length === 0} className="btn-primary w-full">
+          {busy ? <Spinner size={18} className="text-white" /> : `指派 ${picked.length} 人（覆蓋 ${leaves.length} 個工序）`}
+        </button>
+      }
+    >
+      <p className="text-xs text-site-400 mb-3">揀邊個負責 {zone.name} — 佢哋可以更新呢個分區入面所有工序。</p>
+      {handlers === null ? (
+        <div className="py-6 flex justify-center"><Spinner size={22} /></div>
+      ) : handlers.length === 0 ? (
+        <p className="text-sm text-site-400 text-center py-4">此工地未有已批准嘅成員 — 先喺「工地」批人入項目</p>
+      ) : (
+        <div className="space-y-1.5 max-h-64 overflow-y-auto">
+          {handlers.map(h => {
+            const on = picked.includes(h.user_id)
+            return (
+              <label key={h.user_id} className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 cursor-pointer ${on ? 'border-safety-400 bg-safety-50' : 'border-site-200'}`}>
+                <input type="checkbox" checked={on} onChange={() => toggle(h.user_id)} className="accent-safety-600 h-4 w-4" />
+                <Users size={13} className="text-site-400" />
+                <span className="text-sm font-medium text-site-800 flex-1 truncate">{h.name}</span>
+                <span className="text-[10px] text-site-400">{h.role}</span>
+              </label>
+            )
+          })}
+        </div>
+      )}
+      {leaves.length === 0 && <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mt-3">呢個分區未有工序 — 先加工序再指派</p>}
+      {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mt-3">{error}</div>}
     </Modal>
   )
 }
