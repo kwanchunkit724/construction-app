@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Plus, Trash2, Map as MapIcon, Check, Users, History as HistoryIcon, PackagePlus } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Map as MapIcon, Check, Users, History as HistoryIcon, PackagePlus, Settings2 } from 'lucide-react'
 import { Modal } from '../Modal'
 import { Spinner } from '../Spinner'
 import { SiteMapView } from './SiteMap'
+import { AddZoneSheet, ZoneSettingsSheet } from './ZoneManage'
 import { HistoryModal } from '../HistoryModal'
+import { useAuth } from '../../contexts/AuthContext'
 import { useProgress } from '../../contexts/ProgressContext'
 import { useDicts, guidedLeaves, guidedPct, guidedPctOf, distinctValues, unionOrdered } from '../../lib/guided'
 import { supabase } from '../../lib/supabase'
@@ -39,13 +41,14 @@ function abbrevFloor(label: string): string {
   return label.replace('/F', '') || label
 }
 
-function PctRow({ label, pct, sub, onClick, onDelete, onAssign }: {
+function PctRow({ label, pct, sub, onClick, onDelete, onAssign, onSettings }: {
   label: string
   pct: number | null
   sub?: string
   onClick?: () => void
   onDelete?: () => void
   onAssign?: () => void
+  onSettings?: () => void
 }) {
   return (
     <div className="flex items-center gap-1">
@@ -65,6 +68,11 @@ function PctRow({ label, pct, sub, onClick, onDelete, onAssign }: {
       {onAssign && (
         <button onClick={onAssign} className="flex-shrink-0 w-10 h-10 grid place-items-center text-site-400 hover:text-blue-600" aria-label="指派分區">
           <Users size={16} />
+        </button>
+      )}
+      {onSettings && (
+        <button onClick={onSettings} className="flex-shrink-0 w-10 h-10 grid place-items-center text-site-400 hover:text-site-700" aria-label="分區設定">
+          <Settings2 size={16} />
         </button>
       )}
       {onDelete && (
@@ -121,8 +129,17 @@ export function GuidedProgress({ project }: {
   const [addingProcess, setAddingProcess] = useState(false)
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [assigningZone, setAssigningZone] = useState<Zone | null>(null)
+  const [settingsZone, setSettingsZone] = useState<Zone | null>(null)
+  const [addZoneOpen, setAddZoneOpen] = useState(false)
   const [historyItem, setHistoryItem] = useState<ProgressItem | null>(null)
   const [err, setErr] = useState('')
+
+  const { profile } = useAuth()
+  // zone STRUCTURE edits (加減分區 / 改樓層) write the projects row — gate to
+  // admin / assigned PM, matching that row's RLS.
+  const canManageZones = !!profile && (
+    profile.global_role === 'admin' || project.assigned_pm_ids.includes(profile.id)
+  )
 
   const zones = project.zones
   const zone: Zone | undefined = sel.zoneId ? zones.find(z => z.id === sel.zoneId) : undefined
@@ -308,9 +325,15 @@ export function GuidedProgress({ project }: {
                 pct={p.pct}
                 onClick={() => setSel({ ...sel, zoneId: z.id })}
                 onAssign={canEdit ? () => setAssigningZone(z) : undefined}
+                onSettings={canManageZones ? () => setSettingsZone(z) : undefined}
               />
             )
           })}
+          {canManageZones && (
+            <button onClick={() => setAddZoneOpen(true)} className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-safety-700 bg-safety-50 border border-safety-200 hover:bg-safety-100 py-2.5 rounded-xl">
+              <Plus size={16} /> 新增分區
+            </button>
+          )}
         </div>
       )}
 
@@ -451,6 +474,17 @@ export function GuidedProgress({ project }: {
           onClose={() => setAssigningZone(null)}
         />
       )}
+      {settingsZone && (
+        <ZoneSettingsSheet
+          project={project}
+          zone={settingsZone}
+          leaves={guidedLeaves(items, { zoneIds: [settingsZone.id] })}
+          onClose={() => setSettingsZone(null)}
+        />
+      )}
+      {addZoneOpen && (
+        <AddZoneSheet project={project} onClose={() => setAddZoneOpen(false)} />
+      )}
       <HistoryModal
         open={!!historyItem}
         onClose={() => setHistoryItem(null)}
@@ -550,11 +584,15 @@ function AddProcessSheet({ zone, tradeLabel, location, processDict, locationDict
   const isExternal = zone.kind === 'external'
   const [title, setTitle] = useState('')
   const [extLabels, setExtLabels] = useState<string[]>(locationDict)
+  // building zones: all floors ON by default; tap to EXCLUDE the ones this
+  // 工序 doesn't cover (e.g. 批盪 skips the 水泵房 floor).
+  const [floorsSel, setFloorsSel] = useState<string[]>(zone.floors ?? [])
   const [newLoc, setNewLoc] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  const labels = isExternal ? extLabels : (zone.floors ?? [])
+  const zoneFloors = zone.floors ?? []
+  const labels = isExternal ? extLabels : zoneFloors.filter(f => floorsSel.includes(f))
 
   async function submit() {
     setError('')
@@ -632,9 +670,31 @@ function AddProcessSheet({ zone, tradeLabel, location, processDict, locationDict
             </div>
           </div>
         ) : (
-          <p className="text-xs text-site-500 bg-site-50 border border-site-100 rounded-xl px-3 py-2">
-            剔格清單 = {zone.name} 全部 {labels.length} 層（{labels[0]} … {labels[labels.length - 1]}）
-          </p>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="label mb-0">適用樓層（撳走唔包括嘅）*</label>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setFloorsSel(zoneFloors)} className="text-[11px] text-safety-600 font-semibold min-h-0">全選</button>
+                <button type="button" onClick={() => setFloorsSel([])} className="text-[11px] text-site-400 font-semibold min-h-0">清空</button>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5">
+              {zoneFloors.map(f => {
+                const on = floorsSel.includes(f)
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setFloorsSel(p => on ? p.filter(x => x !== f) : [...p, f])}
+                    className={`py-1.5 rounded-lg border-2 text-xs font-semibold min-h-0 ${on ? 'border-safety-400 bg-safety-50 text-safety-700' : 'border-site-200 bg-site-50 text-site-300 line-through'}`}
+                  >
+                    {f}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-[10px] text-site-400 mt-1.5">剔格清單 = {labels.length}/{zoneFloors.length} 層</p>
+          </div>
         )}
 
         {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{error}</div>}
