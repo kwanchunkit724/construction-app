@@ -1476,27 +1476,44 @@ interface GuidedRow {
   cells: { label: string; done: boolean }[]
 }
 
-// consecutive 分區×工種×位置 groups (rows arrive sorted) — the sketch layout:
-// 類別 as a big title, one bordered block per group, 工序 strips inside.
-interface GuidedGroup {
-  kindZh: string
-  zoneName: string
+// sketch layout v2: outer group = 分區 × 位置 (with its own progress bar),
+// inner sub-groups = 工種 banners, then one box per 工序. Rows arrive sorted
+// kind → zone → location → trade → title, so consecutive grouping suffices.
+interface GuidedTradeSub {
   trade: string
-  location: string
   rows: GuidedRow[]
 }
+interface GuidedLocGroup {
+  kindZh: string
+  zoneName: string
+  location: string
+  rows: GuidedRow[]
+  trades: GuidedTradeSub[]
+}
 
-function groupGuidedRows(rows: GuidedRow[]): GuidedGroup[] {
-  const out: GuidedGroup[] = []
+function groupByLocation(rows: GuidedRow[]): GuidedLocGroup[] {
+  const out: GuidedLocGroup[] = []
   for (const r of rows) {
-    const last = out[out.length - 1]
-    if (last && last.kindZh === r.kindZh && last.zoneName === r.zoneName && last.trade === r.trade && last.location === r.location) {
-      last.rows.push(r)
-    } else {
-      out.push({ kindZh: r.kindZh, zoneName: r.zoneName, trade: r.trade, location: r.location, rows: [r] })
+    let g = out[out.length - 1]
+    if (!g || g.kindZh !== r.kindZh || g.zoneName !== r.zoneName || g.location !== r.location) {
+      g = { kindZh: r.kindZh, zoneName: r.zoneName, location: r.location, rows: [], trades: [] }
+      out.push(g)
     }
+    g.rows.push(r)
+    let t = g.trades[g.trades.length - 1]
+    if (!t || t.trade !== r.trade) {
+      t = { trade: r.trade, rows: [] }
+      g.trades.push(t)
+    }
+    t.rows.push(r)
   }
   return out
+}
+
+function pctOfGuidedRows(rows: GuidedRow[]): number | null {
+  const done = rows.reduce((s, r) => s + r.done, 0)
+  const total = rows.reduce((s, r) => s + r.total, 0)
+  return total === 0 ? null : Math.round((done / total) * 100)
 }
 
 // text progress bar for Excel cells (no cell styling in community xlsx)
@@ -1537,8 +1554,8 @@ function buildGuidedRows(project: Project, items: ProgressItem[], opts: GuidedEx
   rows.sort((a, b) =>
     a.kindZh.localeCompare(b.kindZh)
     || a.zoneIdx - b.zoneIdx
-    || a.trade.localeCompare(b.trade)
     || a.location.localeCompare(b.location)
+    || a.trade.localeCompare(b.trade)
     || a.title.localeCompare(b.title))
   return rows
 }
@@ -1593,25 +1610,30 @@ export async function exportGuidedProgressToExcel(project: Project, items: Progr
   const ws1 = XLSX.utils.aoa_to_sheet(aoa1)
   ws1['!cols'] = [{ wch: 14 }, ...m.trades.map(() => ({ wch: 20 })), { wch: 20 }]
 
-  // 工序明細 — the sketch layout: 類別 title, one block per 分區×工種×位置,
-  // then a floor-per-column grid (✓ = done, □ = not yet, blank = excluded).
+  // 工序明細 — sketch v2: 類別 title → one block per 分區×位置 (with the
+  // location's own % bar) → 工種 banner rows → floor-per-column grid
+  // (✓ = done, □ = not yet, blank = excluded from that 工序).
   const aoa2: (string | number | null)[][] = []
   aoa2.push([`${project.name} — 工序明細`])
   aoa2.push([])
   let lastKind = ''
-  for (const g of groupGuidedRows(rows)) {
+  for (const g of groupByLocation(rows)) {
     if (g.kindZh !== lastKind) { aoa2.push([`【${g.kindZh}】`]); lastKind = g.kindZh }
-    aoa2.push([`${g.zoneName} · ${g.trade}${g.location !== '—' ? ` · ${g.location}` : ''}`])
+    const headName = g.location !== '—' ? `${g.zoneName} · ${g.location}` : g.zoneName
+    aoa2.push([headName, textBar(pctOfGuidedRows(g.rows))])
     const cols: string[] = []
     for (const r of g.rows) for (const c of r.cells) if (!cols.includes(c.label)) cols.push(c.label)
-    aoa2.push(['工序', ...cols, '%'])
-    for (const r of g.rows) {
-      const cellMap = new Map(r.cells.map(c => [c.label, c.done]))
-      aoa2.push([
-        r.title,
-        ...cols.map(cl => !cellMap.has(cl) ? '' : (cellMap.get(cl) ? '✓' : '□')),
-        fmtGuidedPct(r.pct),
-      ])
+    for (const t of g.trades) {
+      aoa2.push([`▍工種：${t.trade}`])
+      aoa2.push(['工序', ...cols, '%'])
+      for (const r of t.rows) {
+        const cellMap = new Map(r.cells.map(c => [c.label, c.done]))
+        aoa2.push([
+          r.title,
+          ...cols.map(cl => !cellMap.has(cl) ? '' : (cellMap.get(cl) ? '✓' : '□')),
+          fmtGuidedPct(r.pct),
+        ])
+      }
     }
     aoa2.push([])
   }
@@ -1660,41 +1682,52 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
       <tr class="pgblk"><td style="${tdS} font-weight:700; background:#f1f5f9;">整體</td>${m.overall.map(c => `<td style="${tdS} background:#f1f5f9;">${bar(c)}</td>`).join('')}<td style="${tdS} background:#f1f5f9;">${bar(m.grand)}</td></tr>
     </tbody></table>`
 
-  // 明細 — the sketch layout: 類別 banner, a bordered block per
-  // 分區×工種×位置, each 工序 as a name + 格仔 strip + %. Every aligned
-  // element is a TABLE — the one layout html2canvas gets right: the strip is
-  // a two-row table (labels over boxes stay glued), the title/% pair and the
-  // chips are single-row tables (no baseline drift).
+  // 明細 — sketch v2: 類別 banner → one card per 分區×位置 whose header row
+  // is [分區 chip][位置 chip][progress bar + %] → a 工種 banner per trade →
+  // one bordered box per 工序 (name + % on top, 格仔 strip below). Every
+  // aligned element is a TABLE — the one layout html2canvas renders
+  // faithfully; floor labels get a real 8px/12px line so they no longer
+  // clip into the boxes.
   const abbrev = (l: string) => l.replace('/F', '') || l
-  const chip = (t: string) => `<td style="border:1px solid #94a3b8; border-radius:8px; padding:2px 9px; font-size:11px; font-weight:700; color:#334155; white-space:nowrap;">${esc(t)}</td><td style="width:6px;"></td>`
+  const chip = (t: string) => `<td style="width:1%; border:1px solid #64748b; border-radius:8px; padding:3px 10px; font-size:12px; font-weight:700; color:#1e293b; white-space:nowrap;">${esc(t)}</td><td style="width:6px;"></td>`
   const strip = (cells: GuidedRow['cells']): string => {
     const widthPct = Math.min(100, cells.length * 4.4)
-    return `<table style="border-collapse:separate; border-spacing:2px 0; table-layout:fixed; width:${widthPct}%; margin-top:3px;"><tbody>
-      <tr>${cells.map(c => `<td style="padding:0; font-size:6px; line-height:9px; color:#64748b; text-align:center; overflow:hidden; white-space:nowrap;">${esc(abbrev(c.label))}</td>`).join('')}</tr>
-      <tr>${cells.map(c => `<td style="padding:0;"><div style="height:10px; border-radius:2px; background:${c.done ? '#22c55e' : '#f1f5f9'}; border:1px solid ${c.done ? '#16a34a' : '#cbd5e1'};"></div></td>`).join('')}</tr>
+    return `<table style="border-collapse:separate; border-spacing:2px 0; table-layout:fixed; width:${widthPct}%; margin-top:4px;"><tbody>
+      <tr>${cells.map(c => `<td style="padding:0; font-size:8px; line-height:12px; height:12px; color:#475569; text-align:center; overflow:hidden; white-space:nowrap; vertical-align:bottom;">${esc(abbrev(c.label))}</td>`).join('')}</tr>
+      <tr>${cells.map(c => `<td style="padding:0;"><div style="height:11px; border-radius:2px; background:${c.done ? '#22c55e' : '#f8fafc'}; border:1px solid ${c.done ? '#16a34a' : '#cbd5e1'};"></div></td>`).join('')}</tr>
     </tbody></table>`
   }
+  const pctColorOf = (p: number | null) => p === null ? '#94a3b8' : p >= 100 ? '#16a34a' : p > 0 ? '#2563eb' : '#94a3b8'
   let detailHtml = ''
   let lastKind = ''
-  for (const g of groupGuidedRows(shown)) {
+  for (const g of groupByLocation(shown)) {
     if (g.kindZh !== lastKind) {
       detailHtml += `<div class="pgblk" style="font-size:15px; font-weight:800; margin-top:16px; background:#1e293b; color:#ffffff; padding:5px 10px; border-radius:8px; text-align:center;">${esc(g.kindZh)}</div>`
       lastKind = g.kindZh
     }
-    const strips = g.rows.map(r => `
-      <div class="pgblk" style="margin-top:7px; border-top:1px dashed #e2e8f0; padding-top:6px;">
-        <table style="border-collapse:collapse; width:100%;"><tbody><tr>
-          <td style="padding:0; font-size:12px; font-weight:600; vertical-align:middle;">${esc(r.title)}</td>
-          <td style="padding:0; font-size:12px; font-weight:800; text-align:right; vertical-align:middle; white-space:nowrap; color:${r.pct === null ? '#94a3b8' : r.pct >= 100 ? '#16a34a' : r.pct > 0 ? '#2563eb' : '#94a3b8'};">${r.pct === null ? '—' : `${r.pct}%`}</td>
-        </tr></tbody></table>
-        ${strip(r.cells)}
-      </div>`).join('')
+    const gPct = pctOfGuidedRows(g.rows)
+    const inner = g.trades.map(t => {
+      const boxes = t.rows.map(r => `
+        <div class="pgblk" style="border:1px solid #cbd5e1; border-radius:8px; padding:6px 9px; margin-top:6px;">
+          <table style="border-collapse:collapse; width:100%;"><tbody><tr>
+            <td style="padding:0; font-size:12px; font-weight:700; vertical-align:middle;">${esc(r.title)}</td>
+            <td style="padding:0; font-size:13px; font-weight:800; text-align:right; vertical-align:middle; white-space:nowrap; color:${pctColorOf(r.pct)};">${r.pct === null ? '—' : `${r.pct}%`}</td>
+          </tr></tbody></table>
+          ${strip(r.cells)}
+        </div>`).join('')
+      return `
+        <div class="pgblk" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; text-align:center; font-size:12px; font-weight:700; color:#334155; padding:3px 8px; margin-top:9px;">${esc(t.trade)}</div>
+        ${boxes}`
+    }).join('')
     detailHtml += `
-      <div style="border:1px solid #cbd5e1; border-radius:8px; padding:8px 10px; margin-top:8px;">
+      <div style="border:1.5px solid #94a3b8; border-radius:10px; padding:9px 11px; margin-top:10px;">
         <div class="pgblk">
-          <table style="border-collapse:separate; border-spacing:0;"><tbody><tr>${chip(g.zoneName)}${chip(g.trade)}${g.location !== '—' ? chip(g.location) : ''}</tr></tbody></table>
+          <table style="border-collapse:separate; border-spacing:0; width:100%;"><tbody><tr>
+            ${chip(g.zoneName)}${g.location !== '—' ? chip(g.location) : ''}
+            <td style="padding-left:12px; vertical-align:middle;">${bar(gPct)}</td>
+          </tr></tbody></table>
         </div>
-        ${strips}
+        ${inner}
       </div>`
   }
 
