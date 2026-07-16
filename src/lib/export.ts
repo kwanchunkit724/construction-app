@@ -1667,14 +1667,16 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
   // 總覽 matrix with real progress bars in every cell. html2canvas mislays
   // flex/inline-block baselines — a two-cell table keeps the bar and its %
   // on one line reliably.
+  // palette (ui-ux-pro-max: industrial grey + safety orange, financial-dashboard
+  // style): slate chrome, orange = in-progress, emerald = done. No blue headers.
   const bar = (p: number | null): string => p === null
     ? '<span style="color:#94a3b8; font-size:10px;">—</span>'
     : `<table style="border-collapse:collapse; width:100%;"><tbody><tr>
-        <td style="padding:0; vertical-align:middle;"><div style="height:7px; background:#e2e8f0; border-radius:4px; overflow:hidden;"><div style="width:${p}%; height:7px; background:${p >= 100 ? '#16a34a' : '#2563eb'};"></div></div></td>
+        <td style="padding:0; vertical-align:middle;"><div style="height:7px; background:#e2e8f0; border-radius:4px; overflow:hidden;"><div style="width:${p}%; height:7px; background:${p >= 100 ? '#10b981' : '#f97316'};"></div></div></td>
         <td style="padding:0 0 0 6px; width:34px; font-size:10px; font-weight:700; text-align:right; vertical-align:middle; white-space:nowrap;">${p}%</td>
       </tr></tbody></table>`
   const tdS = 'border:1px solid #e2e8f0; padding:5px 7px; font-size:11px; vertical-align:middle;'
-  const thS = 'border:1px solid #cbd5e1; padding:5px 7px; font-size:11px; text-align:left; color:#ffffff; background:#1d4ed8;'
+  const thS = 'border:1px solid #1e293b; padding:5px 7px; font-size:11px; text-align:left; color:#ffffff; background:#334155;'
   const matrixHtml = `<table style="border-collapse:collapse; width:100%; margin:6px 0; table-layout:fixed;">
     <thead><tr><th style="${thS} width:70px;">分區</th>${m.trades.map(t => `<th style="${thS}">${esc(t)}</th>`).join('')}<th style="${thS}">整體</th></tr></thead>
     <tbody>
@@ -1698,10 +1700,10 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
   const strip = (cells: GuidedRow['cells']): string => {
     const widthPct = Math.min(100, cells.length * 4.4)
     return `<table style="border-collapse:separate; border-spacing:2px 0; table-layout:fixed; width:${widthPct}%; margin-top:5px;"><tbody>
-      <tr>${cells.map(c => `<td style="padding:0; height:17px; line-height:17px; text-align:center; border-radius:3px; overflow:hidden; font-size:9px; font-weight:700; white-space:nowrap; background:${c.done ? '#22c55e' : '#f8fafc'}; border:1px solid ${c.done ? '#16a34a' : '#cbd5e1'}; color:${c.done ? '#ffffff' : '#64748b'};"><span style="position:relative; top:-5px;">${esc(abbrev(c.label))}</span></td>`).join('')}</tr>
+      <tr>${cells.map(c => `<td style="padding:0; height:17px; line-height:17px; text-align:center; border-radius:3px; overflow:hidden; font-size:9px; font-weight:700; white-space:nowrap; background:${c.done ? '#10b981' : '#f8fafc'}; border:1px solid ${c.done ? '#059669' : '#cbd5e1'}; color:${c.done ? '#ffffff' : '#64748b'};"><span style="position:relative; top:-6px;">${esc(abbrev(c.label))}</span></td>`).join('')}</tr>
     </tbody></table>`
   }
-  const pctColorOf = (p: number | null) => p === null ? '#94a3b8' : p >= 100 ? '#16a34a' : p > 0 ? '#2563eb' : '#94a3b8'
+  const pctColorOf = (p: number | null) => p === null ? '#94a3b8' : p >= 100 ? '#059669' : p > 0 ? '#ea580c' : '#94a3b8'
   let detailHtml = ''
   let lastKind = ''
   for (const g of groupByLocation(shown)) {
