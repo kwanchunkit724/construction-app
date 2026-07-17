@@ -1141,15 +1141,27 @@ async function htmlToPdfBlob(bodyHtml: string): Promise<Blob> {
   document.body.appendChild(container)
   try {
     const cTop = container.getBoundingClientRect().top
-    const blockBottoms = Array.from(container.querySelectorAll('.pgblk'))
+    const blockBottoms = Array.from(container.querySelectorAll('.pgblk, .pgavoid'))
       .map(b => (b as HTMLElement).getBoundingClientRect().bottom - cTop)
+    // .pgavoid = keep the WHOLE element on one page (page-break-inside: avoid).
+    // Break candidates strictly inside a page-sized pgavoid are discarded, so
+    // the slicer breaks before it instead of bisecting its border box.
+    const avoidRects = Array.from(container.querySelectorAll('.pgavoid')).map(b => {
+      const r = (b as HTMLElement).getBoundingClientRect()
+      return { top: r.top - cTop, bottom: r.bottom - cTop }
+    })
     const canvas = await html2canvas(container, { scale: 2, backgroundColor: '#ffffff', logging: false })
     const cssToCanvas = canvas.height / container.offsetHeight
-    const bounds = blockBottoms.map(b => b * cssToCanvas).sort((a, b) => a - b)
     const doc: any = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
     const pageWpt = doc.internal.pageSize.getWidth()
     const pageHpt = doc.internal.pageSize.getHeight()
     const pageHcanvas = (pageHpt * canvas.width) / pageWpt
+    const avoids = avoidRects
+      .map(r => ({ top: r.top * cssToCanvas, bottom: r.bottom * cssToCanvas }))
+      .filter(r => r.bottom - r.top <= pageHcanvas - 24)
+    const bounds = blockBottoms.map(b => b * cssToCanvas)
+      .filter(b => !avoids.some(r => b > r.top + 6 && b < r.bottom - 6))
+      .sort((a, b) => a - b)
     let startPx = 0, first = true
     while (startPx < canvas.height - 1) {
       let endPx = startPx + pageHcanvas
@@ -1691,7 +1703,10 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
   // faithfully; floor labels get a real 8px/12px line so they no longer
   // clip into the boxes.
   const abbrev = (l: string) => l.replace('/F', '') || l
-  const chip = (t: string) => `<td style="width:1%; border:1px solid #64748b; border-radius:8px; padding:3px 10px; font-size:12px; font-weight:700; color:#1e293b; white-space:nowrap;">${esc(t)}</td><td style="width:6px;"></td>`
+  // chip text needs the same counter-shift as strip labels (html2canvas paints
+  // inline text low): explicit height + line-height + relative span. Offset is
+  // pixel-measured with the canvas harness — don't tweak blind.
+  const chip = (t: string) => `<td style="width:1%; height:22px; line-height:22px; border:1px solid #64748b; border-radius:8px; padding:0 10px; font-size:12px; font-weight:700; color:#1e293b; white-space:nowrap; text-align:center;"><span style="position:relative; top:-6px;">${esc(t)}</span></td><td style="width:6px;"></td>`
   // one row, label INSIDE the box — no second row to drift out of alignment.
   // html2canvas paints small inline text ~5px below where the browser does
   // (verified pixel-by-pixel against its own canvas output); the relative
@@ -1712,8 +1727,8 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
       lastKind = g.kindZh
     }
     const gPct = pctOfGuidedRows(g.rows)
-    const inner = g.trades.map(t => {
-      const boxes = t.rows.map(r => `
+    // 工序 boxes directly under the location header — no 工種 banner (user cut it).
+    const inner = g.rows.map(r => `
         <div class="pgblk" style="border:1px solid #cbd5e1; border-radius:8px; padding:6px 9px; margin-top:6px;">
           <table style="border-collapse:collapse; width:100%;"><tbody><tr>
             <td style="padding:0; font-size:12px; font-weight:700; vertical-align:middle;">${esc(r.title)}</td>
@@ -1721,12 +1736,8 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
           </tr></tbody></table>
           ${strip(r.cells)}
         </div>`).join('')
-      return `
-        <div class="pgblk" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; text-align:center; font-size:12px; font-weight:700; color:#334155; padding:3px 8px; margin-top:9px;">${esc(t.trade)}</div>
-        ${boxes}`
-    }).join('')
     detailHtml += `
-      <div style="border:1.5px solid #94a3b8; border-radius:10px; padding:9px 11px; margin-top:10px;">
+      <div class="pgavoid" style="border:1.5px solid #94a3b8; border-radius:10px; padding:9px 11px; margin-top:10px;">
         <div class="pgblk">
           <table style="border-collapse:separate; border-spacing:0; width:100%;"><tbody><tr>
             ${chip(g.zoneName)}${g.location !== '—' ? chip(g.location) : ''}
