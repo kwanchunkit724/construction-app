@@ -54,3 +54,11 @@ android/.gradle/
 # google-services.json contains a public Firebase API key — safe to commit
 # per Google's official guidance (it identifies the project, not authenticates).
 # Real auth happens via FCM Server Key (kept server-side in OneSignal).
+
+# Android signing — NEVER commit keystores or credentials
+*.jks
+*.keystore
+key.properties
+android/key.properties
+
+.vercel
