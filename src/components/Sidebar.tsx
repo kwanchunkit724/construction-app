@@ -98,7 +98,7 @@ export function Sidebar() {
               </p>
             </div>
             <button
-              onClick={signOut}
+              onClick={() => { if (window.confirm('確定登出？')) void signOut() }}
               className="text-site-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50"
               aria-label="登出"
             >

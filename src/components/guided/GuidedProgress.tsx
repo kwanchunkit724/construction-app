@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, Plus, Trash2, Map as MapIcon, Check, Users, History as HistoryIcon, PackagePlus, Settings2, Loader2 } from 'lucide-react'
 import { Modal } from '../Modal'
 import { Spinner } from '../Spinner'
@@ -514,19 +514,43 @@ function TickSheet({ leaf, unitZh, canDelete, onClose, onSave, onDelete, onHisto
   onHistory: () => void
 }) {
   const labels = leaf.floor_labels ?? []
-  const [picked, setPicked] = useState<string[]>(leaf.floors_completed ?? [])
+  const origPicked = leaf.floors_completed ?? []
+  const origWorking = (leaf.floors_in_progress ?? []).filter(f => !origPicked.includes(f))
+  const [picked, setPicked] = useState<string[]>(origPicked)
   // v113 半態: 進行中 — display-only, not counted into %
-  const [working, setWorking] = useState<string[]>(
-    (leaf.floors_in_progress ?? []).filter(f => !(leaf.floors_completed ?? []).includes(f)),
-  )
+  const [working, setWorking] = useState<string[]>(origWorking)
   const [busy, setBusy] = useState(false)
   const [confirmDel, setConfirmDel] = useState(false)
+  // 綠格兩步清除: first tap arms the cell (red), second tap within 2.5s clears
+  const [armClear, setArmClear] = useState<string | null>(null)
+  const armTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // unsaved-changes guard: closing with edits asks first
+  const [confirmLeave, setConfirmLeave] = useState(false)
+  const dirty =
+    JSON.stringify([...picked].sort()) !== JSON.stringify([...origPicked].sort())
+    || JSON.stringify([...working].sort()) !== JSON.stringify([...origWorking].sort())
+
+  function armClearCell(f: string) {
+    if (armTimer.current) clearTimeout(armTimer.current)
+    setArmClear(f)
+    armTimer.current = setTimeout(() => setArmClear(null), 2500)
+  }
 
   // tap cycles the site's natural progression: 未做 → 進行中 → 完成 → 未做
+  // (完成 → 未做 needs a second tap on the armed red cell — 誤撳唔會即刻清零)
   function toggle(f: string) {
     if (picked.includes(f)) {
-      setPicked(p => p.filter(x => x !== f))
-    } else if (working.includes(f)) {
+      if (armClear === f) {
+        setPicked(p => p.filter(x => x !== f))
+        setArmClear(null)
+        if (armTimer.current) clearTimeout(armTimer.current)
+      } else {
+        armClearCell(f)
+      }
+      return
+    }
+    if (armClear) { setArmClear(null); if (armTimer.current) clearTimeout(armTimer.current) }
+    if (working.includes(f)) {
       setWorking(w => w.filter(x => x !== f))
       setPicked(p => [...p, f])
     } else {
@@ -534,10 +558,16 @@ function TickSheet({ leaf, unitZh, canDelete, onClose, onSave, onDelete, onHisto
     }
   }
 
+  function requestClose() {
+    if (busy) return
+    if (dirty && !confirmLeave) { setConfirmLeave(true); return }
+    onClose()
+  }
+
   return (
     <Modal
       open
-      onClose={() => { if (!busy) onClose() }}
+      onClose={requestClose}
       title={leaf.title}
       footer={
         <button
@@ -549,45 +579,55 @@ function TickSheet({ leaf, unitZh, canDelete, onClose, onSave, onDelete, onHisto
         </button>
       }
     >
-      <p className="text-xs text-site-400 mb-3">
-        撳一下 = <span className="font-semibold text-orange-600">進行中</span>，再撳 = <span className="font-semibold text-emerald-600">完成</span>，第三下清除 · 只有「完成」計入 %
+      {confirmLeave && (
+        <div className="mb-3 bg-amber-50 border border-amber-300 rounded-xl p-3">
+          <p className="text-sm font-semibold text-amber-800">有未儲存嘅改動 — 離開就會唔見</p>
+          <div className="mt-2 flex gap-2">
+            <button onClick={() => setConfirmLeave(false)} className="flex-1 text-sm font-semibold bg-white border border-site-200 rounded-lg py-2">繼續編輯</button>
+            <button onClick={onClose} className="flex-1 text-sm font-semibold text-red-600 bg-white border border-red-200 rounded-lg py-2">唔儲存離開</button>
+          </div>
+        </div>
+      )}
+      <p className="text-sm text-site-500 mb-3">
+        撳一下 = <span className="font-semibold text-orange-600">進行中</span>，再撳 = <span className="font-semibold text-emerald-600">完成</span> · 只有「完成」計入 %<br />
+        <span className="text-xs text-site-400">清除完成：撳綠格一下（轉紅）再撳一下確認</span>
       </p>
       <div className="grid grid-cols-3 gap-2">
         {labels.map(f => {
           const isDone = picked.includes(f)
+          const isArmed = isDone && armClear === f
           const isWorking = !isDone && working.includes(f)
           return (
             <button
               key={f}
               onClick={() => toggle(f)}
-              className={`flex items-center justify-center gap-1 py-2.5 rounded-xl border-2 text-sm font-semibold ${isDone ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : isWorking ? 'border-orange-400 bg-orange-50 text-orange-600' : 'border-site-200 text-site-500'}`}
+              className={`flex items-center justify-center gap-1 py-2.5 rounded-xl border-2 text-sm font-semibold ${isArmed ? 'border-red-500 bg-red-50 text-red-600' : isDone ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : isWorking ? 'border-orange-400 bg-orange-50 text-orange-600' : 'border-site-200 text-site-500'}`}
             >
-              {isDone && <Check size={13} />}{isWorking && <Loader2 size={13} />} {f}
+              {isArmed ? <Trash2 size={13} /> : isDone ? <Check size={13} /> : isWorking ? <Loader2 size={13} /> : null} {isArmed ? '再撳清除' : f}
             </button>
           )
         })}
       </div>
 
-      {/* 歷史 — 指派 now lives on the 分區 row (zone-level, replace semantics) */}
-      <button onClick={onHistory} className="mt-4 w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-site-600 bg-white border border-site-200 hover:bg-site-50 py-2.5 rounded-xl min-h-0">
-        <HistoryIcon size={15} /> 更新歷史
-      </button>
-
-      {canDelete && (
-        <div className="mt-3 pt-3 border-t border-site-100 flex items-center justify-between">
-          {confirmDel ? (
-            <>
-              <span className="text-xs text-red-600 font-semibold">確認刪除呢個工序？</span>
-              <div className="flex gap-2">
-                <button onClick={() => void onDelete()} className="text-xs bg-red-600 text-white px-3 py-1.5 rounded-lg">刪除</button>
-                <button onClick={() => setConfirmDel(false)} className="text-xs text-site-500 px-2">取消</button>
-              </div>
-            </>
-          ) : (
-            <button onClick={() => setConfirmDel(true)} className="text-xs text-site-400 hover:text-red-600 flex items-center gap-1 min-h-0">
-              <Trash2 size={13} /> 刪除工序
-            </button>
-          )}
+      {/* 歷史 + 刪除 same mid-sheet row — 刪除 deliberately moved AWAY from the
+          footer 儲存 button (thumb-zone adjacency caused near-misses on site) */}
+      <div className="mt-4 flex gap-2">
+        <button onClick={onHistory} className="flex-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-site-600 bg-white border border-site-200 hover:bg-site-50 py-2.5 rounded-xl min-h-0">
+          <HistoryIcon size={15} /> 更新歷史
+        </button>
+        {canDelete && !confirmDel && (
+          <button onClick={() => setConfirmDel(true)} className="px-3.5 flex items-center justify-center gap-1 text-sm text-site-400 hover:text-red-600 bg-white border border-site-200 rounded-xl min-h-0">
+            <Trash2 size={14} /> 刪除
+          </button>
+        )}
+      </div>
+      {canDelete && confirmDel && (
+        <div className="mt-2 bg-red-50 border border-red-200 rounded-xl p-3 flex items-center justify-between">
+          <span className="text-xs text-red-600 font-semibold">確認刪除呢個工序？成排剔會一齊唔見。</span>
+          <div className="flex gap-2 flex-shrink-0">
+            <button onClick={() => void onDelete()} className="text-xs bg-red-600 text-white px-3 py-1.5 rounded-lg">刪除</button>
+            <button onClick={() => setConfirmDel(false)} className="text-xs text-site-500 px-2">取消</button>
+          </div>
         </div>
       )}
     </Modal>

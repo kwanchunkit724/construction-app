@@ -1492,6 +1492,8 @@ interface GuidedRow {
   title: string
   done: number
   total: number
+  // v113: how many included floors are 進行中 (display-only, not in %)
+  workingCount: number
   pct: number | null
   doneLabels: string[]
   restLabels: string[]
@@ -1588,6 +1590,7 @@ function buildGuidedRows(project: Project, items: ProgressItem[], opts: GuidedEx
       title: l.title,
       done: done.length,
       total: labels.length,
+      workingCount: labels.filter(f => !ticked.has(f) && working.has(f)).length,
       pct: labels.length === 0 ? null : Math.round((done.length / labels.length) * 100),
       doneLabels: done,
       restLabels: rest,
@@ -1791,7 +1794,7 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
         <div class="pgblk" style="border:1px solid #cbd5e1; border-radius:8px; padding:6px 9px; margin-top:6px;">
           <table style="border-collapse:collapse; width:100%;"><tbody><tr>
             <td style="padding:0; font-size:12px; font-weight:700; vertical-align:middle;">${shim(-6.25, esc(r.title))}</td>
-            <td style="padding:0; font-size:10px; font-weight:600; text-align:right; vertical-align:middle; white-space:nowrap; color:#94a3b8;">${shim(-5.5, `${r.done}/${r.total} ${r.kindZh === '外圍' ? '項' : '層'}`)}</td>
+            <td style="padding:0; font-size:10px; font-weight:600; text-align:right; vertical-align:middle; white-space:nowrap; color:#94a3b8;">${shim(-5.5, `${r.done}/${r.total} ${r.kindZh === '外圍' ? '項' : '層'}${r.workingCount > 0 ? ` · <span style="color:#ea580c;">${r.workingCount} 進行中</span>` : ''}`)}</td>
             <td style="padding:0 0 0 8px; width:44px; font-size:13px; font-weight:800; text-align:right; vertical-align:middle; white-space:nowrap; color:${pctColorOf(r.pct)};">${shim(-7.5, r.pct === null ? '—' : `${r.pct}%`)}</td>
           </tr></tbody></table>
           ${strip(r.cells, r.kindZh === '外圍')}
@@ -1821,7 +1824,9 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
       <div style="font-size:11px; font-weight:700; color:#334155;">${esc(label)}</div>
       <div style="margin-top:34px; border-bottom:1px solid #64748b;"></div>
       <div style="font-size:9px; color:#94a3b8; margin-top:3px;">簽署</div>
-      <div style="margin-top:22px; border-bottom:1px solid #64748b;"></div>
+      <div style="margin-top:20px; border-bottom:1px solid #64748b;"></div>
+      <div style="font-size:9px; color:#94a3b8; margin-top:3px;">姓名（正楷）／公司</div>
+      <div style="margin-top:20px; border-bottom:1px solid #64748b;"></div>
       <div style="font-size:9px; color:#94a3b8; margin-top:3px;">日期</div>
     </td>`
 

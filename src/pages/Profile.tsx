@@ -261,7 +261,7 @@ function ProfileInner() {
       </div>
 
       <button
-        onClick={signOut}
+        onClick={() => { if (window.confirm('確定登出？')) void signOut() }}
         className="mt-5 w-full flex items-center justify-center gap-2 text-red-600 bg-white border border-red-200 hover:bg-red-50 font-semibold rounded-xl py-3"
       >
         <LogOut size={18} /> 登出
