@@ -219,6 +219,9 @@ export interface ProgressItem {
   tracking_mode: TrackingMode
   floor_labels: string[]
   floors_completed: string[]
+  // v113 (guided 半態): floors currently being worked on. Display-only —
+  // NEVER counted into % (保守口徑: 綠 = 該層 100% 先計).
+  floors_in_progress?: string[] | null
   // ── P2 (v43): quantity mode (渠務 / linear work) ──
   // qty_total = the run's total measure (e.g. 600 m); qty_done = how much is
   // laid (e.g. 230 m); qty_unit = the free-text unit (m / m2 / m3 / 個 / 件…).

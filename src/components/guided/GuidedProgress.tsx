@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Plus, Trash2, Map as MapIcon, Check, Users, History as HistoryIcon, PackagePlus, Settings2 } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Map as MapIcon, Check, Users, History as HistoryIcon, PackagePlus, Settings2, Loader2 } from 'lucide-react'
 import { Modal } from '../Modal'
 import { Spinner } from '../Spinner'
 import { SiteMapView } from './SiteMap'
@@ -90,6 +90,9 @@ function PctRow({ label, pct, sub, onClick, onDelete, onAssign, onSettings }: {
 function ProcessRow({ leaf, onClick }: { leaf: ProgressItem; onClick?: () => void }) {
   const labels = leaf.floor_labels ?? []
   const done = new Set(leaf.floors_completed ?? [])
+  // v113 半態: 進行中 floors show orange but NEVER count into %
+  const working = new Set(leaf.floors_in_progress ?? [])
+  const workingCount = labels.filter(f => !done.has(f) && working.has(f)).length
   const p = guidedPctOf([leaf])
   return (
     <button
@@ -107,13 +110,15 @@ function ProcessRow({ leaf, onClick }: { leaf: ProgressItem; onClick?: () => voi
         {labels.map(f => (
           <span
             key={f}
-            className={`inline-flex items-center justify-center w-[19px] h-[17px] rounded-[4px] border text-[8px] font-bold leading-none ${done.has(f) ? 'bg-emerald-500 border-emerald-600 text-white' : 'bg-site-50 border-site-200 text-site-400'}`}
+            className={`inline-flex items-center justify-center min-w-[19px] px-0.5 h-[17px] rounded-[4px] border text-[8px] font-bold leading-none ${done.has(f) ? 'bg-emerald-500 border-emerald-600 text-white' : working.has(f) ? 'bg-orange-400 border-orange-500 text-white' : 'bg-site-50 border-site-200 text-site-400'}`}
           >
             {abbrevFloor(f)}
           </span>
         ))}
       </div>
-      <p className="text-[10px] text-site-400 mt-1.5">{done.size}/{labels.length} 完成</p>
+      <p className="text-[10px] text-site-400 mt-1.5">
+        {done.size}/{labels.length} 完成{workingCount > 0 ? ` · ${workingCount} 進行中` : ''}
+      </p>
     </button>
   )
 }
@@ -419,8 +424,8 @@ export function GuidedProgress({ project }: {
           unitZh={isExternal ? '位置' : '樓層'}
           canDelete={canEdit}
           onClose={() => setTicking(null)}
-          onSave={async picked => {
-            const r = await updateFloors(ticking.id, picked, '')
+          onSave={async (picked, working) => {
+            const r = await updateFloors(ticking.id, picked, '', working)
             if (r.error) { setErr(r.error); return false }
             setTicking(null)
             return true
@@ -504,17 +509,29 @@ function TickSheet({ leaf, unitZh, canDelete, onClose, onSave, onDelete, onHisto
   unitZh: string
   canDelete: boolean
   onClose: () => void
-  onSave: (picked: string[]) => Promise<boolean>
+  onSave: (picked: string[], working: string[]) => Promise<boolean>
   onDelete: () => Promise<void>
   onHistory: () => void
 }) {
   const labels = leaf.floor_labels ?? []
   const [picked, setPicked] = useState<string[]>(leaf.floors_completed ?? [])
+  // v113 半態: 進行中 — display-only, not counted into %
+  const [working, setWorking] = useState<string[]>(
+    (leaf.floors_in_progress ?? []).filter(f => !(leaf.floors_completed ?? []).includes(f)),
+  )
   const [busy, setBusy] = useState(false)
   const [confirmDel, setConfirmDel] = useState(false)
 
+  // tap cycles the site's natural progression: 未做 → 進行中 → 完成 → 未做
   function toggle(f: string) {
-    setPicked(p => p.includes(f) ? p.filter(x => x !== f) : [...p, f])
+    if (picked.includes(f)) {
+      setPicked(p => p.filter(x => x !== f))
+    } else if (working.includes(f)) {
+      setWorking(w => w.filter(x => x !== f))
+      setPicked(p => [...p, f])
+    } else {
+      setWorking(w => [...w, f])
+    }
   }
 
   return (
@@ -524,25 +541,28 @@ function TickSheet({ leaf, unitZh, canDelete, onClose, onSave, onDelete, onHisto
       title={leaf.title}
       footer={
         <button
-          onClick={async () => { setBusy(true); const ok = await onSave(picked); if (!ok) setBusy(false) }}
+          onClick={async () => { setBusy(true); const ok = await onSave(picked, working); if (!ok) setBusy(false) }}
           disabled={busy}
           className="btn-primary w-full"
         >
-          {busy ? <Spinner size={18} className="text-white" /> : `儲存（${picked.length}/${labels.length} 完成）`}
+          {busy ? <Spinner size={18} className="text-white" /> : `儲存（${picked.length}/${labels.length} 完成${working.length > 0 ? ` · ${working.length} 進行中` : ''}）`}
         </button>
       }
     >
-      <p className="text-xs text-site-400 mb-3">剔咗 = 該{unitZh}呢個工序做完（100%）</p>
+      <p className="text-xs text-site-400 mb-3">
+        撳一下 = <span className="font-semibold text-orange-600">進行中</span>，再撳 = <span className="font-semibold text-emerald-600">完成</span>，第三下清除 · 只有「完成」計入 %
+      </p>
       <div className="grid grid-cols-3 gap-2">
         {labels.map(f => {
-          const on = picked.includes(f)
+          const isDone = picked.includes(f)
+          const isWorking = !isDone && working.includes(f)
           return (
             <button
               key={f}
               onClick={() => toggle(f)}
-              className={`flex items-center justify-center gap-1 py-2.5 rounded-xl border-2 text-sm font-semibold ${on ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-site-200 text-site-500'}`}
+              className={`flex items-center justify-center gap-1 py-2.5 rounded-xl border-2 text-sm font-semibold ${isDone ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : isWorking ? 'border-orange-400 bg-orange-50 text-orange-600' : 'border-site-200 text-site-500'}`}
             >
-              {on && <Check size={13} />} {f}
+              {isDone && <Check size={13} />}{isWorking && <Loader2 size={13} />} {f}
             </button>
           )
         })}

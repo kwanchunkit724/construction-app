@@ -1499,7 +1499,8 @@ interface GuidedRow {
   // Building zones list the zone's FULL floor set: floors the 工序 doesn't
   // cover are marked excluded (dashed in PDF, blank in Excel) so 未做 and
   // 不適用 never look the same — the "分母灌水" dispute killer.
-  cells: { label: string; done: boolean; excluded?: boolean }[]
+  // inProgress (v113 半態) is display-only and never counted into %.
+  cells: { label: string; done: boolean; excluded?: boolean; inProgress?: boolean }[]
 }
 
 // sketch layout v2: outer group = 分區 × 位置 (with its own progress bar),
@@ -1560,6 +1561,8 @@ function buildGuidedRows(project: Project, items: ProgressItem[], opts: GuidedEx
     const zone = zi >= 0 ? project.zones[zi] : undefined
     const labels = Array.isArray(l.floor_labels) ? l.floor_labels : []
     const ticked = new Set(Array.isArray(l.floors_completed) ? l.floors_completed : [])
+    // v113 半態 — orange in reports, never counted into %
+    const working = new Set(Array.isArray(l.floors_in_progress) ? l.floors_in_progress : [])
     const done = labels.filter(f => ticked.has(f))
     const rest = labels.filter(f => !ticked.has(f))
     // building zones render the zone's FULL floor list — floors this 工序
@@ -1567,14 +1570,15 @@ function buildGuidedRows(project: Project, items: ProgressItem[], opts: GuidedEx
     const zoneFloors = zone?.kind !== 'external' && Array.isArray(zone?.floors) && zone.floors.length > 0
       ? zone.floors : null
     const labelSet = new Set(labels)
+    const mkCell = (f: string) => ({ label: f, done: ticked.has(f), inProgress: !ticked.has(f) && working.has(f) })
     const cells = zoneFloors
       ? [
           ...zoneFloors.map(f => labelSet.has(f)
-            ? { label: f, done: ticked.has(f) }
+            ? mkCell(f)
             : { label: f, done: false, excluded: true }),
-          ...labels.filter(f => !zoneFloors.includes(f)).map(f => ({ label: f, done: ticked.has(f) })),
+          ...labels.filter(f => !zoneFloors.includes(f)).map(mkCell),
         ]
-      : labels.map(f => ({ label: f, done: ticked.has(f) }))
+      : labels.map(mkCell)
     return {
       kindZh: zone?.kind === 'external' ? '外圍' : '大樓',
       zoneIdx: zi >= 0 ? zi : 99,
@@ -1671,7 +1675,7 @@ export async function exportGuidedProgressToExcel(project: Project, items: Progr
           r.title,
           ...cols.map(cl => {
             const c = cellMap.get(cl)
-            return !c || c.excluded ? '' : (c.done ? '✓' : '□')
+            return !c || c.excluded ? '' : (c.done ? '✓' : c.inProgress ? '◐' : '□')
           }),
           fmtGuidedPct(r.pct),
         ])
@@ -1748,21 +1752,27 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
   // (verified pixel-by-pixel against its own canvas output); the relative
   // top:-5px span counter-shifts it to dead centre. Don't "clean this up"
   // without re-running the canvas A/B harness.
-  // three states: done = dark emerald + white label (dark enough to survive a
-  // B&W photocopy), pending = light grey box, excluded (工序唔包括嗰層) =
-  // dashed border + faint label so 未做 and 不適用 never look the same.
+  // four states: done = dark emerald + white label (dark enough to survive a
+  // B&W photocopy), in-progress (v113 半態) = mid orange + white label (prints
+  // as a distinct mid-grey), pending = light grey box, excluded (工序唔包括
+  // 嗰層) = dashed border + faint label so 未做 and 不適用 never look the same.
   const cellCss = (c: GuidedRow['cells'][number]): string => c.excluded
     ? 'background:#ffffff; border:1px dashed #cbd5e1; color:#cbd5e1;'
     : c.done
       ? 'background:#059669; border:1px solid #047857; color:#ffffff;'
-      : 'background:#f8fafc; border:1px solid #cbd5e1; color:#64748b;'
+      : c.inProgress
+        ? 'background:#fb923c; border:1px solid #ea580c; color:#ffffff;'
+        : 'background:#f8fafc; border:1px solid #cbd5e1; color:#64748b;'
   const stripCell = (c: GuidedRow['cells'][number]): string =>
     `<td style="padding:0; height:17px; line-height:17px; text-align:center; border-radius:3px; overflow:hidden; font-size:9px; font-weight:700; white-space:nowrap; ${cellCss(c)}"><span style="position:relative; top:-6px;">${esc(abbrev(c.label))}</span></td>`
   // fixed-width sample cell for the legend row (outside a fixed-layout table)
   const legendCell = (c: GuidedRow['cells'][number]): string =>
     `<td style="padding:0; width:24px; height:17px; line-height:17px; text-align:center; border-radius:3px; font-size:9px; font-weight:700; white-space:nowrap; ${cellCss(c)}"><span style="position:relative; top:-6px;">${esc(c.label)}</span></td>`
-  const strip = (cells: GuidedRow['cells']): string => {
-    const widthPct = Math.min(100, cells.length * 4.4)
+  const strip = (cells: GuidedRow['cells'], wide = false): string => {
+    // external zones carry location NAMES (行人路/EVA…) — floor-sized cells
+    // truncate them, so give each cell 2.5× the width and show the full label.
+    const per = wide ? 11 : 4.4
+    const widthPct = Math.min(100, cells.length * per)
     return `<table style="border-collapse:separate; border-spacing:2px 0; table-layout:fixed; width:${widthPct}%; margin-top:5px;"><tbody>
       <tr>${cells.map(stripCell).join('')}</tr>
     </tbody></table>`
@@ -1784,7 +1794,7 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
             <td style="padding:0; font-size:10px; font-weight:600; text-align:right; vertical-align:middle; white-space:nowrap; color:#94a3b8;">${shim(-5.5, `${r.done}/${r.total} ${r.kindZh === '外圍' ? '項' : '層'}`)}</td>
             <td style="padding:0 0 0 8px; width:44px; font-size:13px; font-weight:800; text-align:right; vertical-align:middle; white-space:nowrap; color:${pctColorOf(r.pct)};">${shim(-7.5, r.pct === null ? '—' : `${r.pct}%`)}</td>
           </tr></tbody></table>
-          ${strip(r.cells)}
+          ${strip(r.cells, r.kindZh === '外圍')}
         </div>`).join('')
     detailHtml += `
       <div class="pgavoid" style="border:1.5px solid #94a3b8; border-radius:10px; padding:9px 11px; margin-top:10px;">
@@ -1798,9 +1808,26 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
       </div>`
   }
 
+  // 數據截至 = the newest last_updated_at among exported items — the honest
+  // data cut-off, distinct from the moment the button was pressed.
+  const asOfMs = items.reduce((m, i) => {
+    const t = i.last_updated_at ? new Date(i.last_updated_at).getTime() : 0
+    return t > m ? t : m
+  }, 0)
+  const asOf = asOfMs > 0 ? new Date(asOfMs).toLocaleString('zh-HK') : '—'
+
+  const signBox = (label: string): string => `
+    <td style="width:33%; padding:0 14px; vertical-align:top;">
+      <div style="font-size:11px; font-weight:700; color:#334155;">${esc(label)}</div>
+      <div style="margin-top:34px; border-bottom:1px solid #64748b;"></div>
+      <div style="font-size:9px; color:#94a3b8; margin-top:3px;">簽署</div>
+      <div style="margin-top:22px; border-bottom:1px solid #64748b;"></div>
+      <div style="font-size:9px; color:#94a3b8; margin-top:3px;">日期</div>
+    </td>`
+
   const body = `
     <div class="pgblk" style="font-size:20px; font-weight:800;">${esc(project.name)} — 進度表</div>
-    <div class="pgblk" style="font-size:11px; color:#64748b; margin-top:4px;">產生：${esc(new Date().toLocaleString('zh-HK'))}${filterLabel ? ` · ${esc(filterLabel)}` : ''} · 共 ${esc(String(rows.length))} 個工序</div>
+    <div class="pgblk" style="font-size:11px; color:#64748b; margin-top:4px;">產生：${esc(new Date().toLocaleString('zh-HK'))} · <b>數據截至（最後更新）：${esc(asOf)}</b>${filterLabel ? ` · ${esc(filterLabel)}` : ''} · 共 ${esc(String(rows.length))} 個工序</div>
     <div class="pgblk" style="font-size:14px; font-weight:700; margin-top:14px;">進度總覽（分區 × 工種）</div>
     ${matrixHtml}
     <div class="pgblk" style="font-size:14px; font-weight:700; margin-top:14px;">工序明細</div>
@@ -1808,15 +1835,25 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
       <table style="border-collapse:separate; border-spacing:2px 0;"><tbody><tr>
         ${legendCell({ label: '8', done: true })}
         <td style="padding:0 10px 0 3px; font-size:10px; color:#64748b; white-space:nowrap;">${shim(-5.5, '= 該層完成')}</td>
-        ${legendCell({ label: '9', done: false })}
-        <td style="padding:0 10px 0 3px; font-size:10px; color:#64748b; white-space:nowrap;">${shim(-5.5, '= 未完成')}</td>
-        ${legendCell({ label: '10', done: false, excluded: true })}
+        ${legendCell({ label: '9', done: false, inProgress: true })}
+        <td style="padding:0 10px 0 3px; font-size:10px; color:#64748b; white-space:nowrap;">${shim(-5.5, '= 進行中（未計入 %）')}</td>
+        ${legendCell({ label: '10', done: false })}
+        <td style="padding:0 10px 0 3px; font-size:10px; color:#64748b; white-space:nowrap;">${shim(-5.5, '= 未開始')}</td>
+        ${legendCell({ label: '11', done: false, excluded: true })}
         <td style="padding:0 10px 0 3px; font-size:10px; color:#64748b; white-space:nowrap;">${shim(-5.5, '= 不適用（該工序唔包括嗰層，唔計入 %）')}</td>
       </tr></tbody></table>
     </div>
     ${detailHtml}
     ${capNote}
-    <div class="pgblk" style="font-size:10px; color:#94a3b8; margin-top:20px;">由 CK工程系統產生 — % = 已完成 ÷ 該工序包括嘅樓層(或位置)總數 · 每行「n/m」= 完成數/總數</div>`
+    <div class="pgblk" style="font-size:10px; color:#64748b; margin-top:20px;">% = 已完成 ÷ 該工序包括嘅樓層(或位置)總數 · 每行「n/m」= 完成數/總數 · 分區／工種／整體 % 按格仔總數加權 roll-up（層數加權，非工序平均）· 「進行中」不計入 % · 由 CK工程系統產生</div>
+    <div class="pgavoid" style="margin-top:26px;">
+      <div style="font-size:12px; font-weight:700; color:#334155; margin-bottom:6px;">簽署確認</div>
+      <table style="border-collapse:collapse; width:100%;"><tbody><tr>
+        ${signBox('呈報人（判頭／分判）')}
+        ${signBox('覆核（工地主任）')}
+        ${signBox('批准（項目經理）')}
+      </tr></tbody></table>
+    </div>`
 
   const blob = await htmlToPdfBlob(body)
   await shareOrDownloadBlob(blob, `${safeName(project.name)}_進度表_${dateStr()}.pdf`, `${project.name} — 進度表（${rows.length} 個工序）`)

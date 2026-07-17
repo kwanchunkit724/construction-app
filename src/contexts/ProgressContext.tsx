@@ -29,7 +29,7 @@ interface ProgressContextType {
   refetch: () => Promise<void>
   addItem: (input: AddItemInput) => Promise<{ error: string | null }>
   updateProgress: (id: string, actual: number, notes: string) => Promise<{ error: string | null }>
-  updateFloors: (id: string, floorsCompleted: string[], notes: string) => Promise<{ error: string | null }>
+  updateFloors: (id: string, floorsCompleted: string[], notes: string, floorsInProgress?: string[]) => Promise<{ error: string | null }>
   // P2 (v43): set the quantity done on a 渠務 leaf. Materialises
   // actual_progress = qtyToProgress(qtyDone, qty_total) and journals the metres
   // into progress_history.qty_done so "本期 +86m" survives in the audit trail.
@@ -352,7 +352,7 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     return { error: null }
   }
 
-  async function updateFloors(id: string, floorsCompleted: string[], notes: string) {
+  async function updateFloors(id: string, floorsCompleted: string[], notes: string, floorsInProgress?: string[]) {
     if (!profile) return { error: '未登入' }
     const item = items.find(i => i.id === id)
     if (!item) return { error: '找不到此項目' }
@@ -361,6 +361,9 @@ export function ProgressProvider({ projectId, children }: { projectId: string; c
     const { error } = await supabase.from('progress_items').update({
       actual_progress: actual,
       floors_completed: floorsCompleted,
+      // v113 半態 — display-only, never counted into actual_progress.
+      // Optional so classic callers stay untouched (backwards compatible).
+      ...(floorsInProgress !== undefined ? { floors_in_progress: floorsInProgress } : {}),
       status,
       notes,
       last_updated_by: profile.id,

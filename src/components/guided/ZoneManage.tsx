@@ -175,13 +175,16 @@ export function ZoneSettingsSheet({ project, zone, leaves, onClose }: {
       const had = new Set(leaf.floor_labels ?? [])
       const newLabels = floors.filter(f => had.has(f) || additions.includes(f))
       const newDone = (leaf.floors_completed ?? []).filter(f => newLabels.includes(f))
+      const newWorking = (leaf.floors_in_progress ?? []).filter(f => newLabels.includes(f))
       const sameLabels = JSON.stringify(newLabels) === JSON.stringify(leaf.floor_labels ?? [])
       const sameDone = JSON.stringify(newDone) === JSON.stringify(leaf.floors_completed ?? [])
-      if (sameLabels && sameDone) continue
+      const sameWorking = JSON.stringify(newWorking) === JSON.stringify(leaf.floors_in_progress ?? [])
+      if (sameLabels && sameDone && sameWorking) continue
       const actual = newLabels.length === 0 ? 0 : Math.round((newDone.length / newLabels.length) * 100)
       const { error: e } = await supabase.from('progress_items').update({
         floor_labels: newLabels,
         floors_completed: newDone,
+        floors_in_progress: newWorking,
         actual_progress: actual,
         status: actual >= 100 ? 'completed' : actual === 0 ? 'not-started' : 'in-progress',
         last_updated_at: new Date().toISOString(),
