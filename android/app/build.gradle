@@ -8,7 +8,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode (project.hasProperty('versionCode') ? project.versionCode.toInteger() : 1)
-        versionName (project.hasProperty('versionName') ? project.versionName : "1.4")
+        versionName (project.hasProperty('versionName') ? project.versionName : "1.7")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -19,8 +19,7 @@ android {
     signingConfigs {
         // Release signing via env vars (Codemagic Environment groups).
         // Local builds without these vars fall back to NO release signing
-        // (release build will be unsigned and rejected by Play Console —
-        // expected; release builds should run on CI with vars set).
+        // (release build will be unsigned and rejected by Play Console ??        // expected; release builds should run on CI with vars set).
         release {
             if (System.getenv("CM_KEYSTORE_PATH")) {
                 storeFile file(System.getenv("CM_KEYSTORE_PATH"))

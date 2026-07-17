@@ -1,4 +1,4 @@
-workflows:
+﻿workflows:
   ios-app-store:
     name: iOS App Store Release
     max_build_duration: 60
@@ -54,7 +54,7 @@ workflows:
           # Bump marketing version (CFBundleShortVersionString) too — App Store
           # Connect rejects re-uploading the same MARKETING_VERSION once a build
           # has been approved. Derive monotonic 1.0.<BUILD_NUMBER> per CI run.
-          agvtool new-marketing-version "1.6"
+          agvtool new-marketing-version "1.7"
         working_directory: ios/App
 
       - name: Fetch App Store signing files
@@ -180,7 +180,7 @@ workflows:
           # Bump marketing version (CFBundleShortVersionString) too — App Store
           # Connect rejects re-uploading the same MARKETING_VERSION once a build
           # has been approved. Derive monotonic 1.0.<BUILD_NUMBER> per CI run.
-          agvtool new-marketing-version "1.6"
+          agvtool new-marketing-version "1.7"
         working_directory: ios/App
 
       - name: Fetch App Store signing files
@@ -312,7 +312,7 @@ workflows:
         script: |
           cd android
           echo "VERSION_CODE=$(($(date +%s) % 2100000000))" >> $CM_ENV
-          echo "VERSION_NAME=1.6" >> $CM_ENV
+          echo "VERSION_NAME=1.7" >> $CM_ENV
 
       - name: Build debug APK + release AAB (debug-signed for now)
         script: |
@@ -430,7 +430,7 @@ workflows:
           # Play requires monotonically increasing versionCode across uploads.
           # $BUILD_NUMBER is Codemagic's build counter — safe choice.
           echo "VERSION_CODE=$BUILD_NUMBER" >> $CM_ENV
-          echo "VERSION_NAME=1.6" >> $CM_ENV
+          echo "VERSION_NAME=1.7" >> $CM_ENV
 
       - name: Build release AAB (signed via Codemagic android_signing)
         script: |
