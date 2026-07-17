@@ -1155,14 +1155,18 @@ async function htmlToPdfBlob(bodyHtml: string): Promise<Blob> {
     const doc: any = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
     const pageWpt = doc.internal.pageSize.getWidth()
     const pageHpt = doc.internal.pageSize.getHeight()
-    const pageHcanvas = (pageHpt * canvas.width) / pageWpt
+    // reserve a footer strip on every page for the "n / N" page number
+    const FOOTER_PT = 18
+    const pageHcanvas = ((pageHpt - FOOTER_PT) * canvas.width) / pageWpt
     const avoids = avoidRects
       .map(r => ({ top: r.top * cssToCanvas, bottom: r.bottom * cssToCanvas }))
       .filter(r => r.bottom - r.top <= pageHcanvas - 24)
     const bounds = blockBottoms.map(b => b * cssToCanvas)
       .filter(b => !avoids.some(r => b > r.top + 6 && b < r.bottom - 6))
       .sort((a, b) => a - b)
-    let startPx = 0, first = true
+    // two passes: compute all slice ranges first so every footer can say "n / N"
+    const ranges: Array<{ start: number; end: number }> = []
+    let startPx = 0
     while (startPx < canvas.height - 1) {
       let endPx = startPx + pageHcanvas
       if (endPx < canvas.height) {
@@ -1171,17 +1175,24 @@ async function htmlToPdfBlob(bodyHtml: string): Promise<Blob> {
       } else {
         endPx = canvas.height
       }
-      const sliceH = Math.max(1, Math.round(endPx - startPx))
+      ranges.push({ start: startPx, end: endPx })
+      startPx = endPx
+    }
+    ranges.forEach((r, i) => {
+      const sliceH = Math.max(1, Math.round(r.end - r.start))
       const slice = document.createElement('canvas')
       slice.width = canvas.width
       slice.height = sliceH
       const ctx = slice.getContext('2d')!
       ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, slice.width, sliceH)
-      ctx.drawImage(canvas, 0, -startPx)
-      if (!first) doc.addPage()
+      ctx.drawImage(canvas, 0, -r.start)
+      if (i > 0) doc.addPage()
       doc.addImage(slice.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageWpt, (sliceH * pageWpt) / canvas.width)
-      startPx = endPx; first = false
-    }
+      // numerals only — jsPDF core fonts carry no CJK glyphs
+      doc.setFontSize(8)
+      doc.setTextColor(148, 163, 184)
+      doc.text(`${i + 1} / ${ranges.length}`, pageWpt / 2, pageHpt - 8, { align: 'center' })
+    })
     return doc.output('blob') as Blob
   } finally {
     document.body.removeChild(container)
@@ -1484,8 +1495,11 @@ interface GuidedRow {
   pct: number | null
   doneLabels: string[]
   restLabels: string[]
-  // ordered per-floor cells — the app's 格仔 strip, reproduced in the report
-  cells: { label: string; done: boolean }[]
+  // ordered per-floor cells — the app's 格仔 strip, reproduced in the report.
+  // Building zones list the zone's FULL floor set: floors the 工序 doesn't
+  // cover are marked excluded (dashed in PDF, blank in Excel) so 未做 and
+  // 不適用 never look the same — the "分母灌水" dispute killer.
+  cells: { label: string; done: boolean; excluded?: boolean }[]
 }
 
 // sketch layout v2: outer group = 分區 × 位置 (with its own progress bar),
@@ -1548,6 +1562,19 @@ function buildGuidedRows(project: Project, items: ProgressItem[], opts: GuidedEx
     const ticked = new Set(Array.isArray(l.floors_completed) ? l.floors_completed : [])
     const done = labels.filter(f => ticked.has(f))
     const rest = labels.filter(f => !ticked.has(f))
+    // building zones render the zone's FULL floor list — floors this 工序
+    // excludes become excluded cells (kept out of done/total so % is unchanged)
+    const zoneFloors = zone?.kind !== 'external' && Array.isArray(zone?.floors) && zone.floors.length > 0
+      ? zone.floors : null
+    const labelSet = new Set(labels)
+    const cells = zoneFloors
+      ? [
+          ...zoneFloors.map(f => labelSet.has(f)
+            ? { label: f, done: ticked.has(f) }
+            : { label: f, done: false, excluded: true }),
+          ...labels.filter(f => !zoneFloors.includes(f)).map(f => ({ label: f, done: ticked.has(f) })),
+        ]
+      : labels.map(f => ({ label: f, done: ticked.has(f) }))
     return {
       kindZh: zone?.kind === 'external' ? '外圍' : '大樓',
       zoneIdx: zi >= 0 ? zi : 99,
@@ -1560,7 +1587,7 @@ function buildGuidedRows(project: Project, items: ProgressItem[], opts: GuidedEx
       pct: labels.length === 0 ? null : Math.round((done.length / labels.length) * 100),
       doneLabels: done,
       restLabels: rest,
-      cells: labels.map(f => ({ label: f, done: ticked.has(f) })),
+      cells,
     }
   })
   rows.sort((a, b) =>
@@ -1639,10 +1666,13 @@ export async function exportGuidedProgressToExcel(project: Project, items: Progr
       aoa2.push([`▍工種：${t.trade}`])
       aoa2.push(['工序', ...cols, '%'])
       for (const r of t.rows) {
-        const cellMap = new Map(r.cells.map(c => [c.label, c.done]))
+        const cellMap = new Map(r.cells.map(c => [c.label, c]))
         aoa2.push([
           r.title,
-          ...cols.map(cl => !cellMap.has(cl) ? '' : (cellMap.get(cl) ? '✓' : '□')),
+          ...cols.map(cl => {
+            const c = cellMap.get(cl)
+            return !c || c.excluded ? '' : (c.done ? '✓' : '□')
+          }),
           fmtGuidedPct(r.pct),
         ])
       }
@@ -1718,10 +1748,23 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
   // (verified pixel-by-pixel against its own canvas output); the relative
   // top:-5px span counter-shifts it to dead centre. Don't "clean this up"
   // without re-running the canvas A/B harness.
+  // three states: done = dark emerald + white label (dark enough to survive a
+  // B&W photocopy), pending = light grey box, excluded (工序唔包括嗰層) =
+  // dashed border + faint label so 未做 and 不適用 never look the same.
+  const cellCss = (c: GuidedRow['cells'][number]): string => c.excluded
+    ? 'background:#ffffff; border:1px dashed #cbd5e1; color:#cbd5e1;'
+    : c.done
+      ? 'background:#059669; border:1px solid #047857; color:#ffffff;'
+      : 'background:#f8fafc; border:1px solid #cbd5e1; color:#64748b;'
+  const stripCell = (c: GuidedRow['cells'][number]): string =>
+    `<td style="padding:0; height:17px; line-height:17px; text-align:center; border-radius:3px; overflow:hidden; font-size:9px; font-weight:700; white-space:nowrap; ${cellCss(c)}"><span style="position:relative; top:-6px;">${esc(abbrev(c.label))}</span></td>`
+  // fixed-width sample cell for the legend row (outside a fixed-layout table)
+  const legendCell = (c: GuidedRow['cells'][number]): string =>
+    `<td style="padding:0; width:24px; height:17px; line-height:17px; text-align:center; border-radius:3px; font-size:9px; font-weight:700; white-space:nowrap; ${cellCss(c)}"><span style="position:relative; top:-6px;">${esc(c.label)}</span></td>`
   const strip = (cells: GuidedRow['cells']): string => {
     const widthPct = Math.min(100, cells.length * 4.4)
     return `<table style="border-collapse:separate; border-spacing:2px 0; table-layout:fixed; width:${widthPct}%; margin-top:5px;"><tbody>
-      <tr>${cells.map(c => `<td style="padding:0; height:17px; line-height:17px; text-align:center; border-radius:3px; overflow:hidden; font-size:9px; font-weight:700; white-space:nowrap; background:${c.done ? '#10b981' : '#f8fafc'}; border:1px solid ${c.done ? '#059669' : '#cbd5e1'}; color:${c.done ? '#ffffff' : '#64748b'};"><span style="position:relative; top:-6px;">${esc(abbrev(c.label))}</span></td>`).join('')}</tr>
+      <tr>${cells.map(stripCell).join('')}</tr>
     </tbody></table>`
   }
   const pctColorOf = (p: number | null) => p === null ? '#94a3b8' : p >= 100 ? '#059669' : p > 0 ? '#ea580c' : '#94a3b8'
@@ -1738,7 +1781,8 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
         <div class="pgblk" style="border:1px solid #cbd5e1; border-radius:8px; padding:6px 9px; margin-top:6px;">
           <table style="border-collapse:collapse; width:100%;"><tbody><tr>
             <td style="padding:0; font-size:12px; font-weight:700; vertical-align:middle;">${shim(-6.25, esc(r.title))}</td>
-            <td style="padding:0; font-size:13px; font-weight:800; text-align:right; vertical-align:middle; white-space:nowrap; color:${pctColorOf(r.pct)};">${shim(-7.5, r.pct === null ? '—' : `${r.pct}%`)}</td>
+            <td style="padding:0; font-size:10px; font-weight:600; text-align:right; vertical-align:middle; white-space:nowrap; color:#94a3b8;">${shim(-5.5, `${r.done}/${r.total} ${r.kindZh === '外圍' ? '項' : '層'}`)}</td>
+            <td style="padding:0 0 0 8px; width:44px; font-size:13px; font-weight:800; text-align:right; vertical-align:middle; white-space:nowrap; color:${pctColorOf(r.pct)};">${shim(-7.5, r.pct === null ? '—' : `${r.pct}%`)}</td>
           </tr></tbody></table>
           ${strip(r.cells)}
         </div>`).join('')
@@ -1760,9 +1804,19 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
     <div class="pgblk" style="font-size:14px; font-weight:700; margin-top:14px;">進度總覽（分區 × 工種）</div>
     ${matrixHtml}
     <div class="pgblk" style="font-size:14px; font-weight:700; margin-top:14px;">工序明細</div>
+    <div class="pgblk" style="margin-top:5px;">
+      <table style="border-collapse:separate; border-spacing:2px 0;"><tbody><tr>
+        ${legendCell({ label: '8', done: true })}
+        <td style="padding:0 10px 0 3px; font-size:10px; color:#64748b; white-space:nowrap;">${shim(-5.5, '= 該層完成')}</td>
+        ${legendCell({ label: '9', done: false })}
+        <td style="padding:0 10px 0 3px; font-size:10px; color:#64748b; white-space:nowrap;">${shim(-5.5, '= 未完成')}</td>
+        ${legendCell({ label: '10', done: false, excluded: true })}
+        <td style="padding:0 10px 0 3px; font-size:10px; color:#64748b; white-space:nowrap;">${shim(-5.5, '= 不適用（該工序唔包括嗰層，唔計入 %）')}</td>
+      </tr></tbody></table>
+    </div>
     ${detailHtml}
     ${capNote}
-    <div class="pgblk" style="font-size:10px; color:#94a3b8; margin-top:20px;">由 CK工程系統產生 — 剔格制：完成/總數 = 已剔樓層(或位置)/全部 · 綠格 = 該層完成</div>`
+    <div class="pgblk" style="font-size:10px; color:#94a3b8; margin-top:20px;">由 CK工程系統產生 — % = 已完成 ÷ 該工序包括嘅樓層(或位置)總數 · 每行「n/m」= 完成數/總數</div>`
 
   const blob = await htmlToPdfBlob(body)
   await shareOrDownloadBlob(blob, `${safeName(project.name)}_進度表_${dateStr()}.pdf`, `${project.name} — 進度表（${rows.length} 個工序）`)
