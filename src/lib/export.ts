@@ -1681,19 +1681,25 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
   // on one line reliably.
   // palette (ui-ux-pro-max: industrial grey + safety orange, financial-dashboard
   // style): slate chrome, orange = in-progress, emerald = done. No blue headers.
+  // html2canvas paints small inline text 5-8px LOW (offset varies by font size
+  // and line box). Every offset below is pixel-measured with the iterative
+  // canvas harness (glyph-bbox vs box-bbox at scale 2, converged to ±0.5px) —
+  // don't tweak blind, re-run the harness.
+  const shim = (px: number, t: string) => `<span style="position:relative; top:${px}px;">${t}</span>`
   const bar = (p: number | null): string => p === null
-    ? '<span style="color:#94a3b8; font-size:10px;">—</span>'
+    ? `<span style="color:#94a3b8; font-size:10px;">${shim(-5.5, '—')}</span>`
     : `<table style="border-collapse:collapse; width:100%;"><tbody><tr>
         <td style="padding:0; vertical-align:middle;"><div style="height:7px; background:#e2e8f0; border-radius:4px; overflow:hidden;"><div style="width:${p}%; height:7px; background:${p >= 100 ? '#10b981' : '#f97316'};"></div></div></td>
-        <td style="padding:0 0 0 6px; width:34px; font-size:10px; font-weight:700; text-align:right; vertical-align:middle; white-space:nowrap;">${p}%</td>
+        <td style="padding:0 0 0 6px; width:34px; font-size:10px; font-weight:700; text-align:right; vertical-align:middle; white-space:nowrap;">${shim(-5.5, `${p}%`)}</td>
       </tr></tbody></table>`
   const tdS = 'border:1px solid #e2e8f0; padding:5px 7px; font-size:11px; vertical-align:middle;'
-  const thS = 'border:1px solid #1e293b; padding:5px 7px; font-size:11px; text-align:left; color:#ffffff; background:#334155;'
+  const thS = 'border:1px solid #1e293b; padding:5px 7px; font-size:11px; text-align:center; color:#ffffff; background:#334155;'
+  const zoneTdS = `${tdS} font-weight:700; text-align:center;`
   const matrixHtml = `<table style="border-collapse:collapse; width:100%; margin:6px 0; table-layout:fixed;">
-    <thead><tr><th style="${thS} width:70px;">分區</th>${m.trades.map(t => `<th style="${thS}">${esc(t)}</th>`).join('')}<th style="${thS}">整體</th></tr></thead>
+    <thead><tr><th style="${thS} width:70px;">${shim(-6.25, '分區')}</th>${m.trades.map(t => `<th style="${thS}">${shim(-6.25, esc(t))}</th>`).join('')}<th style="${thS}">${shim(-6.25, '整體')}</th></tr></thead>
     <tbody>
-      ${m.lines.map(l => `<tr class="pgblk"><td style="${tdS} font-weight:700;">${esc(l.zone)}</td>${l.cells.map(c => `<td style="${tdS}">${bar(c)}</td>`).join('')}<td style="${tdS}">${bar(l.overall)}</td></tr>`).join('')}
-      <tr class="pgblk"><td style="${tdS} font-weight:700; background:#f1f5f9;">整體</td>${m.overall.map(c => `<td style="${tdS} background:#f1f5f9;">${bar(c)}</td>`).join('')}<td style="${tdS} background:#f1f5f9;">${bar(m.grand)}</td></tr>
+      ${m.lines.map(l => `<tr class="pgblk"><td style="${zoneTdS}">${shim(-6.25, esc(l.zone))}</td>${l.cells.map(c => `<td style="${tdS}">${bar(c)}</td>`).join('')}<td style="${tdS}">${bar(l.overall)}</td></tr>`).join('')}
+      <tr class="pgblk"><td style="${zoneTdS} background:#f1f5f9;">${shim(-6.25, '整體')}</td>${m.overall.map(c => `<td style="${tdS} background:#f1f5f9;">${bar(c)}</td>`).join('')}<td style="${tdS} background:#f1f5f9;">${bar(m.grand)}</td></tr>
     </tbody></table>`
 
   // 明細 — sketch v2: 類別 banner → one card per 分區×位置 whose header row
@@ -1723,7 +1729,7 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
   let lastKind = ''
   for (const g of groupByLocation(shown)) {
     if (g.kindZh !== lastKind) {
-      detailHtml += `<div class="pgblk" style="font-size:15px; font-weight:800; margin-top:16px; background:#1e293b; color:#ffffff; padding:5px 10px; border-radius:8px; text-align:center;">${esc(g.kindZh)}</div>`
+      detailHtml += `<div class="pgblk" style="font-size:15px; font-weight:800; margin-top:16px; background:#1e293b; color:#ffffff; padding:5px 10px; border-radius:8px; text-align:center;">${shim(-8, esc(g.kindZh))}</div>`
       lastKind = g.kindZh
     }
     const gPct = pctOfGuidedRows(g.rows)
@@ -1731,8 +1737,8 @@ export async function exportGuidedProgressToPDF(project: Project, items: Progres
     const inner = g.rows.map(r => `
         <div class="pgblk" style="border:1px solid #cbd5e1; border-radius:8px; padding:6px 9px; margin-top:6px;">
           <table style="border-collapse:collapse; width:100%;"><tbody><tr>
-            <td style="padding:0; font-size:12px; font-weight:700; vertical-align:middle;">${esc(r.title)}</td>
-            <td style="padding:0; font-size:13px; font-weight:800; text-align:right; vertical-align:middle; white-space:nowrap; color:${pctColorOf(r.pct)};">${r.pct === null ? '—' : `${r.pct}%`}</td>
+            <td style="padding:0; font-size:12px; font-weight:700; vertical-align:middle;">${shim(-6.25, esc(r.title))}</td>
+            <td style="padding:0; font-size:13px; font-weight:800; text-align:right; vertical-align:middle; white-space:nowrap; color:${pctColorOf(r.pct)};">${shim(-7.5, r.pct === null ? '—' : `${r.pct}%`)}</td>
           </tr></tbody></table>
           ${strip(r.cells)}
         </div>`).join('')
