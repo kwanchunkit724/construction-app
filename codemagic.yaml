@@ -446,14 +446,17 @@
       - android/app/build/outputs/**/*.aab
       - android/app/build/outputs/**/mapping.txt
 
-    # Auto-publish the release AAB to Google Play Internal Testing. Requires
-    # GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS in the
-    # android_play_store_credentials env group (Play Console → Setup →
-    # API access → service account with Release manager role).
-    publishing:
-      google_play:
-        credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
-        track: internal
+    # Auto-publish to Google Play Internal Testing is disabled: enabling it
+    # without GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS in the
+    # android_play_store_credentials env group fails the whole build at yaml
+    # validation (verified 2026-07-18, build 6a5dc759). To enable: Play Console
+    # → Setup → API access → create service account with Release manager role,
+    # paste its JSON into that env var, then uncomment:
+    #
+    # publishing:
+    #   google_play:
+    #     credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
+    #     track: internal
 
   e2e-tests:
     # Playwright E2E against the LIVE Supabase backend. Runs on the Codemagic
