@@ -1,0 +1,43 @@
+import type { ProgressItem, ProgressStatus, TrackingMode, UnitState } from '../../types'
+
+/** Minimal ProgressItem factory for unit tests. Override any field. */
+export function makeItem(partial: Partial<ProgressItem> & { id: string }): ProgressItem {
+  return {
+    project_id: 'proj-1',
+    parent_id: null,
+    code: 'A.1',
+    title: 'Test item',
+    zone_id: 'A',
+    level: 1,
+    planned_start: null,
+    planned_end: null,
+    planned_progress: 0,
+    actual_progress: 0,
+    status: 'not-started' as ProgressStatus,
+    notes: '',
+    tracking_mode: 'percentage' as TrackingMode,
+    floor_labels: [],
+    floors_completed: [],
+    qty_total: null,
+    qty_done: 0,
+    qty_unit: null,
+    blocked_reason: null,
+    label_status: {} as Record<string, UnitState>,
+    category_domain: null,
+    category_stream: null,
+    trade: null,
+    location: null,
+    trade_label: null,
+    node_kind: null,
+    sort_order: null,
+    acceptance_required: false,
+    accepted_by: null,
+    accepted_at: null,
+    assigned_to: [],
+    delegated_to: [],
+    last_updated_by: null,
+    last_updated_at: '2026-01-01T00:00:00Z',
+    created_at: '2026-01-01T00:00:00Z',
+    ...partial,
+  }
+}
