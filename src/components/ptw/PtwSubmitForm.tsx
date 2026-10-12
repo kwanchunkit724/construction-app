@@ -220,7 +220,16 @@ export function PtwSubmitForm({ open, onClose, onSubmitted }: PtwSubmitFormProps
         {/* Checklist */}
         {checklist.length > 0 && (
           <div>
-            <label className="label">安全核對清單</label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="label mb-0">安全核對清單</label>
+              <button
+                type="button"
+                onClick={() => setChecklist(prev => prev.map(c => ({ ...c, value: true })))}
+                className="text-xs font-semibold text-safety-700 min-h-0 py-1"
+              >
+                全部確認
+              </button>
+            </div>
             <div className="space-y-2 mt-1">
               {checklist.map(item => (
                 <button

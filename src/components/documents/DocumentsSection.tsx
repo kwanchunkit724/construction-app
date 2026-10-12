@@ -72,6 +72,24 @@ export function DocumentsSection({ leafItemId }: DocumentsSectionProps) {
   const [thumbUrls, setThumbUrls] = useState<Record<string, string | null>>({})
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
+  // Keep open viewer in sync after reviewVersion refetch (M3).
+  useEffect(() => {
+    if (!viewing) return
+    const list = versionsByDocument[viewing.document.id] ?? []
+    const freshDoc = documents.find(d => d.id === viewing.document.id)
+    const freshVer = list.find(v => v.id === viewing.version.id)
+    if (!freshDoc && !freshVer) return
+    if (
+      (freshVer && freshVer !== viewing.version) ||
+      (freshDoc && freshDoc !== viewing.document)
+    ) {
+      setViewing({
+        document: freshDoc ?? viewing.document,
+        version: freshVer ?? viewing.version,
+      })
+    }
+  }, [documents, versionsByDocument, viewing])
+
   // Debounce search input (200ms, drawings parity)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {

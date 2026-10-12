@@ -1,4 +1,4 @@
-import { Suspense, lazy, useMemo, useState } from 'react'
+import { useEffect, Suspense, lazy, useMemo, useState } from 'react'
 import { ArrowLeft, Plus, Trash2, FileText, Upload, ChevronRight } from 'lucide-react'
 import { Spinner } from '../Spinner'
 import { DocumentUploadSheet } from '../documents/DocumentUploadSheet'
@@ -76,6 +76,25 @@ export function GuidedDocs({ project }: { project: Project }) {
   const [sel, setSel] = useState<Sel>({})
   const [uploadOpen, setUploadOpen] = useState(false)
   const [viewing, setViewing] = useState<{ doc: Document; version: DocumentVersion } | null>(null)
+
+  // M3: refresh open viewer after document review refetch
+  useEffect(() => {
+    if (!viewing) return
+    const list = versionsByDocument[viewing.doc.id] ?? []
+    const freshDoc = documents.find(d => d.id === viewing.doc.id)
+    const freshVer = list.find(v => v.id === viewing.version.id)
+    if (!freshDoc && !freshVer) return
+    if (
+      (freshVer && freshVer !== viewing.version) ||
+      (freshDoc && freshDoc !== viewing.doc)
+    ) {
+      setViewing({
+        doc: freshDoc ?? viewing.doc,
+        version: freshVer ?? viewing.version,
+      })
+    }
+  }, [documents, versionsByDocument, viewing])
+
   const [newLabel, setNewLabel] = useState('')
   const [err, setErr] = useState('')
 

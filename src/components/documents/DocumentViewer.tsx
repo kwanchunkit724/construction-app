@@ -13,7 +13,7 @@
 // CALLER (DocumentsSection) wraps this in React.lazy() so the chunks only load
 // when the viewer opens — same boundary as DrawingsSection→DrawingViewer.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { History as HistoryIcon, X } from 'lucide-react'
 import { TransformComponent, TransformWrapper } from 'react-zoom-pan-pinch'
 import { Document as PdfDocument, Page } from 'react-pdf'
@@ -43,7 +43,7 @@ export function DocumentViewer({
   onClose,
   onSelectVersion,
 }: DocumentViewerProps) {
-  const { getViewerUrl } = useDocuments()
+  const { getViewerUrl, versionsByDocument } = useDocuments()
   const [signedUrl, setSignedUrl] = useState<string | null>(null)
   const [urlError, setUrlError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -51,8 +51,16 @@ export function DocumentViewer({
   const [totalPages, setTotalPages] = useState(0)
   const [historyOpen, setHistoryOpen] = useState(false)
 
-  const isPdf = version.mime_type === 'application/pdf'
-  const revLabel = revisionLabelOrDefault(version.revision_label, version.version_no)
+  // After 批核/拒絕, DocumentsContext refetches but the caller's `version`
+  // prop can stay stale (status still 'submitted', review buttons linger).
+  // Prefer the live row from context so the header + review bar update.
+  const liveVersion = useMemo(() => {
+    const list = versionsByDocument[document.id] ?? allVersions
+    return list.find(v => v.id === version.id) ?? version
+  }, [versionsByDocument, document.id, allVersions, version])
+
+  const isPdf = liveVersion.mime_type === 'application/pdf'
+  const revLabel = revisionLabelOrDefault(liveVersion.revision_label, liveVersion.version_no)
 
   useEffect(() => {
     let cancelled = false
@@ -61,7 +69,7 @@ export function DocumentViewer({
     setLoading(true)
     setPageNum(1)
     setTotalPages(0)
-    getViewerUrl(version).then(({ url, error }) => {
+    getViewerUrl(liveVersion).then(({ url, error }) => {
       if (cancelled) return
       if (error) setUrlError(error)
       else setSignedUrl(url)
@@ -70,7 +78,7 @@ export function DocumentViewer({
     return () => {
       cancelled = true
     }
-  }, [version, getViewerUrl])
+  }, [liveVersion, getViewerUrl])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -181,14 +189,14 @@ export function DocumentViewer({
       {/* Reviewer controls — render only on a submitted version (the bar
           early-returns otherwise). Sits above the safe-area inset. */}
       <div className="px-4 py-2 bg-black/80">
-        <DocumentReviewBar version={version} />
+        <DocumentReviewBar version={liveVersion} />
       </div>
 
       <DocumentVersionHistory
         open={historyOpen}
         document={document}
         versions={allVersions}
-        currentVersionId={version.id}
+        currentVersionId={liveVersion.id}
         onClose={() => setHistoryOpen(false)}
         onSelect={onSelectVersion}
       />

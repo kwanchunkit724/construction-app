@@ -592,6 +592,24 @@ function TickSheet({ leaf, unitZh, canDelete, onClose, onSave, onDelete, onHisto
         撳一下 = <span className="font-semibold text-orange-600">進行中</span>，再撳 = <span className="font-semibold text-emerald-600">完成</span> · 只有「完成」計入 %<br />
         <span className="text-xs text-site-400">清除完成：撳綠格一下（轉紅）再撳一下確認</span>
       </p>
+      {labels.length > 1 && (
+        <div className="flex gap-2 mb-3">
+          <button
+            type="button"
+            onClick={() => { setWorking([]); setPicked([...labels]); setArmClear(null) }}
+            className="flex-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl py-2 min-h-0"
+          >
+            全部完成
+          </button>
+          <button
+            type="button"
+            onClick={() => { setWorking([]); setPicked([]); setArmClear(null) }}
+            className="flex-1 text-xs font-semibold text-site-500 bg-white border border-site-200 rounded-xl py-2 min-h-0"
+          >
+            全部清除
+          </button>
+        </div>
+      )}
       <div className="grid grid-cols-3 gap-2">
         {labels.map(f => {
           const isDone = picked.includes(f)
