@@ -58,6 +58,37 @@ function SiDetailInner({ projectId, siId }: { projectId: string; siId: string })
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({})
   const [voiceUrl, setVoiceUrl] = useState<string | null>(null)
   const [usersById, setUsersById] = useState<Record<string, UserProfile>>({})
+  const [drawingLabels, setDrawingLabels] = useState<Record<string, string>>({})
+
+
+  // Resolve 圖則參照 version ids → doc number / title (avoid raw UUID chips).
+  useEffect(() => {
+    let mounted = true
+    const ids = current?.payload?.drawing_version_ids || []
+    if (ids.length === 0) {
+      setDrawingLabels({})
+      return
+    }
+    supabase
+      .from('document_versions')
+      .select('id, revision_label, documents(title, doc_number)')
+      .in('id', ids)
+      .then(({ data }) => {
+        if (!mounted || !data) return
+        const map: Record<string, string> = {}
+        for (const row of data as Array<{
+          id: string
+          revision_label: string | null
+          documents: { title: string; doc_number: string } | { title: string; doc_number: string }[] | null
+        }>) {
+          const doc = Array.isArray(row.documents) ? row.documents[0] : row.documents
+          const base = doc ? `${doc.doc_number} ${doc.title}` : row.id.slice(0, 8)
+          map[row.id] = row.revision_label ? `${base} · ${row.revision_label}` : base
+        }
+        setDrawingLabels(map)
+      })
+    return () => { mounted = false }
+  }, [current?.payload?.drawing_version_ids])
 
   // Resolve signed URLs for photos
   useEffect(() => {
@@ -267,6 +298,7 @@ function SiDetailInner({ projectId, siId }: { projectId: string; siId: string })
           payload={current?.payload}
           photoUrls={photoUrls}
           voiceUrl={voiceUrl}
+          drawingLabels={drawingLabels}
         />
       )}
 
@@ -295,12 +327,13 @@ function SiDetailInner({ projectId, siId }: { projectId: string; siId: string })
 }
 
 function DetailPane({
-  si, payload, photoUrls, voiceUrl,
+  si, payload, photoUrls, voiceUrl, drawingLabels,
 }: {
   si: SI
   payload: SI extends never ? never : import('../types').SiPayload | undefined
   photoUrls: Record<string, string>
   voiceUrl: string | null
+  drawingLabels: Record<string, string>
 }) {
   if (!payload) {
     return <p className="text-site-500">未有版本內容。</p>
@@ -328,9 +361,10 @@ function DetailPane({
             {payload.drawing_version_ids.map(id => (
               <span
                 key={id}
-                className="text-[10px] font-mono bg-site-100 text-site-700 px-2 py-0.5 rounded-full"
+                className="text-[10px] bg-site-100 text-site-700 px-2 py-0.5 rounded-full"
+                title={id}
               >
-                {id.slice(0, 8)}
+                {drawingLabels[id] ?? id.slice(0, 8)}
               </span>
             ))}
           </div>

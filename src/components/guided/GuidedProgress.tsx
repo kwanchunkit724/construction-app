@@ -9,6 +9,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useProgress } from '../../contexts/ProgressContext'
 import { useDicts, guidedLeaves, guidedPct, guidedPctOf, distinctValues, unionOrdered } from '../../lib/guided'
 import { supabase } from '../../lib/supabase'
+import { ROLE_ZH } from '../../types'
 import type { ProgressTemplate, Project, ProgressItem, Zone, ZoneKind } from '../../types'
 
 // Guided 進度表 (v112, v2 after user feedback) — ONE drill for everyone:
@@ -934,7 +935,7 @@ function ZoneAssignSheet({ projectId, zone, leaves, onClose }: {
                 <input type="checkbox" checked={on} onChange={() => toggle(h.user_id)} className="accent-safety-600 h-4 w-4" />
                 <Users size={13} className="text-site-400" />
                 <span className="text-sm font-medium text-site-800 flex-1 truncate">{h.name}</span>
-                <span className="text-[10px] text-site-400">{h.role}</span>
+                <span className="text-[10px] text-site-400">{ROLE_ZH[h.role as keyof typeof ROLE_ZH] ?? h.role}</span>
               </label>
             )
           })}
