@@ -92,7 +92,7 @@ export function ApplyToProjectModal({
             className="input"
           >
             <option value="">請選擇</option>
-            {(['pm','main_contractor','subcontractor','subcontractor_worker','owner'] as const).map(r => (
+            {(['pm','main_contractor','general_foreman','subcontractor','subcontractor_worker','safety_officer','owner'] as const).map(r => (
               <option key={r} value={r}>{ROLE_ZH[r]}</option>
             ))}
           </select>

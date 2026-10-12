@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Building2, Clock, CheckCircle2, XCircle, UserPlus, ShieldCheck } from 'lucide-react'
 import { AppLayout } from '../components/AppLayout'
 import { Spinner } from '../components/Spinner'
@@ -43,10 +44,27 @@ export default function Projects() {
     [memberships, profile?.id]
   )
 
+  // Assigned PMs who have not (yet) applied as project_members still need to
+  // see the site under 我的工地 — otherwise the 工地 tab shows "0 / 還未加入".
+  const myAssignedPmProjects = useMemo(() => {
+    if (!profile) return [] as Project[]
+    const memberIds = new Set(myMemberships.map(m => m.project_id))
+    return projects.filter(
+      p => p.assigned_pm_ids.includes(profile.id) && !memberIds.has(p.id),
+    )
+  }, [projects, profile, myMemberships])
+
+  const mySitesCount = myMemberships.length + myAssignedPmProjects.length
+
   const myApprovedProjectIds = new Set(
     myMemberships.filter(m => m.status === 'approved').map(m => m.project_id)
   )
-  const myAppliedProjectIds = new Set(myMemberships.map(m => m.project_id))
+  // Also treat assigned-PM projects as already "applied" so the apply list
+  // does not offer them again.
+  const myAppliedProjectIds = new Set([
+    ...myMemberships.map(m => m.project_id),
+    ...myAssignedPmProjects.map(p => p.id),
+  ])
 
   // Projects user can apply to (not already a member)
   const availableProjects = projects.filter(p => !myAppliedProjectIds.has(p.id))
@@ -151,11 +169,14 @@ export default function Projects() {
       ) : (
         <>
           {/* My memberships */}
-          <Section title="我的工地" count={myMemberships.length}>
-            {myMemberships.length === 0 ? (
+          <Section title="我的工地" count={mySitesCount}>
+            {mySitesCount === 0 ? (
               <EmptyCard icon={Building2} text="還未加入任何工地" />
             ) : (
               <div className="space-y-2">
+                {myAssignedPmProjects.map(project => (
+                  <AssignedPmCard key={`pm-${project.id}`} project={project} />
+                ))}
                 {myMemberships.map(m => {
                   const project = projects.find(p => p.id === m.project_id)
                   return (
@@ -272,6 +293,25 @@ function MembershipCard({ project, membership }: { project: Project | undefined;
         </span>
       </div>
     </div>
+  )
+}
+
+function AssignedPmCard({ project }: { project: Project }) {
+  return (
+    <Link to={`/project/${project.id}`} className="card p-4 block hover:border-safety-300 transition-colors">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl bg-safety-100 text-safety-600 flex items-center justify-center flex-shrink-0">
+          <Building2 size={20} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-site-900 truncate">{project.name}</p>
+          <p className="text-xs text-site-500 mt-0.5">{ROLE_ZH.pm}</p>
+        </div>
+        <span className="flex-shrink-0 inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full font-medium bg-green-100 text-green-700">
+          <CheckCircle2 size={12} />已指派
+        </span>
+      </div>
+    </Link>
   )
 }
 

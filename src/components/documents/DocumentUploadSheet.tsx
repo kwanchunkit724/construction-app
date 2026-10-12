@@ -14,7 +14,7 @@
 // happens inside DocumentsContext.uploadDocument/uploadVersion (kept invisible
 // here — the copy still warns about large files).
 
-import { ChangeEvent, useRef, useState } from 'react'
+import { ChangeEvent, useEffect, useRef, useState } from 'react'
 import { Camera as CameraIcon, FileUp, Image as ImageIcon, X } from 'lucide-react'
 import { useDocuments } from '../../contexts/DocumentsContext'
 import { DOC_PREFIX } from '../../lib/documents'
@@ -126,6 +126,19 @@ export function DocumentUploadSheet({
   const [softWarnNotice, setSoftWarnNotice] = useState<string | null>(null)
   const [batchError, setBatchError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  // H2 / #9: sheet stays mounted under GuidedDocs; presetType only arrives when
+  // the user drills into 圖則›類別. Sync docType whenever the sheet opens or
+  // the preset changes so the first upload is not stuck on material_submission.
+  useEffect(() => {
+    if (!open) return
+    setDocType(presetType ?? typeOptionsOverride?.[0] ?? 'material_submission')
+    setPickedItemId(progressItemId ?? '')
+    setRevisionLabel(suggestedRevisionLabel ?? '')
+    setSubmitError(null)
+    setSoftWarnNotice(null)
+    setBatchError(null)
+  }, [open, presetType, typeOptionsOverride, progressItemId, suggestedRevisionLabel])
 
   const isNewVersion = Boolean(existingDocumentId)
   const heading = isNewVersion ? '上載新版本' : '上載文件'

@@ -119,7 +119,7 @@ export default function Dashboard() {
       })
     allItems
       .slice()
-      .sort((a, b) => b.last_updated_at.localeCompare(a.last_updated_at))
+      .sort((a, b) => (b.last_updated_at ?? '').localeCompare(a.last_updated_at ?? ''))
       .slice(0, 5)
       .forEach(it => {
         if (it.last_updated_at !== it.created_at) {
@@ -134,7 +134,7 @@ export default function Dashboard() {
           })
         }
       })
-    events.sort((a, b) => b.at.localeCompare(a.at))
+    events.sort((a, b) => (b.at ?? '').localeCompare(a.at ?? ''))
     setActivity(events.slice(0, 15))
   }, [allItems, allIssues, memberships, profile?.id, projectIdsKey, visibleProjects])
 
@@ -227,7 +227,7 @@ export default function Dashboard() {
                         {PROGRESS_STATUS_ZH[rollup.status]}
                       </span>
                     </div>
-                    <p className="text-[10px] text-site-400 mt-0.5">{leafCount} 個 leaf{templateFor(project.project_type).autoZone ? '' : ` · ${project.zones.length} 個分區`}</p>
+                    <p className="text-[10px] text-site-400 mt-0.5">{leafCount} 個工序{templateFor(project.project_type).autoZone ? '' : ` · ${project.zones.length} 個分區`}</p>
                   </div>
                   <ChevronRight size={16} className="text-site-300 flex-shrink-0" />
                 </Link>

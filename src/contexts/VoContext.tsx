@@ -155,7 +155,16 @@ export function VoProvider({ projectId, children }: { projectId: string; childre
       .eq('version_no', nextNo)
       .single()
     if (vRow) {
-      await supabase.from('variation_orders').update({ current_version_id: vRow.id }).eq('id', voId)
+      const { error: linkErr } = await supabase
+        .from('variation_orders')
+        .update({ current_version_id: vRow.id })
+        .eq('id', voId)
+      if (linkErr) {
+        return {
+          versionNo: null,
+          error: `版本已建立但無法寫入總額（${linkErr.message}）。請重試或聯絡管理員。`,
+        }
+      }
     }
     return { versionNo: nextNo, error: null }
   }, [profile, versionsByVo])

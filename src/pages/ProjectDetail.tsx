@@ -819,7 +819,7 @@ function ZoneSection({
                 <h2 className="font-bold text-site-900 truncate">{zone.name}</h2>
               </div>
               <p className="text-[11px] text-site-400 mt-0.5">
-                {rollup.leafCount === 0 ? '尚未有進度項目' : `${rollup.leafCount} 個 leaf 項目自動匯總`}
+                {rollup.leafCount === 0 ? '尚未有進度項目' : `${rollup.leafCount} 個工序自動匯總`}
               </p>
             </div>
             <span className={`flex-shrink-0 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium ${STATUS_PILL[rollup.status]}`}>
