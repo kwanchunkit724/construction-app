@@ -650,6 +650,12 @@ function DocumentDetailSheet({
     [sortedVersions, doc.current_version_id],
   )
 
+  useEffect(() => {
+    if (!viewing) return
+    const fresh = sortedVersions.find(v => v.id === viewing.id)
+    if (fresh && fresh !== viewing) setViewing(fresh)
+  }, [sortedVersions, viewing])
+
   // Fetch the document_events audit timeline on demand (events table is not
   // realtime-published — §1.5 / §3.2).
   useEffect(() => {

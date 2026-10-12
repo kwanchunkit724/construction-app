@@ -37,6 +37,8 @@ export default function Projects() {
   const { profile } = useAuth()
   const { loading, projects, memberships, approveMembership, rejectMembership, refetch } = useProjects()
   const [applyOpen, setApplyOpen] = useState(false)
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null)
 
   const myMemberships = useMemo(
     () => memberships.filter(m => m.user_id === profile?.id),
@@ -136,6 +138,22 @@ export default function Projects() {
     })
   }, [memberships, projects, profile])
 
+  async function bulkApprovePending() {
+    if (pendingForMe.length === 0 || bulkBusy) return
+    setBulkBusy(true)
+    setBulkMsg(null)
+    let ok = 0
+    let fail = 0
+    for (const m of pendingForMe) {
+      const { error } = await approveMembership(m.id)
+      if (error) fail += 1
+      else ok += 1
+    }
+    await refetch()
+    setBulkBusy(false)
+    setBulkMsg(fail === 0 ? `已批准 ${ok} 個申請` : `已批准 ${ok} 個，失敗 ${fail} 個`)
+  }
+
   return (
     <AppLayout title="工地">
       {/* Apply button */}
@@ -173,6 +191,19 @@ export default function Projects() {
           {/* Pending approvals (only shown if there are any) */}
           {pendingForMe.length > 0 && (
             <Section title="待審核申請" count={pendingForMe.length} highlight>
+              <div className="mb-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void bulkApprovePending()}
+                  disabled={bulkBusy}
+                  className="btn-primary flex-1 text-sm py-2 min-h-0"
+                >
+                  {bulkBusy ? '批核中…' : `全部批准（${pendingForMe.length}）`}
+                </button>
+              </div>
+              {bulkMsg && (
+                <p className="text-xs text-site-600 bg-site-50 border border-site-200 rounded-xl px-3 py-2 mb-2">{bulkMsg}</p>
+              )}
               <div className="space-y-2">
                 {pendingForMe.map(m => {
                   const project = projects.find(p => p.id === m.project_id)

@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useProjects } from '../../contexts/ProjectsContext'
 import { useVo } from '../../contexts/VoContext'
 import { useStepUp } from '../../contexts/StepUpContext'
+import { useSignReauth } from '../../contexts/SignReauthContext'
 import { supabase } from '../../lib/supabase'
 import { Spinner } from '../Spinner'
 import { VoLineItemsEditor, validateLineItems } from './VoLineItemsEditor'
@@ -33,6 +34,7 @@ export function VoApproverBar({ vo, latestVersion, progressItems }: VoApproverBa
   const { projects, memberships } = useProjects()
   const { approve, requestRevision, reject, adminOverride } = useVo()
   const { requireStepUp } = useStepUp()
+  const { requireSignReauth } = useSignReauth()
 
   const requiredRole = vo.chain_snapshot?.[vo.current_step]?.required_role
   const optionalUser = vo.chain_snapshot?.[vo.current_step]?.optional_user_id ?? null
@@ -124,8 +126,14 @@ export function VoApproverBar({ vo, latestVersion, progressItems }: VoApproverBa
     setModal('edits')
   }
 
-  async function runAction(fn: () => Promise<{ error: string | null }>) {
+  async function runAction(
+    fn: () => Promise<{ error: string | null }>,
+    opts?: { requirePassword?: boolean },
+  ) {
     if (!(await requireStepUp('approval'))) return
+    // M4: VO approvals move money — same fresh-password proof as PTW signoffs
+    // when sign_reauth_enforced is on (no-op otherwise).
+    if (opts?.requirePassword && !(await requireSignReauth())) return
     setBusy(true)
     setError(null)
     try {
@@ -156,7 +164,7 @@ export function VoApproverBar({ vo, latestVersion, progressItems }: VoApproverBa
             <button
               type="button"
               disabled={busy}
-              onClick={() => runAction(() => approve(vo.id))}
+              onClick={() => runAction(() => approve(vo.id), { requirePassword: true })}
               className="inline-flex items-center justify-center gap-1 px-3 py-2 rounded-xl bg-green-600 text-white font-semibold text-sm disabled:opacity-50"
             >
               <Check size={16} />
@@ -232,7 +240,7 @@ export function VoApproverBar({ vo, latestVersion, progressItems }: VoApproverBa
             if (modal === 'reason-reject') {
               return runAction(() => reject(vo.id, reason.trim()))
             }
-            return runAction(() => adminOverride(vo.id, reason.trim()))
+            return runAction(() => adminOverride(vo.id, reason.trim()), { requirePassword: true })
           }}
         />
       )}
@@ -245,7 +253,7 @@ export function VoApproverBar({ vo, latestVersion, progressItems }: VoApproverBa
           busy={busy}
           error={error}
           onClose={() => setModal(null)}
-          onSubmit={editedPayload => runAction(() => approve(vo.id, editedPayload))}
+          onSubmit={editedPayload => runAction(() => approve(vo.id, editedPayload), { requirePassword: true })}
         />
       )}
     </>
